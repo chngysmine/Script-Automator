@@ -1,0 +1,22 @@
+name: QuickJSBindings
+description: Bindings for QuickJS library.
+output: 'lib/features/script_engine/native_bridge/ffi_quickjs_bindings.dart'
+headers:
+  entry-points:
+    - 'android/app/src/main/cpp/quickjs/quickjs.h'
+    - 'android/app/src/main/cpp/quickjs_wrapper.c'
+  include-directives:
+    - 'android/app/src/main/cpp/quickjs/quickjs.h'
+    - 'android/app/src/main/cpp/quickjs_wrapper.c'
+
+comments:
+  style: any
+  length: full
+
+preamble: |
+  // ignore_for_file: always_specify_types
+  // ignore_for_file: camel_case_types
+  // ignore_for_file: non_constant_identifier_names
+
+compiler-opts:
+  - '-Iandroid/app/src/main/cpp/quickjs'
