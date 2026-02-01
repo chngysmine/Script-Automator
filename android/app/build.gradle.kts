@@ -43,6 +43,21 @@ android {
             path = file("src/main/cpp/CMakeLists.txt")
         }
     }
+
+    buildFeatures {
+        compose = true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.14"
+    }
+}
+
+dependencies {
+    implementation("androidx.glance:glance-appwidget:1.2.0-alpha03")
+    implementation("androidx.glance:glance-material3:1.1.0")
+    implementation("com.google.code.gson:gson:2.10.1")
+    implementation("androidx.work:work-runtime-ktx:2.8.1")
 }
 
 flutter {

@@ -30,24 +30,48 @@ class VirtualFileSystemService {
 
   /// securely resolves and validates the path.
   /// Prevention against Path Traversal (../../etc/passwd).
-  String _resolveAndValidatePath(String relativePath) {
-    // 1. Sanitize: Remove null bytes
+  /// Updated Phase 2.5: Mounts 'shared/' to App Group Directory.
+  Future<String> _resolveAndValidatePath(String relativePath) async {
+    // 1. Sanitize
     if (relativePath.contains('\u0000')) {
       throw SecurityException("Null byte detected in path.");
     }
 
-    // 2. Construct Absolute Path
-    final rawPath = path.join(rootDirectory, relativePath);
+    // Normalize path separators
+    String normalizedPath = path.normalize(relativePath);
+    if (path.isAbsolute(normalizedPath)) {
+      // VFS works on relative paths only. Strip leading slash.
+      if (normalizedPath.startsWith(path.separator)) {
+        normalizedPath = normalizedPath.substring(1);
+      }
+    }
 
-    // 3. Canonicalize (Resolve symlinks and ..)
-    // Note: path.canonicalize is pure string manipulation in Dart unless we use File(p).resolveSymbolicLinksSync()
-    // To be strictly secure against FS-level symlinks:
+    String baseDir = rootDirectory;
+    String effectiveRelativePath = normalizedPath;
+
+    // 2. Check for Mount Points
+    if (normalizedPath.startsWith('shared/') || normalizedPath == 'shared') {
+      baseDir = await getSharedDirectory();
+      if (normalizedPath == 'shared') {
+        effectiveRelativePath = '.';
+      } else {
+        effectiveRelativePath = normalizedPath.substring(7); // remove 'shared/'
+      }
+    }
+
+    // 3. Construct Absolute Path
+    final rawPath = path.join(baseDir, effectiveRelativePath);
+
+    // 4. Canonicalize
     final canonicalPath = path.canonicalize(rawPath);
 
-    // 4. Boundary Check (The Jail)
-    if (!path.isWithin(rootDirectory, canonicalPath)) {
+    // 5. Boundary Check
+    // We must check if it is within the SPECIFIC base dir (root vs shared)
+    // Beware: path.canonicalize might resolve symlinks.
+    // For Shared Dir on iOS, it is a separate volume.
+    if (!path.isWithin(baseDir, canonicalPath) && canonicalPath != baseDir) {
       throw SecurityException(
-        "Access Denied: Path escapes sandbox ($relativePath)",
+        "Access Denied: Path escapes sandbox ($relativePath -> $canonicalPath not in $baseDir)",
       );
     }
 
@@ -55,7 +79,7 @@ class VirtualFileSystemService {
   }
 
   Future<String> readString(String relativePath) async {
-    final absolutePath = _resolveAndValidatePath(relativePath);
+    final absolutePath = await _resolveAndValidatePath(relativePath);
     final file = File(absolutePath);
     if (!await file.exists()) {
       throw FileSystemException("File not found", absolutePath);
@@ -64,7 +88,7 @@ class VirtualFileSystemService {
   }
 
   Future<void> writeString(String relativePath, String content) async {
-    final absolutePath = _resolveAndValidatePath(relativePath);
+    final absolutePath = await _resolveAndValidatePath(relativePath);
     final file = File(absolutePath);
     // Ensure parent directory exists
     await file.parent.create(recursive: true);
@@ -73,16 +97,17 @@ class VirtualFileSystemService {
 
   Future<bool> exists(String relativePath) async {
     try {
-      final absolutePath = _resolveAndValidatePath(relativePath);
+      final absolutePath = await _resolveAndValidatePath(relativePath);
       return await File(absolutePath).exists();
     } catch (e) {
       if (e is SecurityException) return false;
-      rethrow;
+      // If shared path fails to resolve (e.g. app group error), treat as not exists
+      return false;
     }
   }
 
   Future<void> delete(String relativePath) async {
-    final absolutePath = _resolveAndValidatePath(relativePath);
+    final absolutePath = await _resolveAndValidatePath(relativePath);
     final file = File(absolutePath);
     if (await file.exists()) {
       await file.delete();
@@ -96,17 +121,17 @@ class VirtualFileSystemService {
         final dir = await AppGroupDirectory.getAppGroupDirectory(
           'group.com.scriptautomator',
         );
-        // We use the real shared container.
-        if (dir != null) {
-          return dir.path;
-        }
+        if (dir != null) return dir.path;
       } catch (e) {
         _logger.warning("App Group Error: $e");
       }
     }
-
-    // Fallback for Android/Tests (or if App Group fails)
-    final sharedPath = path.join(rootDirectory, 'shared');
+    // Android Support (Phase 3 Spec): Use MethodChannel or Fallback
+    // For VFS simplicity, we stick to a local 'shared' folder on Android
+    // UNLESS Headless Service is configured to use the same path.
+    // Ideally, Headless Service and VFS should agree on the path.
+    // Current VFS Fallback:
+    final sharedPath = path.join(rootDirectory, 'shared_container');
     await Directory(sharedPath).create(recursive: true);
     return sharedPath;
   }
