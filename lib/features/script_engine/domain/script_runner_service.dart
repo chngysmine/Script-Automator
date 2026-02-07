@@ -8,7 +8,11 @@ import '../data/engines/jsc_engine.dart';
 import 'js_engine.dart';
 import 'js_engine_exception.dart';
 
+import 'dart:convert'; // JsonDecode
 import 'package:logging/logging.dart';
+import '../../widget_renderer/domain/services/headless_widget_rendering_service.dart';
+import '../../script_management/data/services/virtual_file_system_service.dart';
+import '../../widget_renderer/domain/entities/widget_node.dart';
 
 /// Service responsible for managing the background Isolate and the JS Engine lifecycle.
 class ScriptRunnerService {
@@ -35,6 +39,8 @@ class ScriptRunnerService {
       receivePort.sendPort,
       debugName: 'JSEngineIsolate',
     );
+    _isDisposed = false;
+    _setupSupervision();
 
     // Listen for messages from the isolate (handshake + logs)
     receivePort.listen((message) {
@@ -49,8 +55,36 @@ class ScriptRunnerService {
     return _initCompleter!.future;
   }
 
+  bool _isDisposed = false;
+
+  void _setupSupervision() {
+    final exitPort = ReceivePort();
+    _engineIsolate?.addOnExitListener(exitPort.sendPort);
+
+    exitPort.listen((message) {
+      if (_isDisposed) return; // Expected exit
+
+      print("CRITICAL: JS Engine Isolate crashed unexpectedly!");
+      // Self-healing: Restart
+      _engineIsolate = null;
+      _toEnginePort = null;
+      _initCompleter = null;
+
+      print("Supervisor: Attempting to restart service...");
+      initialize()
+          .then((_) {
+            print("Supervisor: Service successfully recovered.");
+          })
+          .catchError((e) {
+            print("Supervisor: Failed to recover service: $e");
+          });
+    });
+  }
+
   /// Sends a script to the background isolate for evaluation.
   Future<void> runScript(String script) async {
+    if (_engineIsolate == null) await initialize();
+
     await _initCompleter!.future;
     if (_toEnginePort == null) throw Exception("Service not initialized");
     _toEnginePort!.send({'command': 'eval', 'script': script});
@@ -60,6 +94,7 @@ class ScriptRunnerService {
   static void _isolateEntryPoint(SendPort mainSendPort) {
     print("Isolate Entry Point Started");
 
+    // 1. Setup Logging
     Logger.root.level = Level.ALL;
     Logger.root.onRecord.listen((record) {
       final msg = "[${record.level.name}] ${record.message}";
@@ -68,10 +103,17 @@ class ScriptRunnerService {
     });
     final logger = Logger('JSEngineIsolate');
 
+    // 2. Handshake
     final receivePort = ReceivePort();
     mainSendPort.send(receivePort.sendPort);
     print("Isolate Handshake Sent");
 
+    // 3. Initialize Integration Services
+    // Note: In Isolate, we create fresh instances.
+    final headlessService = HeadlessWidgetRenderingService(); // Phase 3
+    final vfsInitFuture = VirtualFileSystemService.create(); // Phase 2
+
+    // 4. Setup Engine
     JSEngine engine;
     if (Platform.isIOS) {
       engine = JSCEngine();
@@ -79,23 +121,74 @@ class ScriptRunnerService {
       engine = QuickJSEngine();
     }
 
-    try {
-      print("Initializing Engine...");
-      engine.initialize();
-      logger.info(
-        "JSEngine Initialized in Isolate: ${Isolate.current.debugName}",
-      );
-      print("Engine Initialize Success");
+    // 5. Initialize Sequence
+    Future<void> initializeAll() async {
+      try {
+        final vfs = await vfsInitFuture;
+        print("VFS Initialized in Isolate: ${vfs.rootDirectory}");
 
-      engine.registerGlobalFunction('print', (message) {
-        logger.info("[JS stdout] $message");
-      });
-    } catch (e, stack) {
-      print("Fatal Error initializing engine: $e\n$stack");
-      logger.severe("Fatal Error initializing engine: $e");
+        print("Initializing Engine...");
+        engine.initialize();
+        logger.info(
+          "JSEngine Initialized in Isolate: ${Isolate.current.debugName}",
+        );
+
+        // --- BINDINGS ---
+
+        // Binding 1: Print
+        engine.registerGlobalFunction('print', (message) {
+          logger.info("[JS stdout] $message");
+        });
+
+        // Binding 2: Render Widget (Headless)
+        engine.registerGlobalFunction('renderWidget', (jsonString) {
+          logger.info("JS requested renderWidget");
+          try {
+            // Decode JSON to Map
+            final jsonMap = jsonDecode(jsonString);
+            // Convert to WidgetNode
+            final node = WidgetNode.fromJson(jsonMap);
+            // Render and Save
+            // We use a 'fire and forget' or blocking approach?
+            // Since we can't await inside this sync callback easily without Promise support,
+            // we will use a blocking call if possible, or trigger async and log.
+            // HEADLESS SERVICE 'renderAndSave' is ASYNC.
+            // We cannot await it here in a sync callback.
+            // WORKAROUND: Trigger it unawaited, and log result.
+            // Real solution requires AsyncBinding in Phase 4.
+
+            headlessService
+                .renderAndSave(node, 'sasup_ui.json')
+                .then((path) {
+                  logger.info("Render Success: $path");
+                })
+                .catchError((e) {
+                  logger.severe("Render Failed: $e");
+                });
+
+            return "rendering_started";
+          } catch (e) {
+            logger.severe("Render Request Invalid: $e");
+            return "error";
+          }
+        });
+
+        // Binding 3: File System
+        engine.registerGlobalFunction('writeFile', (args) {
+          // Mock Implementation for now
+          logger.info("Write File Request: $args");
+        });
+      } catch (e, stack) {
+        print("Fatal Error initializing: $e\n$stack");
+        logger.severe("Fatal Error initializing: $e");
+      }
     }
 
-    receivePort.listen((message) {
+    // Run Init
+    initializeAll();
+
+    // 6. Message Loop
+    receivePort.listen((message) async {
       print("Isolate received message: $message");
       if (message is Map) {
         final command = message['command'];
@@ -109,7 +202,6 @@ class ScriptRunnerService {
           } on JSEngineException catch (e) {
             print("JS Engine Error: ${e.message}");
             logger.warning("JS Engine Error: ${e.message}");
-            // Optionally send error back to main isolate if needed
           } catch (e) {
             print("Unknown Script Error: $e");
             logger.warning("Unknown Script Error: $e");
@@ -121,6 +213,7 @@ class ScriptRunnerService {
 
   /// Disposes the service and kills the background isolate.
   void dispose() {
+    _isDisposed = true;
     _engineIsolate?.kill();
     _engineIsolate = null;
     _logController.close();

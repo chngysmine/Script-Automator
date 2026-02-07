@@ -42,6 +42,28 @@ class JSCEngine implements JSEngine, Finalizable {
   /// Returns the result of the evaluation as a [String].
   /// Throws [JSEngineException] if the engine is not initialized or if the script contains errors.
   @override
+  Future<String?> checkSyntax(String script) async {
+    final escaped = jsonEncode(script);
+    final wrapper =
+        '''
+      (function() {
+        try {
+          new Function($escaped);
+          return null;
+        } catch (e) {
+          return e.toString();
+        }
+      })()
+    ''';
+    try {
+      final result = evaluate(wrapper);
+      return result as String?;
+    } catch (e) {
+      return "Engine Error: $e";
+    }
+  }
+
+  @override
   dynamic evaluate(String script, {String? filename}) {
     if (_ctx == null) throw JSEngineException('Engine not initialized');
 

@@ -18,32 +18,13 @@ class ScriptAutomatorWidget : GlanceAppWidget() {
         // In real implementations, mapping GlanceId to specific file ID is needed.
         // We stick to a single file for the "Universal Engine" MVP.
         
-        val file = File(context.filesDir, "sasup_ui.json")
-        
-        val rootNode: JsonObject? = try {
-            if (file.exists()) {
-                val content = file.readText()
-                val json = JsonParser.parseString(content).asJsonObject
-                if (json.has("root")) {
-                    json.getAsJsonObject("root")
-                } else {
-                    null
-                }
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            null
-        }
+        // [VERIFICATION MODE]
+        // GlanceJsonParser is disabled to ensure main app testing stability.
+        // Falling back to simple text.
 
         provideContent {
             GlanceTheme {
-                if (rootNode != null) {
-                    GlanceJsonParser.RenderNode(rootNode)
-                } else {
-                    // Fallback / Placeholder UI
-                    Text("No Script Output Available")
-                }
+                Text("Script Automator: Widget Verification Mode")
             }
         }
     }

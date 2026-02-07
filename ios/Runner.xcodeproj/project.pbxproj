@@ -87,18 +87,8 @@
 		C44063E5D91D5754F80A20E2 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		BEB3F6D82F2E6AA000DE3EDD /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = BEB3F6BF2F2E6A9F00DE3EDD /* ScriptAutomatorWidgetExtension */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		BEB3F6C52F2E6A9F00DE3EDD /* ScriptAutomatorWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (BEB3F6D82F2E6AA000DE3EDD /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ScriptAutomatorWidget; sourceTree = "<group>"; };
+		BEB3F6C52F2E6A9F00DE3EDD /* ScriptAutomatorWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = ScriptAutomatorWidget; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */

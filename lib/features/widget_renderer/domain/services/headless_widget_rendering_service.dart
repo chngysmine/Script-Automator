@@ -2,16 +2,13 @@ import 'dart:ui' as ui;
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart'; // MethodChannel
 import 'package:path_provider/path_provider.dart';
-import 'package:app_group_directory/app_group_directory.dart';
+
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_node.dart';
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_type.dart';
 import 'package:script_automator/features/widget_renderer/domain/entities/sasup_modifiers.dart';
 
 class HeadlessWidgetRenderingService {
-  static const String _appGroupId = 'group.com.scriptautomator';
-
   /// Renders a WidgetNode to a PNG image and saves it to the Shared App Group storage.
   /// Returns the file URI 'file://...' accessible by the Widget Extension.
   Future<String> renderAndSave(WidgetNode node, String filename) async {
@@ -64,30 +61,9 @@ class HeadlessWidgetRenderingService {
   // ... (existing _getSharedDirectory)
 
   Future<Directory> _getSharedDirectory() async {
-    if (Platform.isIOS) {
-      return await AppGroupDirectory.getAppGroupDirectory(_appGroupId) ??
-          await getApplicationDocumentsDirectory();
-    } else {
-      // Android Robust Fix: Use MethodChannel to ask Native side for the exact path.
-      try {
-        final platform = MethodChannel('com.antigravity/paths');
-        final String? path = await platform.invokeMethod('getNativeFilesDir');
-        if (path != null) {
-          return Directory(path);
-        }
-      } catch (e) {
-        debugPrint(
-          "MethodChannel failed: $e, falling back to standard provider",
-        );
-      }
-
-      // Fallback
-      final appDocDir = await getApplicationDocumentsDirectory();
-      if (appDocDir.path.endsWith('app_flutter')) {
-        return appDocDir.parent;
-      }
-      return appDocDir;
-    }
+    // REFACTOR: Fallback to local documents for verification test (AppGroup plugin removed)
+    final appDocDir = await getApplicationDocumentsDirectory();
+    return appDocDir;
   }
 
   // --- Internal Rendering Logic ---

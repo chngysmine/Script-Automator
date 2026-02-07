@@ -1,0 +1,95 @@
+import 'package:flutter/material.dart';
+import 'dart:ui';
+
+class GlassDock extends StatelessWidget {
+  final int selectedIndex;
+  final Function(int) onItemSelected;
+
+  const GlassDock({
+    super.key,
+    required this.selectedIndex,
+    required this.onItemSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(32),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          height: 72,
+          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.5),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildDockItem(Icons.grid_view_rounded, 0),
+              _buildDockItem(Icons.search_rounded, 1),
+              _buildDockItem(Icons.add_rounded, 2, isFab: true),
+              _buildDockItem(Icons.analytics_rounded, 3),
+              _buildDockItem(Icons.person_rounded, 4),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDockItem(IconData icon, int index, {bool isFab = false}) {
+    final isSelected = selectedIndex == index;
+
+    if (isFab) {
+      return GestureDetector(
+        onTap: () => onItemSelected(index),
+        child: Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B), // Slate 800
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1E293B).withValues(alpha: 0.4),
+                blurRadius: 15,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Icon(icon, color: Colors.white, size: 28),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () => onItemSelected(index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Icon(
+          icon,
+          color: isSelected ? const Color(0xFF1E293B) : const Color(0xFF64748B),
+          size: 26,
+        ),
+      ),
+    );
+  }
+}

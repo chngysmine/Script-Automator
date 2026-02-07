@@ -76,6 +76,36 @@ class QuickJSEngine implements JSEngine {
     });
   }
 
+  @override
+  Future<String?> checkSyntax(String script) async {
+    // 1. Escape the script to be safely embedded in a JS string
+    // Simple escape: \ -> \\, ' -> \', " -> \", newline -> \n
+    final escaped = jsonEncode(script);
+
+    // 2. Wrap in a syntax check closure
+    // new Function(code) parses code as a function body.
+    // This catches invalid statements, unclosed braces, etc.
+    final wrapper =
+        '''
+      (function() {
+        try {
+          new Function($escaped);
+          return null;
+        } catch (e) {
+          return e.toString();
+        }
+      })()
+    ''';
+
+    try {
+      final result = evaluate(wrapper);
+      return result as String?;
+    } catch (e) {
+      // If the engine itself fails, assume strict syntax error
+      return "Engine Error: $e";
+    }
+  }
+
   dynamic _jsValueToDart(JSValue val) {
     if (_ctx == null) return null;
     final tag = val.tag;

@@ -1,8 +1,21 @@
 import 'package:flutter/material.dart';
-import 'features/script_engine/domain/script_runner_service.dart';
+import 'package:fpdart/fpdart.dart';
+import 'package:get_it/get_it.dart';
+import 'core/theme/liquid_theme.dart';
+import 'features/dashboard/presentation/pages/dashboard_page.dart';
+import 'features/script_management/domain/entities/script.dart';
+import 'features/script_management/domain/repositories/script_repository.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await _setupDI();
   runApp(const MyApp());
+}
+
+Future<void> _setupDI() async {
+  if (!GetIt.I.isRegistered<ScriptRepository>()) {
+    GetIt.I.registerSingleton<ScriptRepository>(_InMemoryScriptRepository());
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -12,110 +25,93 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Script Automator',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: const HomePage(),
+      theme: LiquidTheme.lightTheme,
+      home: const LiquidDashboardPage(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+class _InMemoryScriptRepository implements ScriptRepository {
+  final List<Script> _scripts = [];
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  Future<Either<Failure, List<Script>>> getScripts() async {
+    // Return dummy data for "Recent Scripts" visual confirmation
+    if (_scripts.isEmpty) {
+      _scripts.add(
+        Script(
+          id: '1',
+          name: 'Hello World',
+          content: "console.log('Hello from Liquid Glass!');",
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      _scripts.add(
+        Script(
+          id: '2',
+          name: 'Web Scraper',
+          content: "// A simple scraper\nfunction scrape() { ... }",
+          createdAt: DateTime.now().subtract(const Duration(days: 1)),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      _scripts.add(
+        Script(
+          id: '3',
+          name: 'Weather Widget',
+          content: """
+// Liquid Weather Widget
+// Author: CodeForge AI
+
+function render() {
+  return Widget.Container({
+    decoration: BoxDecoration({
+      gradient: LinearGradient([Colors.blue, Colors.lightBlueAccent]),
+      borderRadius: 24,
+      boxShadow: [BoxShadow(blur: 20, color: Colors.blue.withOpacity(0.4))]
+    }),
+    child: Column([
+      Icon(Icons.sunny, size: 64, color: Colors.white),
+      Text("San Francisco", style: TextStyle(color: Colors.white, fontSize: 24)),
+      Text("72°F", style: TextStyle(color: Colors.white, fontSize: 48, fontWeight: Bold)),
+      Text("Clear Sky", style: TextStyle(color: Colors.white70))
+    ])
+  });
 }
-
-class _HomePageState extends State<HomePage> {
-  final _scriptService = ScriptRunnerService();
-  bool _isEngineReady = false;
-  final List<String> _logs = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _scriptService.logs.listen((log) {
-      setState(() {
-        _logs.add(log);
-      });
-    });
-    _initEngine();
-  }
-
-  Future<void> _initEngine() async {
-    try {
-      await _scriptService.initialize();
-      setState(() {
-        _isEngineReady = true;
-      });
-    } catch (e) {
-      debugPrint("Engine Init Failed: $e");
+""",
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
     }
-  }
-
-  void _runTestScript() {
-    // Note: Since we don't have the real QuickJS lib compiled yet, this might crash or fail if run.
-    // But this demonstrates the architecture.
-    const script = """
-      'Hello World from ' + 'QuickJS';
-    """;
-    _scriptService.runScript(script);
+    return right(_scripts);
   }
 
   @override
-  void dispose() {
-    _scriptService.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Script Automator Core')),
-      body: Column(
-        children: [
-          const SizedBox(height: 20),
-          Text(
-            'Engine Status: ${_isEngineReady ? "Ready" : "Initializing..."}',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: _isEngineReady ? _runTestScript : null,
-            child: const Text('Run Test Script (Hello World)'),
-          ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.black87,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: ListView.builder(
-                itemCount: _logs.length,
-                itemBuilder: (context, index) {
-                  final log = _logs[index];
-                  Color color = Colors.greenAccent;
-                  if (log.contains("SEVERE") || log.contains("Error")) {
-                    color = Colors.redAccent;
-                  }
-                  if (log.contains("WARNING")) {
-                    color = Colors.orangeAccent;
-                  }
-                  return Text(
-                    log,
-                    style: TextStyle(color: color, fontFamily: 'Courier'),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
+  Future<Either<Failure, Script>> getScriptDetail(String id) async {
+    final script = _scripts.firstWhere(
+      (s) => s.id == id,
+      orElse: () => _scripts.first,
     );
+    return right(script);
+  }
+
+  @override
+  Future<Either<Failure, Unit>> saveScript(Script script) async {
+    final index = _scripts.indexWhere((s) => s.id == script.id);
+    if (index >= 0) {
+      _scripts[index] = script;
+    } else {
+      _scripts.add(script);
+    }
+    return right(unit);
+  }
+
+  @override
+  Future<Either<Failure, Unit>> deleteScript(String id) async {
+    _scripts.removeWhere((s) => s.id == id);
+    return right(unit);
   }
 }

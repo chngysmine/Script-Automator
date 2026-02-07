@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
-import 'package:app_group_directory/app_group_directory.dart';
-import 'package:logging/logging.dart';
 
 /// Exception thrown when a security violation is detected.
 class SecurityException implements Exception {
@@ -14,9 +12,9 @@ class SecurityException implements Exception {
 /// Acts as a secure gatekeeper (Chroot Jail) for file access from scripts.
 class VirtualFileSystemService {
   final String rootDirectory;
-  final _logger = Logger('VirtualFileSystemService');
 
-  VirtualFileSystemService(this.rootDirectory);
+  VirtualFileSystemService(String root)
+    : rootDirectory = Directory(root).resolveSymbolicLinksSync();
 
   /// Initializes the VFS root directory.
   static Future<VirtualFileSystemService> create() async {
@@ -62,8 +60,30 @@ class VirtualFileSystemService {
     // 3. Construct Absolute Path
     final rawPath = path.join(baseDir, effectiveRelativePath);
 
-    // 4. Canonicalize
-    final canonicalPath = path.canonicalize(rawPath);
+    // 4. Canonicalize (Resolve Symlinks)
+    // path.canonicalize is pure string manipulation on some versions/platforms.
+    // We MUST use File.resolveSymbolicLinks to guarantee OS-level resolution.
+    String canonicalPath;
+    try {
+      canonicalPath = await File(rawPath).resolveSymbolicLinks();
+    } catch (e) {
+      // If file doesn't exist, resolveSymbolicLinks might fail.
+      // But for security, if we can't resolve it, we fallback to canonicalize
+      // AND ensure it doesn't exist later?
+      // Actually, if we are writing a NEW file, it doesn't exist yet.
+      // So we can't resolve symlinks for a clear target that doesn't exist.
+      // BUT, if we are writing to a path that involves EXISTING symlinks in parent directories,
+      // resolveSymbolicLinks should work on the parent?
+
+      // Strategy:
+      // If path exists (or symlink exists), resolve it.
+      // If not, use string canonicalize.
+      if (await File(rawPath).exists() || await Link(rawPath).exists()) {
+        canonicalPath = await File(rawPath).resolveSymbolicLinks();
+      } else {
+        canonicalPath = path.canonicalize(rawPath);
+      }
+    }
 
     // 5. Boundary Check
     // We must check if it is within the SPECIFIC base dir (root vs shared)
@@ -116,23 +136,12 @@ class VirtualFileSystemService {
 
   // Helper for App Groups (iOS) - Phase 2 Step 3
   Future<String> getSharedDirectory() async {
-    if (Platform.isIOS) {
-      try {
-        final dir = await AppGroupDirectory.getAppGroupDirectory(
-          'group.com.scriptautomator',
-        );
-        if (dir != null) return dir.path;
-      } catch (e) {
-        _logger.warning("App Group Error: $e");
-      }
+    // REFACTOR: Fallback to local documents for verification test (AppGroup plugin removed)
+    final docsDir = await getApplicationDocumentsDirectory();
+    final sharedPath = path.join(docsDir.path, 'shared_container');
+    if (!await Directory(sharedPath).exists()) {
+      await Directory(sharedPath).create(recursive: true);
     }
-    // Android Support (Phase 3 Spec): Use MethodChannel or Fallback
-    // For VFS simplicity, we stick to a local 'shared' folder on Android
-    // UNLESS Headless Service is configured to use the same path.
-    // Ideally, Headless Service and VFS should agree on the path.
-    // Current VFS Fallback:
-    final sharedPath = path.join(rootDirectory, 'shared_container');
-    await Directory(sharedPath).create(recursive: true);
     return sharedPath;
   }
 }

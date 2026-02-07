@@ -20,33 +20,81 @@ import BackgroundTasks
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
+  // Headless Engine for Background Tasks
+  var headlessEngine: FlutterEngine?
+  
   // MARK: - Background Task Handling
   @available(iOS 13.0, *)
   func handleAppRefresh(task: BGAppRefreshTask) {
-      // 1. Set Expiration Handler (CRITICAL)
+      // 1. Schedule Next (Moved to script implementation to support Smart Policy)
+      // We do NOT schedule here immediately. We wait for script execution to determine needed time.
+      // Fallback: If script crashes/times out, iOS will use its own discretion or we rely on the launch trigger.
+      // Ideally, set a backup schedule? No, expiration handler deals with failure.
+      
+      // 2. Setup Expiration
       task.expirationHandler = {
-          // Clean up any unfinished task logic here
-          // e.g. Cancel JS Engine execution
           print("Background Task Expired")
+          task.setTaskCompleted(success: false)
+          self.headlessEngine?.destroyContext()
+          self.headlessEngine = nil
       }
 
-      // 2. Refresh Logic
-      // In Phase 3, we simulate the refresh by "completing" immediately or doing a light check.
-      // In Phase 4, we will call into Flutter Engine via MethodChannel.
-      
-      scheduleNextRefresh()
-      
-      // Simulate success for now
-      task.setTaskCompleted(success: true)
+      // 3. Initialize Headless Engine
+      // We must run it on Main Thread as per Flutter Constraints
+      DispatchQueue.main.async {
+          self.headlessEngine = FlutterEngine(name: "headless_runner")
+          // Allow Plugins (like MethodChannel, shared_preferences) to work
+          guard let engine = self.headlessEngine,
+                engine.run(withEntrypoint: "scriptRunnerMain", libraryURI: nil) else {
+             print("Failed to run Dart Entrypoint")
+             task.setTaskCompleted(success: false)
+             return
+          }
+          GeneratedPluginRegistrant.register(with: engine)
+          
+          // 4. Setup MethodChannel Bridge
+          let channel = FlutterMethodChannel(
+              name: "com.antigravity.script_automator/background",
+              binaryMessenger: engine.binaryMessenger
+          )
+          
+          // 5. Wait for Signal
+          channel.setMethodCallHandler { (call, result) in
+              if call.method == "scriptCompleted" {
+                  print("Background Script Completed Successfully")
+                  
+                  // Extract Smart Timeline Delay if provided
+                  var nextDelay: Double = 15 * 60 // Default 15 mins
+                  if let args = call.arguments as? [String: Any],
+                     let delay = args["nextRunDelay"] as? Double {
+                      nextDelay = delay
+                      print("Smart Timeline: Requested next run in \(delay) seconds")
+                  }
+                  
+                  // Schedule next run DYNAMICALLY based on script needs
+                  self.scheduleNextRefresh(delay: nextDelay)
+                  
+                  task.setTaskCompleted(success: true)
+                  
+                  // Cleanup
+                  self.headlessEngine?.destroyContext()
+                  self.headlessEngine = nil
+                  result(nil)
+              } else {
+                  result(FlutterMethodNotImplemented)
+              }
+          }
+      }
   }
   
   @available(iOS 13.0, *)
-  func scheduleNextRefresh() {
+  func scheduleNextRefresh(delay: Double = 15 * 60) {
       let request = BGAppRefreshTaskRequest(identifier: "com.antigravity.scriptautomator.refresh")
-      request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60) // 15 mins
+      request.earliestBeginDate = Date(timeIntervalSinceNow: delay)
       
       do {
           try BGTaskScheduler.shared.submit(request)
+          print("Scheduled next background refresh in \(delay) seconds")
       } catch {
           print("Could not schedule app refresh: \(error)")
       }
