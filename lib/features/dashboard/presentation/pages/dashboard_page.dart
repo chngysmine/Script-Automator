@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
+
 import 'package:get_it/get_it.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
@@ -9,6 +10,8 @@ import 'package:script_automator/features/dashboard/presentation/widgets/new_scr
 import 'package:script_automator/features/dashboard/presentation/widgets/staggered_script_grid.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_dock.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_drawer.dart';
+import 'package:script_automator/core/theme/liquid_page_route.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/liquid_search_bar.dart';
 
 class LiquidDashboardPage extends StatefulWidget {
   const LiquidDashboardPage({super.key});
@@ -97,9 +100,11 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
                             heightFactor: 5,
                             child: CircularProgressIndicator(),
                           )
-                        : StaggeredScriptGrid(
-                            scripts: _scripts,
-                            onTap: _openEditor,
+                        : AnimationLimiter(
+                            child: StaggeredScriptGrid(
+                              scripts: _scripts,
+                              onTap: _openEditor,
+                            ),
                           ),
                   ),
                 ),
@@ -206,7 +211,7 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
   void _openEditor(Script script) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => EditorPage(script: script)),
+      LiquidPageRoute(page: EditorPage(script: script)),
     ).then((_) => _loadScripts());
   }
 
@@ -239,56 +244,12 @@ class _GlassSearchHeaderDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return ClipRRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          height: maxExtent,
-          color: Colors.white.withValues(
-            alpha: 0.7,
-          ), // Sticky Header Background
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          alignment: Alignment.center,
-          child: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.grey.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.search_rounded, color: Colors.grey),
-                      SizedBox(width: 12),
-                      Text(
-                        "Search scripts...",
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                height: 48,
-                width: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-                ),
-                child: const Icon(Icons.tune_rounded, color: Colors.black87),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return Container(
+      height: maxExtent,
+      color: Colors.transparent, // Allow Aurora to show through
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      alignment: Alignment.center,
+      child: const LiquidSearchBar(),
     );
   }
 

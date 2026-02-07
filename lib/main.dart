@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:get_it/get_it.dart';
 import 'core/theme/liquid_theme.dart';
-import 'features/dashboard/presentation/pages/dashboard_page.dart';
+import 'features/dashboard/presentation/pages/liquid_splash_page.dart';
 import 'features/script_management/domain/entities/script.dart';
 import 'features/script_management/domain/repositories/script_repository.dart';
 
@@ -26,7 +26,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Script Automator',
       theme: LiquidTheme.lightTheme,
-      home: const LiquidDashboardPage(),
+      home: const LiquidSplashPage(),
       debugShowCheckedModeBanner: false,
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'liquid_bento_card.dart';
 
 class StaggeredScriptGrid extends StatelessWidget {
@@ -44,12 +45,23 @@ class StaggeredScriptGrid extends StatelessWidget {
     }
 
     return Column(
-      children: rows
-          .map(
-            (r) =>
-                Padding(padding: const EdgeInsets.only(bottom: 16), child: r),
-          )
-          .toList(),
+      children: rows.asMap().entries.map((entry) {
+        final index = entry.key;
+        final widget = entry.value;
+        return AnimationConfiguration.staggeredList(
+          position: index,
+          duration: const Duration(milliseconds: 600),
+          child: SlideAnimation(
+            verticalOffset: 50.0,
+            child: FadeInAnimation(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: widget,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 

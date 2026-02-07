@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'package:flutter/services.dart';
 
-class GlassDock extends StatelessWidget {
+class GlassDock extends StatefulWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
 
@@ -10,6 +11,13 @@ class GlassDock extends StatelessWidget {
     required this.selectedIndex,
     required this.onItemSelected,
   });
+
+  @override
+  State<GlassDock> createState() => _GlassDockState();
+}
+
+class _GlassDockState extends State<GlassDock> {
+  int _hoveredIndex = -1;
 
   @override
   Widget build(BuildContext context) {
@@ -51,11 +59,14 @@ class GlassDock extends StatelessWidget {
   }
 
   Widget _buildDockItem(IconData icon, int index, {bool isFab = false}) {
-    final isSelected = selectedIndex == index;
+    final isSelected = widget.selectedIndex == index;
 
     if (isFab) {
       return GestureDetector(
-        onTap: () => onItemSelected(index),
+        onTap: () {
+          HapticFeedback.mediumImpact();
+          widget.onItemSelected(index);
+        },
         child: Container(
           width: 50,
           height: 50,
@@ -76,18 +87,40 @@ class GlassDock extends StatelessWidget {
     }
 
     return GestureDetector(
-      onTap: () => onItemSelected(index),
-      child: AnimatedContainer(
+      onTapDown: (_) => setState(() => _hoveredIndex = index),
+      onTapUp: (_) => setState(() => _hoveredIndex = -1),
+      onTapCancel: () => setState(() => _hoveredIndex = -1),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        widget.onItemSelected(index);
+      },
+      child: AnimatedScale(
+        scale: _hoveredIndex == index ? 1.1 : 1.0,
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Icon(
-          icon,
-          color: isSelected ? const Color(0xFF1E293B) : const Color(0xFF64748B),
-          size: 26,
+        curve: Curves.easeOutBack,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : [],
+          ),
+          child: Icon(
+            icon,
+            color: isSelected
+                ? const Color(0xFF1E293B)
+                : const Color(0xFF64748B),
+            size: 26,
+          ),
         ),
       ),
     );

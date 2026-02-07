@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:ui';
+import 'package:flutter/services.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 
 enum BentoSize { small, wide, large }
@@ -68,7 +69,10 @@ class _LiquidBentoCardState extends State<LiquidBentoCard>
     final activeGradient = gradients[gradientIndex];
 
     return GestureDetector(
-      onTapDown: _handleTapDown,
+      onTapDown: (details) {
+        HapticFeedback.lightImpact();
+        _handleTapDown(details);
+      },
       onTapUp: _handleTapUp,
       onTapCancel: _handleTapCancel,
       onTap: widget.onTap,

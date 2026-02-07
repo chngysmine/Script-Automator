@@ -75,8 +75,8 @@ struct UniversalWidgetView: View {
         content()
             .padding(modifiers?.padding?.toEdgeInsets() ?? EdgeInsets())
             .frame(
-                width: modifiers?.width,
-                height: modifiers?.height
+                width: modifiers?.width.map { CGFloat($0) },
+                height: modifiers?.height.map { CGFloat($0) }
             )
             .background(parseBackground(modifiers?.background))
             .cornerRadius(modifiers?.cornerRadius ?? 0)
