@@ -152,17 +152,23 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
                     "Good Morning,",
                     style: TextStyle(
                       fontSize: 16,
-                      color: Colors.grey[600],
+                      color: LiquidTheme.textLight, // Standardized
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const Text(
-                    "CodeForge",
-                    style: TextStyle(
-                      fontSize: 34,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF1E293B),
-                      letterSpacing: -1.5,
+                  ShaderMask(
+                    shaderCallback: (bounds) {
+                      return LiquidTheme.brandDarkGradient.createShader(bounds);
+                    },
+                    blendMode: BlendMode.srcIn,
+                    child: const Text(
+                      "CodeForge",
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w800,
+                        color: LiquidTheme.textDeep, // Standardized Fallback
+                        letterSpacing: -1.5,
+                      ),
                     ),
                   ),
                 ],
@@ -185,7 +191,7 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
                   ),
                   child: const Icon(
                     Icons.menu_rounded,
-                    color: Color(0xFF1E293B),
+                    color: LiquidTheme.textDeep, // Standardized
                   ),
                 ),
               ),

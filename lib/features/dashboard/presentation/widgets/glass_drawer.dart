@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'dart:ui';
 
 class GlassDrawer extends StatefulWidget {
@@ -49,7 +50,7 @@ class _GlassDrawerState extends State<GlassDrawer>
                 children: [
                   // Deep Space Base
                   Container(
-                    color: const Color(0xFF0F172A).withValues(alpha: 0.6),
+                    color: LiquidTheme.darkBackground.withValues(alpha: 0.6),
                   ),
 
                   // Aurora Mesh 1
@@ -70,12 +71,14 @@ class _GlassDrawerState extends State<GlassDrawer>
                     filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(
+                        color: LiquidTheme.textPrimary.withValues(
                           alpha: 0.1,
                         ), // Ultra-thin glass
                         border: Border(
                           right: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.1),
+                            color: LiquidTheme.textPrimary.withValues(
+                              alpha: 0.1,
+                            ),
                             width: 1,
                           ),
                         ),
@@ -91,7 +94,7 @@ class _GlassDrawerState extends State<GlassDrawer>
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          Colors.white.withValues(alpha: 0.05),
+                          LiquidTheme.textPrimary.withValues(alpha: 0.05),
                           Colors.transparent,
                           Colors.black.withValues(alpha: 0.05),
                         ],
@@ -122,7 +125,9 @@ class _GlassDrawerState extends State<GlassDrawer>
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3),
+                              color: LiquidTheme.textPrimary.withValues(
+                                alpha: 0.3,
+                              ),
                               width: 2,
                             ),
                             boxShadow: [
@@ -147,7 +152,7 @@ class _GlassDrawerState extends State<GlassDrawer>
                             fontFamily: 'Inter',
                             fontWeight: FontWeight.bold,
                             fontSize: 28,
-                            color: Colors.white,
+                            color: LiquidTheme.textPrimary,
                             letterSpacing: -0.5,
                           ),
                         ),
@@ -155,7 +160,9 @@ class _GlassDrawerState extends State<GlassDrawer>
                           "Pro Workspace",
                           style: TextStyle(
                             fontFamily: 'Inter',
-                            color: Colors.white.withValues(alpha: 0.6),
+                            color: LiquidTheme.textPrimary.withValues(
+                              alpha: 0.6,
+                            ),
                             fontWeight: FontWeight.w500,
                             fontSize: 14,
                           ),
@@ -287,25 +294,31 @@ class _GlassDrawerState extends State<GlassDrawer>
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
           color: isActive
-              ? Colors.white.withValues(alpha: 0.1)
+              ? LiquidTheme.textPrimary.withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
           border: isActive
-              ? Border.all(color: Colors.white.withValues(alpha: 0.2))
+              ? Border.all(
+                  color: LiquidTheme.textPrimary.withValues(alpha: 0.2),
+                )
               : null,
         ),
         child: Row(
           children: [
             Icon(
               icon,
-              color: Colors.white.withValues(alpha: isActive ? 1.0 : 0.6),
+              color: LiquidTheme.textPrimary.withValues(
+                alpha: isActive ? 1.0 : 0.6,
+              ),
               size: 22,
             ),
             const SizedBox(width: 16),
             Text(
               label,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: isActive ? 1.0 : 0.6),
+                color: LiquidTheme.textPrimary.withValues(
+                  alpha: isActive ? 1.0 : 0.6,
+                ),
                 fontSize: 16,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
               ),
@@ -334,19 +347,21 @@ class _GlassDrawerState extends State<GlassDrawer>
         borderRadius: BorderRadius.circular(20),
         gradient: LinearGradient(
           colors: [
-            Colors.white.withValues(alpha: 0.15),
-            Colors.white.withValues(alpha: 0.05),
+            LiquidTheme.textPrimary.withValues(alpha: 0.15),
+            LiquidTheme.textPrimary.withValues(alpha: 0.05),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+        border: Border.all(
+          color: LiquidTheme.textPrimary.withValues(alpha: 0.2),
+        ),
       ),
       alignment: Alignment.center,
       child: Text(
         label,
         style: const TextStyle(
-          color: Colors.white,
+          color: LiquidTheme.textPrimary,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.5,
         ),

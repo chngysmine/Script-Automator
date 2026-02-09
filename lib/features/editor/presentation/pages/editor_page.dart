@@ -5,6 +5,7 @@ import '../painters/viewport_aware_painter.dart';
 import '../widgets/keyboard_toolbar.dart';
 import '../syntax_highlighter.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
+import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'dart:ui';
 import 'dart:math';
 
@@ -302,13 +303,71 @@ class _EditorPageState extends State<EditorPage>
       height: 250,
       width: 300,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(24),
+        gradient: LiquidTheme.auroraGradient,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: LiquidTheme.primary.withValues(alpha: 0.2),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
-      child: const Center(
-        child: Text(
-          "Widget Preview",
-          style: TextStyle(fontWeight: FontWeight.bold),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.6),
+                width: 1.5,
+              ),
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.widgets_rounded,
+                    size: 32,
+                    color: LiquidTheme.textDeep,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  "Widget Preview",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: LiquidTheme.textDeep,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Visual output will appear here.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: LiquidTheme.textMedium),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -336,21 +395,9 @@ class _EditorPageState extends State<EditorPage>
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          // 1. EXACT DASHBOARD BACKGROUND (Aurora + Orbs) - MODE: WARM SUNSET
+          // 1. DASHBOARD BACKGROUND (Aurora + Orbs) - MODE: WARM SUNSET
           Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFFFF7ED), // Orange 50
-                  Color(0xFFFFE4E6), // Rose 100
-                  Color(0xFFFCE7F3), // Pink 100
-                  Colors.white, // Pure White
-                ],
-                stops: [0.0, 0.4, 0.7, 1.0],
-              ),
-            ),
+            decoration: const BoxDecoration(gradient: LiquidTheme.roseGradient),
           ),
           Positioned(
             top: -100,
@@ -461,7 +508,7 @@ class _EditorPageState extends State<EditorPage>
                                               textStyle: const TextStyle(
                                                 fontFamily: 'monospace',
                                                 fontSize: 13.5,
-                                                color: Color(0xFF1E293B),
+                                                color: LiquidTheme.textDeep,
                                                 height: 1.6,
                                                 fontWeight: FontWeight.w500,
                                               ),
@@ -470,7 +517,7 @@ class _EditorPageState extends State<EditorPage>
                                                 baseStyle: const TextStyle(
                                                   fontFamily: 'monospace',
                                                   fontSize: 13.5,
-                                                  color: Color(0xFF1E293B),
+                                                  color: LiquidTheme.textDeep,
                                                   height: 1.6,
                                                   fontWeight: FontWeight.w500,
                                                 ),
@@ -592,85 +639,100 @@ class _EditorPageState extends State<EditorPage>
 
   // Expanded Sheet (Standard App Logs)
   Widget _buildConsoleSheet() {
-    return Container(
-      height: 320,
-      margin: const EdgeInsets.only(left: 12, right: 12, bottom: 60),
-      decoration: BoxDecoration(
-        color: const Color(
-          0xFF1F2937,
-        ).withValues(alpha: 0.95), // Mobile Dark Mode
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
-            blurRadius: 40,
-            offset: const Offset(0, 20),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          height: 320,
+          margin: const EdgeInsets.only(left: 12, right: 12, bottom: 60),
+          decoration: BoxDecoration(
+            color: LiquidTheme.darkBackground.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 40,
+                offset: const Offset(0, 20),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Title Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.white12)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => setState(() {
-                        _isLogExpanded = false;
-                        _showConsole = false;
-                      }),
-                      child: _buildStatusDot(const Color(0xFFEF4444)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title Bar
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.05),
                     ),
-                    const SizedBox(width: 8),
-                    _buildStatusDot(const Color(0xFFF59E0B)),
-                    const SizedBox(width: 8),
-                    _buildStatusDot(const Color(0xFF10B981)),
+                  ),
+                  color: Colors.black.withValues(alpha: 0.2),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => setState(() {
+                            _isLogExpanded = false;
+                            _showConsole = false;
+                          }),
+                          child: _buildStatusDot(const Color(0xFFEF4444)),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildStatusDot(const Color(0xFFF59E0B)),
+                        const SizedBox(width: 8),
+                        _buildStatusDot(const Color(0xFF10B981)),
+                      ],
+                    ),
+                    const Text(
+                      "Console Output",
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Colors.white54,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 40),
                   ],
                 ),
-                const Text(
-                  "Console Output",
-                  style: TextStyle(
-                    color: Colors.white38,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
+              ),
+              // Log Content
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _logs.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final log = _logs[index];
+                    return Text(
+                      log,
+                      style: const TextStyle(
+                        color: Color(0xFFE5E7EB),
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                        height: 1.3,
+                      ),
+                    );
+                  },
                 ),
-                const SizedBox(width: 40),
-              ],
-            ),
+              ),
+            ],
           ),
-          // Log Content
-          Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: _logs.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 6),
-              itemBuilder: (context, index) {
-                final log = _logs[index];
-                return Text(
-                  log,
-                  style: const TextStyle(
-                    color: Color(0xFFE5E7EB),
-                    fontFamily: 'monospace',
-                    fontSize: 13,
-                    height: 1.3,
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+        ),
       ),
-    );
+    ); // Close Container, BackdropFilter, ClipRRect
   }
 
   Widget _buildStatusDot(Color color) {

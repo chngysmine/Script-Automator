@@ -15,4 +15,8 @@ enum WidgetType {
   spacer,
   @JsonValue('list')
   list,
+  @JsonValue('container')
+  container,
+  @JsonValue('icon')
+  icon,
 }

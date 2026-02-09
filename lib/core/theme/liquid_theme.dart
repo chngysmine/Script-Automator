@@ -11,6 +11,11 @@ class LiquidTheme {
   static const Color accent = Color(0xFFEC4899); // Pink
   static const Color cyan = Color(0xFF06B6D4);
 
+  // --- 2026 Liquid Colors (Standardized) ---
+  static const Color textDeep = Color(0xFF0F172A); // Slate 900
+  static const Color textMedium = Color(0xFF334155); // Slate 700
+  static const Color textLight = Color(0xFF64748B); // Slate 500
+
   // Backgrounds
   static const Color darkBackground = Color(0xFF0F172A); // Slate 900
   static const Color lightBackground = Color(0xFFF8FAFC); // Slate 50
@@ -41,6 +46,27 @@ class LiquidTheme {
       Color(0xFF4C1D95), // Violet 900
       Color(0xFF831843), // Pink 900
     ],
+  );
+
+  static const LinearGradient brandDarkGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFF0F172A), // Slate 900
+      Color(0xFF334155), // Slate 700
+    ],
+  );
+
+  static const LinearGradient roseGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFFFFF7ED), // Orange 50
+      Color(0xFFFFE4E6), // Rose 100
+      Color(0xFFFCE7F3), // Pink 100
+      Colors.white, // Pure White
+    ],
+    stops: [0.0, 0.4, 0.7, 1.0],
   );
 
   // --- Legacy Compatibility (Mapped to 2026 Design) ---

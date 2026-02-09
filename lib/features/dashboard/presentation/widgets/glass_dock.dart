@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
+import 'package:script_automator/core/theme/liquid_theme.dart';
+
 import 'package:flutter/services.dart';
 
 class GlassDock extends StatefulWidget {
@@ -21,39 +22,29 @@ class _GlassDockState extends State<GlassDock> {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(32),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          height: 72,
-          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.6),
-            borderRadius: BorderRadius.circular(32),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.5),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 30,
-                offset: const Offset(0, 10),
-              ),
-            ],
+    return Container(
+      height: 72,
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.9), // Solid White (Layer 2)
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 30,
+            offset: const Offset(0, 10),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildDockItem(Icons.grid_view_rounded, 0),
-              _buildDockItem(Icons.search_rounded, 1),
-              _buildDockItem(Icons.add_rounded, 2, isFab: true),
-              _buildDockItem(Icons.analytics_rounded, 3),
-              _buildDockItem(Icons.person_rounded, 4),
-            ],
-          ),
-        ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildDockItem(Icons.grid_view_rounded, 0),
+          _buildDockItem(Icons.search_rounded, 1),
+          _buildDockItem(Icons.add_rounded, 2, isFab: true),
+          _buildDockItem(Icons.analytics_rounded, 3),
+          _buildDockItem(Icons.person_rounded, 4),
+        ],
       ),
     );
   }
@@ -71,11 +62,11 @@ class _GlassDockState extends State<GlassDock> {
           width: 50,
           height: 50,
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B), // Slate 800
+            color: LiquidTheme.textDeep, // Standardized
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF1E293B).withValues(alpha: 0.4),
+                color: LiquidTheme.textDeep.withValues(alpha: 0.4),
                 blurRadius: 15,
                 offset: const Offset(0, 8),
               ),
@@ -117,8 +108,9 @@ class _GlassDockState extends State<GlassDock> {
           child: Icon(
             icon,
             color: isSelected
-                ? const Color(0xFF1E293B)
-                : const Color(0xFF64748B),
+                ? LiquidTheme
+                      .textDeep // Standardized
+                : LiquidTheme.textLight, // Standardized
             size: 26,
           ),
         ),
