@@ -220,19 +220,8 @@ class JSCEngine implements JSEngine, Finalizable {
     developer.log("Registered host object $obj with ID $id as $varName (JSC)");
   }
 
-  // Use NativeFinalizer to protect JS Values until Dart GCs the Handle.
-  JSHandle createHandle(Pointer<JSValue> val) {
-    // 1. Create a stable Reference wrapper in C (calls JSValueProtect)
-    final ref = _lib.CreateJSCValueRef(_ctx!, val);
-
-    // 2. Create Dart Handle
-    final handle = JSHandle(ref);
-
-    // 3. Attach Finalizer: When 'handle' GC -> C calls FinalizeJSCValue -> JSValueUnprotect
-    _finalizer.attach(handle, ref.cast(), detach: handle);
-
-    return handle;
-  }
+  // JSHandle createHandle removed as it relied on missing native symbols.
+  // If needed in future, implement manual JSValueProtect/Unprotect.
 
   /// Destroys the engine context and releases resources.
   @override
@@ -251,9 +240,4 @@ class JSCEngine implements JSEngine, Finalizable {
   }
 }
 
-class JSHandle implements Finalizable {
-  final Pointer<JSCValueRef> _ref;
-  JSHandle(this._ref);
-
-  Pointer<JSCValueRef> get ref => _ref;
-}
+// JSHandle Removed

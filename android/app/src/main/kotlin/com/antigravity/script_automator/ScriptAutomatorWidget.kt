@@ -14,18 +14,28 @@ import com.google.gson.JsonObject
 class ScriptAutomatorWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        // Strategy: Read from "sasup_ui.json" in root files dir.
-        // In real implementations, mapping GlanceId to specific file ID is needed.
-        // We stick to a single file for the "Universal Engine" MVP.
+        // Strategy: Read from "sasup_ui.json" in app files directory.
+        // The Flutter app writes the widget JSON to this location after running a script.
         
-        // [VERIFICATION MODE]
-        // GlanceJsonParser is disabled to ensure main app testing stability.
-        // Falling back to simple text.
-
+        val filesDir = context.filesDir
+        val jsonFile = File(filesDir, "sasup_ui.json")
+        
         provideContent {
             GlanceTheme {
-                Text("Script Automator: Widget Verification Mode")
+                if (jsonFile.exists()) {
+                    try {
+                        val json = jsonFile.readText()
+                        val rootObject = JsonParser.parseString(json).asJsonObject
+                        val rootNode = rootObject.getAsJsonObject("root")
+                        GlanceJsonParser.RenderNode(rootNode)
+                    } catch (e: Exception) {
+                        Text("Widget Error: ${e.message?.take(50)}")
+                    }
+                } else {
+                    Text("No widget output yet. Run a script with renderWidget() first.")
+                }
             }
         }
     }
 }
+

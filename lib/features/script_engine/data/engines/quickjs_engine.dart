@@ -19,7 +19,15 @@ class QuickJSEngine implements JSEngine {
 
   static DynamicLibrary _loadLibrary() {
     if (Platform.isAndroid) {
-      return DynamicLibrary.open('libscript_engine.so');
+      try {
+        return DynamicLibrary.open('libscript_engine.so');
+      } catch (e) {
+        throw JSEngineException(
+          'Failed to load native QuickJS library (libscript_engine.so). '
+          'Ensure the native library has been compiled and is included in the APK. '
+          'Original error: $e',
+        );
+      }
     }
     // iOS/macOS now uses JSCEngine directly, so we don't try to load QuickJS there.
     throw UnsupportedError('QuickJS not supported on this platform');

@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async'; // StreamSubscription
+import 'package:get_it/get_it.dart';
+import '../../../../features/script_engine/domain/script_runner_service.dart';
 import '../../domain/code_forge_controller.dart';
+import '../../../../features/ai_integration/data/services/gemini_service.dart';
+import '../../../../features/ai_integration/data/services/ollama_service.dart'; // Import OllamaService
 import '../painters/viewport_aware_painter.dart';
 import '../widgets/keyboard_toolbar.dart';
+import '../widgets/console_log_widget.dart'; // Enhanced Console
 import '../syntax_highlighter.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
+import '../../../../features/script_management/domain/repositories/script_repository.dart';
+
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'dart:ui';
 import 'dart:math';
+import 'dart:convert';
+import 'package:script_automator/features/widget_renderer/domain/entities/widget_node.dart';
+import 'package:script_automator/features/widget_renderer/presentation/widgets/sasup_renderer.dart';
 
 class EditorPage extends StatefulWidget {
   final Script? script;
@@ -24,12 +35,18 @@ class _EditorPageState extends State<EditorPage>
   final ScrollController _verticalController = ScrollController();
   final ScrollController _horizontalController = ScrollController();
   final FocusNode _focusNode = FocusNode();
-  final List<String> _logs = [];
+  final List<ConsoleLogEntry> _logs = []; // Enhanced log entries
+  bool _showSuccessAnimation = false; // Script completion animation
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
   bool _showConsole = false;
   bool _isLogExpanded = false;
+
+  // Phase 4 Integration: Real Engine
+  final ScriptRunnerService _runnerService = GetIt.I<ScriptRunnerService>();
+  StreamSubscription<String>? _logSubscription;
+  StreamSubscription<String>? _renderSubscription;
 
   @override
   void initState() {
@@ -50,24 +67,151 @@ class _EditorPageState extends State<EditorPage>
     _inputController.text = initialText;
     _controller.setText(_inputController.text);
 
+    // Auto-Save Logic
     _inputController.addListener(() {
       if (_controller.text != _inputController.text) {
         _controller.setText(_inputController.text);
         _controller.selection = _inputController.selection;
+        _onTextChanged(); // Trigger Debounce Save
         setState(() {});
       }
     });
+
+    // Listen to Real Engine Logs
+    _logSubscription = _runnerService.logs.listen((log) {
+      if (!mounted) return;
+      setState(() {
+        _logs.add(ConsoleLogEntry.fromRawLog(log));
+        // Auto-detect script completion
+        if (log.contains('completed') ||
+            log.contains('SUCCESS') ||
+            log.contains('✓')) {
+          _showSuccessAnimation = true;
+        }
+      });
+    });
+
+    // Listen for Live Preview Requests
+    _renderSubscription = _runnerService.renderRequests.listen((jsonString) {
+      if (!mounted) return;
+      _showLivePreview(jsonString);
+    });
+  }
+
+  // --- Auto Save ---
+  Timer? _debounceTimer;
+  final ScriptRepository _repository = GetIt.I<ScriptRepository>();
+  bool _isSaving = false;
+
+  void _onTextChanged() {
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    _debounceTimer = Timer(
+      const Duration(seconds: 1, milliseconds: 500),
+      _saveScript,
+    );
+  }
+
+  Future<void> _saveScript() async {
+    if (widget.script == null) {
+      return; // Can't save untitled/temp yet contextually (though Dashboard creates one)
+    }
+
+    if (mounted) {
+      setState(() => _isSaving = true);
+    }
+
+    final updatedScript = Script(
+      id: widget.script!.id,
+      name: widget.script!.name,
+      content: _controller.text,
+      createdAt: widget.script!.createdAt,
+      updatedAt: DateTime.now(),
+      settings: widget.script!.settings,
+    );
+
+    // Save to Hive + Sync to SQLite (Widget)
+    await _repository.saveScript(updatedScript);
+
+    if (mounted) {
+      setState(() => _isSaving = false);
+    }
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
+    if (widget.script != null && _controller.text != widget.script!.content) {
+      // Create a fire-and-forget save that doesn't rely on State
+      final finalScript = Script(
+        id: widget.script!.id,
+        name: widget.script!.name,
+        content: _controller.text,
+        createdAt: widget.script!.createdAt,
+        updatedAt: DateTime.now(),
+        settings: widget.script!.settings,
+      );
+      _repository.saveScript(finalScript);
+    }
+    // _controller.dispose(); // Do not dispose here if passed from outside, but here it is local.
+    // However, EditorPage State owns it.
     _controller.dispose();
     _inputController.dispose();
     _verticalController.dispose();
     _horizontalController.dispose();
     _focusNode.dispose();
     _animController.dispose();
+    _logSubscription?.cancel();
+    _renderSubscription?.cancel();
     super.dispose();
+  }
+
+  void _showLivePreview(String jsonString) {
+    try {
+      final nodeMap = jsonDecode(jsonString);
+      final node = WidgetNode.fromJson(nodeMap as Map<String, dynamic>);
+
+      showDialog(
+        context: context,
+        builder: (context) => Center(
+          child: Container(
+            margin: const EdgeInsets.all(24),
+            constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 30,
+                  offset: const Offset(0, 15),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(32),
+              child: Stack(
+                children: [
+                  SasupRenderer(node: node),
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: IconButton.filled(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black26,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint("Preview Error: $e");
+    }
   }
 
   void _insertText(String text) {
@@ -88,289 +232,50 @@ class _EditorPageState extends State<EditorPage>
     );
   }
 
-  void _runScript() {
+  Future<void> _runScript() async {
     HapticFeedback.mediumImpact();
     setState(() {
       _showConsole = true;
       _isLogExpanded = true;
       _logs.clear();
-      _logs.add("[Info] Build started...");
+      _logs.add(ConsoleLogEntry.fromRawLog("[INFO] Initializing Engine..."));
     });
 
-    Future.delayed(const Duration(milliseconds: 600), () {
-      if (!mounted) return;
-      setState(() {
-        _logs.add("[Info] Compiled successfully in 45ms");
-      });
-    });
-
-    Future.delayed(const Duration(milliseconds: 1200), () {
-      if (!mounted) return;
-      final isWeather =
-          _controller.text.contains("Weather") ||
-          widget.script?.name.contains("Weather") == true;
-
-      setState(() {
-        if (isWeather) {
-          _logs.add("[Service] LocationManager: Requesting updates...");
-          _logs.add("[Service] LocationManager: Hanoi, VN (Accuracy: High)");
-          _logs.add("[Network] GET api.weather.com/v1/current 200 OK");
-        } else {
-          _logs.add("[Output] Hello World!");
-        }
-      });
-
-      if (isWeather) {
-        _showWidgetPreview(isWeather: true);
-      } else if (_controller.text.contains("render")) {
-        _showWidgetPreview(isWeather: false);
-      }
-    });
-  }
-
-  void _showWidgetPreview({required bool isWeather}) {
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: true,
-        builder: (_) => BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-          child: AlertDialog(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            contentPadding: EdgeInsets.zero,
-            content: ClipRRect(
-              borderRadius: BorderRadius.circular(40),
-              child: isWeather ? _buildLiveWeatherCard() : _buildGenericCard(),
-            ),
-          ),
-        ),
+    try {
+      await _runnerService.runScript(
+        _controller.text,
+        widget.script?.id ?? 'manual_run',
       );
-    });
-  }
-
-  Widget _buildLiveWeatherCard() {
-    final hour = DateTime.now().hour;
-    final isNight = hour < 6 || hour > 18;
-    final temp = 29;
-
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.8, end: 1.0),
-      duration: const Duration(milliseconds: 800),
-      curve: Curves.elasticOut,
-      builder: (context, value, child) {
-        return Transform.scale(
-          scale: value,
-          child: Container(
-            width: 340,
-            constraints: const BoxConstraints(minHeight: 420),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: isNight
-                    ? [const Color(0xFF0F172A), const Color(0xFF312E81)]
-                    : [const Color(0xFF2563EB), const Color(0xFF60A5FA)],
-              ),
-              borderRadius: BorderRadius.circular(40),
-              boxShadow: [
-                BoxShadow(
-                  color: (isNight ? Colors.black : Colors.blueAccent)
-                      .withValues(alpha: 0.4),
-                  blurRadius: 60,
-                  offset: const Offset(0, 30),
-                ),
-              ],
+      if (mounted) {
+        setState(() {
+          _logs.add(
+            ConsoleLogEntry(
+              message: "Script executed successfully!",
+              level: LogLevel.success,
             ),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        center: Alignment.topRight,
-                        radius: 1.2,
-                        colors: [
-                          Colors.white.withValues(alpha: 0.2),
-                          Colors.transparent,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(40),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(28.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.near_me,
-                            color: Colors.white.withValues(alpha: 0.9),
-                            size: 16,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            "HANOI, VN",
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-                      Icon(
-                        isNight
-                            ? Icons.nights_stay_rounded
-                            : Icons.wb_sunny_rounded,
-                        size: 110,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        "$temp°",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 92,
-                          fontWeight: FontWeight.w600,
-                          height: 1.0,
-                        ),
-                      ),
-                      Text(
-                        isNight ? "Clear Night" : "Mostly Sunny",
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          fontSize: 22,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                      const SizedBox(height: 40),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 20,
-                          horizontal: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            width: 1,
-                          ),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _WeatherStat(
-                              icon: Icons.water_drop_rounded,
-                              label: "Humidity",
-                              value: "88%",
-                            ),
-                            _WeatherStat(
-                              icon: Icons.air_rounded,
-                              label: "Wind",
-                              value: "9 km/h",
-                            ),
-                            _WeatherStat(
-                              icon: Icons.compress,
-                              label: "Pressure",
-                              value: "1009",
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+          );
+          _showSuccessAnimation = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              "Script executed. If this was a widget, check your Home Screen.",
             ),
+            backgroundColor: LiquidTheme.primary,
+            behavior: SnackBarBehavior.floating,
           ),
         );
-      },
-    );
-  }
-
-  Widget _buildGenericCard() {
-    return Container(
-      height: 250,
-      width: 300,
-      decoration: BoxDecoration(
-        gradient: LiquidTheme.auroraGradient,
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: LiquidTheme.primary.withValues(alpha: 0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+      }
+    } catch (e) {
+      setState(() {
+        _logs.add(
+          ConsoleLogEntry(
+            message: "Failed to run script: $e",
+            level: LogLevel.error,
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(32),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.6),
-                width: 1.5,
-              ),
-            ),
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.widgets_rounded,
-                    size: 32,
-                    color: LiquidTheme.textDeep,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  "Widget Preview",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: LiquidTheme.textDeep,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "Visual output will appear here.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 14, color: LiquidTheme.textMedium),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+        );
+      });
+    }
   }
 
   // Helper for Orbs (Copied from DashboardPage)
@@ -416,10 +321,15 @@ class _EditorPageState extends State<EditorPage>
             ), // Orange 300
           ),
 
-          // Heavy Blur for uniformity (Optional, but helps text legibility if Editor is semi-transparent)
+          // Heavy Blur for uniformity (Liquid Glass Effect)
           BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-            child: Container(color: Colors.transparent),
+            filter: ImageFilter.blur(
+              sigmaX: 25,
+              sigmaY: 25,
+            ), // Reduced slightly for sharpness
+            child: Container(
+              color: Colors.white.withValues(alpha: 0.2),
+            ), // Light Tint
           ),
 
           // 2. Editor Surface (PRISM GLASS: Tinted, not White)
@@ -439,25 +349,34 @@ class _EditorPageState extends State<EditorPage>
                           end: Alignment.bottomRight,
                           colors: [
                             const Color(
-                              0xFFFFF1F2,
-                            ).withValues(alpha: 0.7), // Rose 50
+                              0xFFFFFFFF,
+                            ).withValues(alpha: 0.85), // White 85%
                             const Color(
-                              0xFFFDF2F8,
-                            ).withValues(alpha: 0.5), // Pink 50
+                              0xFFF8FAFC,
+                            ).withValues(alpha: 0.65), // Slate 50 65%
                           ],
                         ),
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.8),
+                          color: Colors.white.withValues(alpha: 0.9),
                           width: 1.5,
                         ),
                         boxShadow: [
                           BoxShadow(
                             color: const Color(
-                              0xFFE11D48,
-                            ).withValues(alpha: 0.05), // Rose Shadow
-                            blurRadius: 30,
-                            offset: const Offset(0, 15),
+                              0xFF64748B,
+                            ).withValues(alpha: 0.1), // Slate Shadow
+                            blurRadius: 40,
+                            offset: const Offset(0, 20),
+                          ),
+                          BoxShadow(
+                            color: Colors.white.withValues(
+                              alpha: 0.4,
+                            ), // Inner reflection simulation
+                            blurRadius: 0,
+                            offset: const Offset(0, 0),
+                            spreadRadius:
+                                1, // Inset border effect via spread (hacky)
                           ),
                         ],
                       ),
@@ -505,22 +424,10 @@ class _EditorPageState extends State<EditorPage>
                                                   : 0,
                                               viewportHeight:
                                                   constraints.maxHeight,
-                                              textStyle: const TextStyle(
-                                                fontFamily: 'monospace',
-                                                fontSize: 13.5,
-                                                color: LiquidTheme.textDeep,
-                                                height: 1.6,
-                                                fontWeight: FontWeight.w500,
-                                              ),
+                                              textStyle: _kEditorTextStyle,
                                               gutterWidth: 44.0,
                                               highlighter: SyntaxHighlighter(
-                                                baseStyle: const TextStyle(
-                                                  fontFamily: 'monospace',
-                                                  fontSize: 13.5,
-                                                  color: LiquidTheme.textDeep,
-                                                  height: 1.6,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
+                                                baseStyle: _kEditorTextStyle,
                                               ),
                                             ),
                                           ),
@@ -536,17 +443,22 @@ class _EditorPageState extends State<EditorPage>
                                             maxLines: null,
                                             keyboardType:
                                                 TextInputType.multiline,
-                                            style: const TextStyle(
-                                              fontFamily: 'monospace',
-                                              fontSize: 13.5,
-                                              color: Colors.transparent,
-                                              height: 1.6,
+                                            showCursor: true,
+                                            style: _kEditorTextStyle.copyWith(
+                                              color: const Color(0xFF1E293B),
                                             ),
+                                            strutStyle: const StrutStyle(
+                                              fontSize: 13.5,
+                                              height: 1.6,
+                                              leading: 0,
+                                              forceStrutHeight: true,
+                                            ), // LOCK LINE HEIGHT
                                             cursorColor: const Color(
                                               0xFF0284C7,
-                                            ),
+                                            ), // Sky 600
                                             decoration: const InputDecoration(
                                               border: InputBorder.none,
+                                              // contentPadding: EdgeInsets.only(top: 2), // Removed manual padding, relying on Strut
                                               contentPadding: EdgeInsets.zero,
                                             ),
                                           ),
@@ -577,6 +489,14 @@ class _EditorPageState extends State<EditorPage>
                 child: _isLogExpanded
                     ? _buildConsoleSheet()
                     : _buildConsolePill(),
+              ),
+            ),
+
+          // 4. SUCCESS ANIMATION OVERLAY
+          if (_showSuccessAnimation)
+            Center(
+              child: ScriptSuccessOverlay(
+                onComplete: () => setState(() => _showSuccessAnimation = false),
               ),
             ),
 
@@ -716,15 +636,7 @@ class _EditorPageState extends State<EditorPage>
                       const SizedBox(height: 6),
                   itemBuilder: (context, index) {
                     final log = _logs[index];
-                    return Text(
-                      log,
-                      style: const TextStyle(
-                        color: Color(0xFFE5E7EB),
-                        fontFamily: 'monospace',
-                        fontSize: 13,
-                        height: 1.3,
-                      ),
-                    );
+                    return ConsoleLogItem(entry: log);
                   },
                 ),
               ),
@@ -762,11 +674,308 @@ class _EditorPageState extends State<EditorPage>
               fontSize: 16,
             ),
           ),
+          if (_isSaving)
+            const Padding(
+              padding: EdgeInsets.only(left: 8.0),
+              child: SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+
           _buildGlassBtn(
             context,
-            Icons.play_arrow_rounded,
-            _runScript,
-            isPrimary: true,
+            Icons.auto_awesome,
+            () async {
+              // TAP: Trigger AI
+
+              // 1. If Not Configured, Show Onboarding
+              if (CodeForgeController.activeAiProvider == null) {
+                if (context.mounted) await _showAIOnboardingDialog(context);
+                if (CodeForgeController.activeAiProvider == null) return;
+              }
+
+              // 2. Provider Specific Checks
+              // With default fallback key, Gemini is always "ready" basic usage.
+
+              // 3. Trigger
+              await _controller.triggerGhostText();
+              HapticFeedback.lightImpact();
+            },
+            onLongPress: () {
+              // LONG PRESS: Re-Open Settings/Onboarding
+              _showAIOnboardingDialog(context);
+            },
+          ),
+          const SizedBox(width: 8),
+          _buildGlassBtn(context, Icons.play_arrow_rounded, _runScript),
+        ],
+      ),
+    );
+  }
+
+  // REPLACES _showAIProviderDialog with a proper Onboarding experience
+  Future<void> _showAIOnboardingDialog(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFFF8FAFC),
+              surfaceTintColor: Colors.white,
+              title: const Row(
+                children: [
+                  Icon(Icons.auto_awesome, color: LiquidTheme.primary),
+                  SizedBox(width: 8),
+                  Text(
+                    "Enable AI Assistant",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Choose your intelligence engine:",
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // OPTION A: GEMINI
+                    // OPTION A: GEMINI (Instant)
+                    _buildProviderCard(
+                      title: "Google Gemini (Instant)",
+                      subtitle: "Ready to use • Free Tier • Fast",
+                      icon: Icons.flash_on_rounded,
+                      isSelected:
+                          CodeForgeController.activeAiProvider == 'gemini',
+                      onTap: () async {
+                        setState(
+                          () => CodeForgeController.activeAiProvider = 'gemini',
+                        );
+                        // No key check needed for basic usage
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // OPTION B: OLLAMA
+                    _buildProviderCard(
+                      title: "Ollama (Local/Private)",
+                      subtitle: "Runs on PC • Secure • No Internet",
+                      icon: Icons.computer,
+                      isSelected:
+                          CodeForgeController.activeAiProvider == 'ollama',
+                      onTap: () {
+                        setState(
+                          () => CodeForgeController.activeAiProvider = 'ollama',
+                        );
+                      },
+                    ),
+
+                    // OLLAMA SETUP GUIDE (Collapsed unless selected)
+                    if (CodeForgeController.activeAiProvider == 'ollama')
+                      Container(
+                        margin: const EdgeInsets.only(top: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.grey.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Setup Instructions:",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              "1. On your PC, run Ollama with:",
+                              style: TextStyle(fontSize: 11),
+                            ),
+                            Container(
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              padding: const EdgeInsets.all(6),
+                              color: Colors.grey[100],
+                              child: const SelectableText(
+                                "OLLAMA_HOST=0.0.0.0 ollama serve",
+                                style: TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                            const Text(
+                              "2. Find your PC's IP (e.g., 192.168.1.5)",
+                              style: TextStyle(fontSize: 11),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              "Connect to Host:",
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            TextField(
+                              style: const TextStyle(height: 1.0, fontSize: 13),
+                              decoration: const InputDecoration(
+                                hintText: "http://192.168.1.X:11434",
+                                isDense: true,
+                                border: OutlineInputBorder(),
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8,
+                                ),
+                              ),
+                              onChanged: (val) {
+                                GetIt.I<OllamaService>().setConfig(
+                                  val,
+                                  "deepseek-coder:6.7b",
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                // Option to use custom key (removes Free Tier limits)
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await _showApiKeyDialog(context);
+                  },
+                  child: const Text("Use My Own Key"),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Done"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildProviderCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? LiquidTheme.primary.withValues(alpha: 0.1)
+              : Colors.white,
+          border: Border.all(
+            color: isSelected
+                ? LiquidTheme.primary
+                : Colors.grey.withValues(alpha: 0.2),
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: isSelected ? LiquidTheme.primary : Colors.grey),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? LiquidTheme.primary : Colors.black87,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(
+                Icons.check_circle,
+                color: LiquidTheme.primary,
+                size: 18,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showApiKeyDialog(BuildContext context) async {
+    final textController = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Enter Gemini API Key"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "To use AI features, please provide a valid Google Gemini API Key from aistudio.google.com.",
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: textController,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: "API Key",
+                hintText: "AIzaSy...",
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (textController.text.isNotEmpty) {
+                await GetIt.I<GeminiService>().setApiKey(
+                  textController.text.trim(),
+                );
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("API Key Saved!")),
+                  );
+                }
+              }
+            },
+            child: const Text("Save"),
           ),
         ],
       ),
@@ -777,10 +986,12 @@ class _EditorPageState extends State<EditorPage>
     BuildContext context,
     IconData icon,
     VoidCallback onTap, {
+    VoidCallback? onLongPress,
     bool isPrimary = false,
   }) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
         width: 44,
         height: 44,
@@ -808,7 +1019,12 @@ class _EditorPageState extends State<EditorPage>
   }
 
   double _calculateHeight() {
-    return _controller.lineCount * 22.4 + 500;
+    // 13.5 * 1.6 = 21.6 exactly
+    // Adding extra buffer at bottom for easier typing
+    return max(
+      MediaQuery.of(context).size.height,
+      _controller.lineCount * (13.5 * 1.6) + 300,
+    );
   }
 
   double _calculateMaxWidth() {
@@ -822,39 +1038,17 @@ class _EditorPageState extends State<EditorPage>
   }
 }
 
+// SHARED STYLE CONSTANT TO PREVENT MISMATCH
+const TextStyle _kEditorTextStyle = TextStyle(
+  fontFamily: 'monospace',
+  fontSize: 13.5,
+  color: LiquidTheme.textDeep,
+  height: 1.6, // FIXED LINE HEIGHT matches TextField StrutStyle
+  fontFeatures: [FontFeature.tabularFigures()],
+  fontWeight: FontWeight.w500,
+);
+
 class CommonColors {
   static const Color pastelBlue = Color(0xFFE0F2FE);
   static const Color pastelPurple = Color(0xFFF3E8FF);
-}
-
-class _WeatherStat extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  const _WeatherStat({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white70, size: 20),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 13,
-          ),
-        ),
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white54, fontSize: 10),
-        ),
-      ],
-    );
-  }
 }

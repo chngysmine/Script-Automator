@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:script_automator/features/widget_renderer/domain/entities/sasup_modifiers.dart';
+
 import 'package:script_automator/features/widget_renderer/domain/entities/sasup_schema.dart';
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_type.dart';
 
@@ -74,10 +74,7 @@ void main() {
     // 3. Assertions
     expect(schema.meta.version, "1.0");
     expect(schema.root.type, WidgetType.column);
-    expect(
-      schema.root.modifiers?.padding?.mapOrNull(all: (v) => v.value),
-      16.0,
-    );
+    expect(schema.root.modifiers?.padding?.left, 16.0);
     expect(schema.root.children?.length, 3);
 
     // Check first child (Text)

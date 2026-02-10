@@ -45,13 +45,13 @@ void main() {
 
     // 2. Verify Input (While open)
     await tester.enterText(find.byType(TextField), "Hello AI");
-    await tester.tap(find.text("Send")); // Tap LiquidButton
+    await tester.tap(find.text("Generate")); // Tap FilledButton
     await tester.pump();
 
     expect(sentQuery, "Hello AI");
 
-    // 3. Verify Background Dimmer (Close)
-    await tester.tapAt(const Offset(10, 10)); // Top left, should be dimmer
+    // 3. Verify Close Button
+    await tester.tap(find.byIcon(Icons.close));
     await tester.pumpAndSettle();
     expect(closed, true);
   });

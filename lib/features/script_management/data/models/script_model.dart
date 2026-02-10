@@ -6,7 +6,13 @@ part 'script_model.g.dart';
 ///
 /// Stores metadata only. Content is stored internally in a separate box.
 @HiveType(typeId: 0)
+/// Migration Strategy:
+/// When changing fields, increment [schemaVersion] and add migration logic
+/// in [ScriptLocalDataSourceImpl.init()] to handle old data gracefully.
 class ScriptModel extends HiveObject {
+  /// Current schema version for migration tracking.
+  static const int schemaVersion = 1;
+
   /// Unique Identifier (UUID).
   @HiveField(0)
   final String id;

@@ -56,7 +56,7 @@ void scriptRunnerMain() async {
       print('Background Render Request Sent');
     """;
 
-    await service.runScript(bgScript);
+    await service.runScript(bgScript, 'background_update');
 
     // Allow some time for async render (QuickJS is sync, but service might be async)
     await Future.delayed(const Duration(seconds: 2));

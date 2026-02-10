@@ -1,43 +1,109 @@
 import 'dart:ui' as ui;
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:app_group_directory/app_group_directory.dart';
 
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_node.dart';
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_type.dart';
 import 'package:script_automator/features/widget_renderer/domain/entities/sasup_modifiers.dart';
 
 class HeadlessWidgetRenderingService {
-  /// Renders a WidgetNode to a PNG image and saves it to the Shared App Group storage.
-  /// Returns the file URI 'file://...' accessible by the Widget Extension.
-  Future<String> renderAndSave(WidgetNode node, String filename) async {
+  /// Saves the raw SASUP JSON directly to shared storage for native rendering.
+  ///
+  /// This is the **preferred** mode: iOS SwiftUI and Android Glance render the
+  /// JSON tree natively (text, gradients, icons) instead of a static bitmap.
+  /// Falls back to [renderAndSave] for complex UIs that can't be expressed natively.
+  Future<String> renderNativeJson(String jsonString, String scriptId) async {
     try {
-      // 1. Convert Node to Flutter Widget
-      final widget = _buildWidgetTree(node);
+      debugPrint("HeadlessService: Native JSON Passthrough for $scriptId");
+      final directory = await _getSharedDirectory();
+      await _cleanupOldCache(directory);
 
-      // 2. Rasterize (Capture Image)
-      // Since we might be in background, standard generic capture is risky.
-      // We rely on an "Owner" based build if possible, or View synchronization.
-      // For this MVP, we assume the app is active enough to pump a frame or we use a virtual pipeline.
+      // Parse and re-serialize to validate JSON structure
+      final jsonMap = jsonDecode(jsonString);
+      final rootMap = {'root': jsonMap};
+      final sanitizedMap = _sanitizeForJson(rootMap);
+      final jsonPayload = jsonEncode(sanitizedMap);
+
+      // Save per-script JSON
+      final jsonFile = File('${directory.path}/sasup_ui_$scriptId.json');
+      await jsonFile.writeAsString(jsonPayload, flush: true);
+
+      // Also write to default filename for compatibility
+      final defaultFile = File('${directory.path}/sasup_ui.json');
+      await defaultFile.writeAsString(jsonPayload, flush: true);
+
+      debugPrint("HeadlessService: Native JSON saved to ${jsonFile.path}");
+      return 'file://${jsonFile.path}';
+    } catch (e, stack) {
+      debugPrint("Native JSON Render Error: $e\n$stack");
+      throw Exception("Native JSON Render Failed: $e");
+    }
+  }
+
+  /// Renders a WidgetNode to a PNG image and saves it to Shared App Group storage.
+  /// Returns the file URI 'file://...' accessible by the Widget Extension.
+  ///
+  /// This is the **fallback** mode for complex UIs that can't be expressed
+  /// as native SwiftUI/Glance components. Use [renderNativeJson] when possible.
+  Future<String> renderAndSave(WidgetNode node, String scriptId) async {
+    try {
+      debugPrint(
+        "HeadlessService: Starting renderAndSave (Texture Capture)...",
+      );
+      final widget = _buildWidgetTree(node);
       final image = await _captureWidgetOffScreen(widget);
 
-      // 3. Encode to PNG
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw Exception("Failed to encode image");
       final buffer = byteData.buffer.asUint8List();
 
-      // 4. Save to Shared Storage
       final directory = await _getSharedDirectory();
-      await _cleanupOldCache(directory); // Prevent Bloat
+      await _cleanupOldCache(directory);
 
-      final file = File('${directory.path}/$filename');
-      await file.writeAsBytes(buffer, flush: true);
+      final pngFile = File('${directory.path}/sasup_ui_$scriptId.png');
+      await pngFile.writeAsBytes(buffer, flush: true);
 
-      return 'file://${file.path}';
-    } catch (e) {
+      // Wrap as image node JSON for widget to render
+      final imageNode = WidgetNode(
+        type: WidgetType.image,
+        content: 'file://${pngFile.path}',
+        modifiers: const SASUPModifiers(),
+      );
+
+      final jsonFile = File('${directory.path}/sasup_ui_$scriptId.json');
+      final rootMap = {'root': imageNode.toJson()};
+      final sanitizedMap = _sanitizeForJson(rootMap);
+      final jsonPayload = jsonEncode(sanitizedMap);
+
+      await jsonFile.writeAsString(jsonPayload, flush: true);
+
+      final defaultFile = File('${directory.path}/sasup_ui.json');
+      await defaultFile.writeAsString(jsonPayload, flush: true);
+
+      return 'file://${jsonFile.path}';
+    } catch (e, stack) {
+      debugPrint("Headless Render Error: $e\n$stack");
       throw Exception("Headless Render Failed: $e");
     }
+  }
+
+  /// Recursively removes invalid JSON values (Infinity, NaN)
+  dynamic _sanitizeForJson(dynamic value) {
+    if (value is double) {
+      if (value.isInfinite || value.isNaN) return null; // Convert to auto/null
+      return value;
+    }
+    if (value is Map) {
+      return value.map((k, v) => MapEntry(k, _sanitizeForJson(v)));
+    }
+    if (value is List) {
+      return value.map((e) => _sanitizeForJson(e)).toList();
+    }
+    return value;
   }
 
   Future<void> _cleanupOldCache(Directory dir) async {
@@ -61,9 +127,32 @@ class HeadlessWidgetRenderingService {
   // ... (existing _getSharedDirectory)
 
   Future<Directory> _getSharedDirectory() async {
-    // REFACTOR: Fallback to local documents for verification test (AppGroup plugin removed)
-    final appDocDir = await getApplicationDocumentsDirectory();
-    return appDocDir;
+    debugPrint(
+      "HeadlessService: _getSharedDirectory called. Platform:IOS=${Platform.isIOS}",
+    );
+    if (Platform.isIOS) {
+      try {
+        debugPrint("HeadlessService: Requesting AppGroupDirectory...");
+        final directory = await AppGroupDirectory.getAppGroupDirectory(
+          'group.com.antigravity.script_automator',
+        );
+        debugPrint("HeadlessService: AppGroupDirectory returned: $directory");
+        if (directory != null) return directory;
+      } catch (e) {
+        debugPrint(
+          "HeadlessService: App Group error: $e. Falling back to local documents.",
+        );
+        // Fallback for Simulator or devices without App Group configuration
+        // This ensures the app doesn't crash, though Widget Sync won't work.
+        return await getApplicationDocumentsDirectory();
+      }
+    }
+    // Fallback or Android standard
+    if (Platform.isAndroid) {
+      // Android Widget reads from context.filesDir which corresponds to getApplicationSupportDirectory
+      return await getApplicationSupportDirectory();
+    }
+    return await getApplicationDocumentsDirectory();
   }
 
   // --- Internal Rendering Logic ---
@@ -78,6 +167,10 @@ class HeadlessWidgetRenderingService {
         "Cannot render widget off-screen: No active Flutter View available in this Isolate.",
       );
     }
+
+    // Double check if we are in a headless context without surface
+    // If so, we might need to skip or use a virtual view if Flutter allows (Impeller)
+    // For now, fail gracefully.
 
     final RenderView renderView = RenderView(
       configuration: ViewConfiguration(
@@ -124,25 +217,32 @@ class HeadlessWidgetRenderingService {
     Widget widget;
 
     switch (node.type) {
+      case WidgetType.container:
       case WidgetType.column:
+        final children = node.children?.map(_buildWidgetTree).toList() ?? [];
+        final spacing = node.modifiers?.spacing?.toDouble() ?? 0.0;
+
         widget = Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: _parseCrossAxis(node.modifiers?.alignment),
           mainAxisAlignment: _parseMainAxis(node.modifiers?.alignment),
-          children: node.children?.map(_buildWidgetTree).toList() ?? [],
+          children: _applySpacingInService(children, spacing, Axis.vertical),
         );
         break;
       case WidgetType.row:
+        final children = node.children?.map(_buildWidgetTree).toList() ?? [];
+        final spacing = node.modifiers?.spacing?.toDouble() ?? 0.0;
+
         widget = Row(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: _parseCrossAxis(node.modifiers?.alignment),
           mainAxisAlignment: _parseMainAxis(node.modifiers?.alignment),
-          children: node.children?.map(_buildWidgetTree).toList() ?? [],
+          children: _applySpacingInService(children, spacing, Axis.horizontal),
         );
         break;
       case WidgetType.stack:
         widget = Stack(
-          alignment: Alignment.center, // Default
+          alignment: Alignment.center,
           children: node.children?.map(_buildWidgetTree).toList() ?? [],
         );
         break;
@@ -155,9 +255,29 @@ class HeadlessWidgetRenderingService {
       case WidgetType.image:
         widget = _buildImage(node);
         break;
-      case WidgetType.spacer:
-        widget = const Spacer();
+      case WidgetType.icon:
+        widget = Icon(
+          _parseIconData(node.content?.toString()),
+          size: node.modifiers?.fontSize ?? 24,
+          color: _parseColor(node.modifiers?.color ?? "#FFFFFF"),
+        );
         break;
+      case WidgetType.spacer:
+        // When flex is 0 or null with explicit size, render as fixed gap
+        final flex = node.modifiers?.flex;
+        if (flex == null || flex == 0) {
+          return SizedBox(
+            width: node.modifiers?.width,
+            height: node.modifiers?.height,
+          );
+        }
+        // Flex spacer: must be inside Row/Column
+        final content = _applyModifiers(
+          const SizedBox.shrink(),
+          node.modifiers,
+          ignoreFlex: true,
+        );
+        return Expanded(flex: flex, child: content);
       default:
         widget = const SizedBox();
     }
@@ -181,23 +301,23 @@ class HeadlessWidgetRenderingService {
     }
   }
 
-  Widget _applyModifiers(Widget child, SASUPModifiers? mods) {
+  Widget _applyModifiers(
+    Widget child,
+    SASUPModifiers? mods, {
+    bool ignoreFlex = false,
+  }) {
     if (mods == null) return child;
 
     Widget w = child;
 
     // Padding
     if (mods.padding != null) {
-      final insets = mods.padding!.when(
-        all: (val) => EdgeInsets.all(val),
-        symmetric: (v, h) =>
-            EdgeInsets.symmetric(vertical: v ?? 0, horizontal: h ?? 0),
-        only: (l, t, r, b) => EdgeInsets.only(
-          left: l ?? 0,
-          top: t ?? 0,
-          right: r ?? 0,
-          bottom: b ?? 0,
-        ),
+      final p = mods.padding!;
+      final insets = EdgeInsets.only(
+        left: p.left,
+        top: p.top,
+        right: p.right,
+        bottom: p.bottom,
       );
       w = Padding(padding: insets, child: w);
     }
@@ -214,6 +334,7 @@ class HeadlessWidgetRenderingService {
       final bg = mods.background;
       if (bg != null && bg.startsWith("linear-gradient")) {
         // Parse Gradient: linear-gradient(deg, #Col1, #Col2)
+        // Simplistic parser for MVP: ignores degree, takes first 2 colors
         final colors = _extractColors(bg);
         decoration = BoxDecoration(
           gradient: LinearGradient(
@@ -238,7 +359,7 @@ class HeadlessWidgetRenderingService {
     }
 
     // Expand/Flex in Column/Row
-    if (mods.flex != null && mods.flex! > 0) {
+    if (!ignoreFlex && mods.flex != null && mods.flex! > 0) {
       w = Expanded(flex: mods.flex!, child: w);
     }
 
@@ -249,21 +370,70 @@ class HeadlessWidgetRenderingService {
 
   Color _parseColor(String? colorStr) {
     if (colorStr == null) return Colors.transparent;
+    // Hex Support: #RRGGBB or #AARRGGBB
     if (colorStr.startsWith("#")) {
       try {
-        return Color(int.parse("0xFF${colorStr.substring(1)}"));
+        String hex = colorStr.substring(1);
+        if (hex.length == 6) hex = "FF$hex";
+        return Color(int.parse("0x$hex"));
       } catch (_) {
         return Colors.transparent;
       }
     }
-    return Colors.transparent;
+    // Simple Names
+    switch (colorStr.toLowerCase()) {
+      case 'white':
+        return Colors.white;
+      case 'black':
+        return Colors.black;
+      case 'blue':
+        return Colors.blue;
+      case 'red':
+        return Colors.red;
+      case 'transparent':
+        return Colors.transparent;
+    }
+    return Colors.black;
   }
 
   TextStyle _parseTextStyle(SASUPModifiers? mods) {
     return TextStyle(
       color: _parseColor(mods?.color ?? "#000000"),
       fontWeight: mods?.font == "bold" ? FontWeight.bold : FontWeight.normal,
+      fontSize: mods?.fontSize ?? 14.0,
+      fontFamily: 'Inter', // Premium default
     );
+  }
+
+  // Simple Icon Parser (Material Icons)
+  // In a real app, use a comprehensive map or font glyphs.
+  IconData _parseIconData(String? iconName) {
+    switch (iconName) {
+      case 'moon.stars.fill':
+        return Icons.nightlight_round;
+      case 'sun.max.fill':
+        return Icons.wb_sunny;
+      case 'cloud.fill':
+        return Icons.cloud;
+      case 'cloud.sun.fill':
+        return Icons.wb_cloudy;
+      case 'location.fill':
+        return Icons.location_on;
+      case 'drop.fill':
+        return Icons.water_drop;
+      case 'wind':
+        return Icons.air;
+      case 'thermometer.medium':
+        return Icons.thermostat;
+      case 'arrow.clockwise':
+        return Icons.refresh;
+      case 'arrow.up':
+        return Icons.arrow_upward;
+      case 'arrow.down':
+        return Icons.arrow_downward;
+      default:
+        return Icons.help_outline;
+    }
   }
 
   CrossAxisAlignment _parseCrossAxis(String? align) {
@@ -272,6 +442,8 @@ class HeadlessWidgetRenderingService {
         return CrossAxisAlignment.center;
       case 'end':
         return CrossAxisAlignment.end;
+      case 'stretch':
+        return CrossAxisAlignment.stretch;
       default:
         return CrossAxisAlignment.start;
     }
@@ -283,13 +455,42 @@ class HeadlessWidgetRenderingService {
         return MainAxisAlignment.center;
       case 'end':
         return MainAxisAlignment.end;
+      case 'spaceAround':
+        return MainAxisAlignment.spaceAround;
+      case 'spaceBetween':
+        return MainAxisAlignment.spaceBetween;
+      case 'spaceEvenly':
+        return MainAxisAlignment.spaceEvenly;
       default:
         return MainAxisAlignment.start;
     }
   }
 
+  List<Widget> _applySpacingInService(
+    List<Widget> children,
+    double spacing,
+    Axis axis,
+  ) {
+    if (spacing <= 0 || children.length <= 1) return children;
+
+    final List<Widget> spaced = [];
+    for (int i = 0; i < children.length; i++) {
+      spaced.add(children[i]);
+      if (i < children.length - 1) {
+        spaced.add(
+          axis == Axis.horizontal
+              ? SizedBox(width: spacing)
+              : SizedBox(height: spacing),
+        );
+      }
+    }
+    return spaced;
+  }
+
   List<Color> _extractColors(String input) {
-    final RegExp regex = RegExp(r'#(?:[0-9a-fA-F]{3}){1,2}');
+    final RegExp regex = RegExp(
+      r'#(?:[0-9a-fA-F]{3,8})',
+    ); // Modified to support 3-8 chars
     final matches = regex.allMatches(input);
     return matches.map((m) => _parseColor(m.group(0))).toList();
   }

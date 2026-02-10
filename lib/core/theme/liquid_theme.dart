@@ -25,6 +25,13 @@ class LiquidTheme {
   static const Color glassHigh = Color(0x33FFFFFF); // 20% White
   static const Color glassBorder = Color(0x4DFFFFFF); // 30% White
 
+  // Primary Gradient (for buttons, overlays)
+  static const LinearGradient primaryGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [primary, secondary],
+  );
+
   // --- Gradients ---
   static const LinearGradient auroraGradient = LinearGradient(
     begin: Alignment.topLeft,

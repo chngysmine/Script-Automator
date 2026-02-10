@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import BackgroundTasks
+import WidgetKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -15,6 +16,24 @@ import BackgroundTasks
             self.handleAppRefresh(task: task as! BGAppRefreshTask)
         }
     }
+
+    // Widget Refresh Channel
+    let controller : FlutterViewController = window?.rootViewController as! FlutterViewController
+    let widgetChannel = FlutterMethodChannel(name: "com.antigravity.script_automator/widget",
+                                              binaryMessenger: controller.binaryMessenger)
+    widgetChannel.setMethodCallHandler({
+      (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
+      if call.method == "reloadTimelines" {
+         if #available(iOS 14.0, *) {
+             WidgetCenter.shared.reloadAllTimelines()
+             print("Native: Widget Timelines Reloaded")
+         }
+         result(nil)
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    })
+
 
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)

@@ -23,9 +23,11 @@ struct SASUPModifiers: Decodable, Hashable {
     let background: String? // Hex or "linear-gradient(...)"
     let cornerRadius: Double?
     let padding: SASUPPadding?
-    let font: String?
+    let font: String? // 'bold', 'normal', or style name
+    let fontSize: Double? // Added for custom sizing
     let color: String?
     let alignment: String?
+    let spacing: Double?
 }
 
 struct SASUPPadding: Decodable, Hashable {
@@ -56,16 +58,28 @@ struct SASUPPadding: Decodable, Hashable {
 struct ColorParser {
     static func parse(_ value: String?) -> Color {
         guard let hex = value, hex.hasPrefix("#") else { return .clear }
-        // Simple Hex Parser (6 chars)
-        let scanner = Scanner(string: hex)
-        scanner.currentIndex = hex.index(after: hex.startIndex)
+        let cleanHex = String(hex.dropFirst())
+        let scanner = Scanner(string: cleanHex)
         var rgbValue: UInt64 = 0
         scanner.scanHexInt64(&rgbValue)
         
-        let r = (rgbValue & 0xff0000) >> 16
-        let g = (rgbValue & 0xff00) >> 8
-        let b = rgbValue & 0xff
-        
-        return Color(red: Double(r) / 0xff, green: Double(g) / 0xff, blue: Double(b) / 0xff)
+        if cleanHex.count == 8 {
+            // #AARRGGBB format
+            let a = (rgbValue & 0xFF000000) >> 24
+            let r = (rgbValue & 0x00FF0000) >> 16
+            let g = (rgbValue & 0x0000FF00) >> 8
+            let b = rgbValue & 0x000000FF
+            return Color(
+                red: Double(r) / 0xFF,
+                green: Double(g) / 0xFF,
+                blue: Double(b) / 0xFF
+            ).opacity(Double(a) / 0xFF)
+        } else {
+            // #RRGGBB format (6 chars)
+            let r = (rgbValue & 0xFF0000) >> 16
+            let g = (rgbValue & 0x00FF00) >> 8
+            let b = rgbValue & 0x0000FF
+            return Color(red: Double(r) / 0xFF, green: Double(g) / 0xFF, blue: Double(b) / 0xFF)
+        }
     }
 }

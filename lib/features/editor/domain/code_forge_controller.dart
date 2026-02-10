@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:get_it/get_it.dart';
 import '../../../../core/data_structures/rope.dart';
+import '../../../../features/ai_integration/data/services/gemini_service.dart';
+import '../../../../features/ai_integration/data/services/ollama_service.dart';
+import 'dart:async'; // Added for Timer
 
 /// Controller for the CodeForge Editor.
 /// Manages the [Rope] data structure and the current [TextSelection].
@@ -9,6 +13,7 @@ class CodeForgeController extends ChangeNotifier
     implements ValueListenable<TextEditingValue> {
   Rope _rope;
   TextSelection _selection;
+  Timer? _aiDebounceTimer; // Timer for AI Auto-Trigger
 
   /// Creates a controller with initial text.
   CodeForgeController({String text = ''})
@@ -16,6 +21,7 @@ class CodeForgeController extends ChangeNotifier
       _selection = const TextSelection.collapsed(offset: 0) {
     _recalculateLineStarts();
   }
+  // ... (existing code omitted for brevity in prompt, but handled by StartLine/EndLine)
 
   // --- Getters ---
 
@@ -36,6 +42,12 @@ class CodeForgeController extends ChangeNotifier
     selection: selection,
     composing: TextRange.empty,
   );
+
+  @override
+  void dispose() {
+    _aiDebounceTimer?.cancel();
+    super.dispose();
+  }
 
   // --- Ghost Text (AI Suggestions) ---
   String? _ghostText;
@@ -89,6 +101,8 @@ class CodeForgeController extends ChangeNotifier
     _selection = TextSelection.collapsed(offset: newOffset);
 
     notifyListeners();
+    _recalculateLineStarts();
+    _onContentChanged();
   }
 
   /// Deletes text.
@@ -110,6 +124,8 @@ class CodeForgeController extends ChangeNotifier
     _selection = TextSelection.collapsed(offset: start);
 
     notifyListeners();
+    _recalculateLineStarts();
+    _onContentChanged();
   }
 
   /// Internal helper to delete current selection.
@@ -198,9 +214,64 @@ class CodeForgeController extends ChangeNotifier
   /// Replaces the entire text content (e.g. file load).
   void setText(String newText) {
     _rope = Rope.fromString(newText);
-    _selection = const TextSelection.collapsed(offset: 0);
+    // _selection = const TextSelection.collapsed(offset: 0); // Removed to prevent cursor jumping
+    _recalculateLineStarts();
     notifyListeners();
+    // Do not trigger AI on initial set
   }
 
-  // Dispose handled by super
+  /// Internal hook for content changes
+  void _onContentChanged() {
+    // Cancel previous timer
+    _aiDebounceTimer?.cancel();
+
+    // Clear previous ghost text immediately when user types
+    if (_ghostText != null) {
+      _ghostText = null;
+      notifyListeners();
+    }
+
+    // Debounce 600ms before triggering AI
+    _aiDebounceTimer = Timer(const Duration(milliseconds: 600), () {
+      triggerGhostText();
+    });
+  }
+
+  // --- AI Integration ---
+
+  // Helper enum for AI Provider
+  // 'gemini' by default (Zero Setup via Fallback Key)
+  static String? activeAiProvider = 'gemini';
+
+  /// Triggers AI Ghost Text generation
+  Future<void> triggerGhostText() async {
+    final cursorOffset = selection.baseOffset;
+    if (cursorOffset < 0) return;
+
+    // Send context up to the cursor
+    final contextStr = text.substring(0, cursorOffset);
+    String? completion;
+
+    if (activeAiProvider == 'gemini') {
+      // Gemini Integration
+      if (!GetIt.I.isRegistered<GeminiService>()) return;
+      final geminiService = GetIt.I<GeminiService>();
+
+      if (!(await geminiService.hasApiKey())) {
+        debugPrint("Gemini API Key missing");
+        return;
+      }
+      completion = await geminiService.completeCode(contextStr);
+    } else {
+      // Ollama Integration (Default)
+      if (!GetIt.I.isRegistered<OllamaService>()) return;
+      final ollamaService = GetIt.I<OllamaService>();
+
+      completion = await ollamaService.completeCode(contextStr);
+    }
+
+    if (completion != null && completion.isNotEmpty) {
+      setGhostText(completion);
+    }
+  }
 }

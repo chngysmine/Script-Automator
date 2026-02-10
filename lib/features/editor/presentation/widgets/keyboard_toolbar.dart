@@ -17,8 +17,9 @@ class KeyboardToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (MediaQuery.of(context).viewInsets.bottom == 0) {
-      return const SizedBox.shrink(); // Hide if keyboard is closed
+    // Only show if keyboard is actually open (threshold 100 to avoid safe area artifacts)
+    if (MediaQuery.of(context).viewInsets.bottom < 100) {
+      return const SizedBox.shrink();
     }
 
     final keys = ['{', '}', '(', ')', '[', ']', '=>', ';', '=', '"', "'"];

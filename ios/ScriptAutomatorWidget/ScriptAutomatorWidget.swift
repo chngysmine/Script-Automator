@@ -1,46 +1,63 @@
 import WidgetKit
 import SwiftUI
 
-struct Provider: TimelineProvider {
+struct Provider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> SimpleEntry {
-        SimpleEntry(date: Date(), node: nil)
+        SimpleEntry(date: Date(), node: nil, scriptName: "Preview", error: nil)
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (SimpleEntry) -> ()) {
-        let entry = SimpleEntry(date: Date(), node: loadJSON())
-        completion(entry)
+    func snapshot(for configuration: ScriptSelectionIntent, in context: Context) async -> SimpleEntry {
+        let result = loadJSON(scriptId: configuration.script?.id)
+        return SimpleEntry(date: Date(), node: result.node, scriptName: configuration.script?.name, error: result.error)
     }
-
-    func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> ()) {
-         // Reload policy: Update whenever the Main App says so (via reloadAllTimelines)
-         // or every 15 mins
+    
+    func timeline(for configuration: ScriptSelectionIntent, in context: Context) async -> Timeline<SimpleEntry> {
         let date = Date()
-        let entry = SimpleEntry(date: date, node: loadJSON())
+        let scriptId = configuration.script?.id
+        let scriptName = configuration.script?.name
         
+        let result = loadJSON(scriptId: scriptId)
+        // Reload policy
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: date)!
-        let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
-        completion(timeline)
+        let entry = SimpleEntry(date: date, node: result.node, scriptName: scriptName, error: result.error)
+        
+        return Timeline(entries: [entry], policy: .after(nextUpdate))
     }
     
     // MARK: - Shared Storage Loading
     
-    private func loadJSON() -> SASUPNode? {
+    private func loadJSON(scriptId: String?) -> (node: SASUPNode?, error: String?) {
         let fileManager = FileManager.default
-        // Must match App Group ID in Entitlements
-        guard let directory = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.scriptautomator") else {
-            return nil
+        // Corrected App Group ID
+        guard let directory = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.antigravity.script_automator") else {
+            return (nil, "App Group Not Found")
         }
         
-        let fileURL = directory.appendingPathComponent("sasup_ui.json")
+        let fileURL: URL
+        if let id = scriptId {
+            // Specific Script
+            fileURL = directory.appendingPathComponent("sasup_ui_\(id).json")
+        } else {
+            // Fallback: Latest Run (sasup_ui.json)
+            fileURL = directory.appendingPathComponent("sasup_ui.json")
+        }
+        
+        // Debug Check: If file doesn't exist, return specific error
+        if !fileManager.fileExists(atPath: fileURL.path) {
+             if scriptId == nil {
+                 return (nil, nil) // Normal first launch state
+             }
+             return (nil, "Script Output Not Found")
+        }
         
         do {
             let data = try Data(contentsOf: fileURL)
             let decoder = JSONDecoder()
-            let schema = try decoder.decode(SASUPRoot.self, from: data) // Wrapper needed or decode Node directly
-            return schema.root
+            let schema = try decoder.decode(SASUPRoot.self, from: data)
+            return (schema.root, nil)
         } catch {
             print("Widget Load Error: \(error)")
-            return nil // Will show placeholder
+            return (nil, "Err: \(error.localizedDescription)")
         }
     }
 }
@@ -53,6 +70,8 @@ struct SASUPRoot: Decodable {
 struct SimpleEntry: TimelineEntry {
     let date: Date
     let node: SASUPNode?
+    let scriptName: String?
+    let error: String?
 }
 
 struct ScriptAutomatorWidgetEntryView : View {
@@ -60,13 +79,26 @@ struct ScriptAutomatorWidgetEntryView : View {
 
     var body: some View {
         if let node = entry.node {
-            UniversalWidgetView(node: node)
+            UniversalWidgetView(node: node, isRoot: true)
+                .minimumScaleFactor(0.7) // Prevent tiny text
         } else {
             VStack {
-                 Text("No Script Output")
-                 Text("Run a script in app")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                 Text(entry.scriptName ?? "Select Script")
+                    .font(.headline)
+                 if let error = entry.error {
+                     Text(error)
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 4)
+                 } else {
+                     Text("No Output / Not Run")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                     Text("Run script in app first")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                 }
             }
         }
     }
@@ -77,16 +109,12 @@ struct ScriptAutomatorWidget: Widget {
     let kind: String = "ScriptAutomatorWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: Provider()) { entry in
-            if #available(iOS 17.0, *) {
-                ScriptAutomatorWidgetEntryView(entry: entry)
-                    .containerBackground(.fill.tertiary, for: .widget) // iOS 17 adaption
-            } else {
-                ScriptAutomatorWidgetEntryView(entry: entry)
-                    .padding()
-            }
+        AppIntentConfiguration(kind: kind, intent: ScriptSelectionIntent.self, provider: Provider()) { entry in
+            ScriptAutomatorWidgetEntryView(entry: entry)
+                .containerBackground(.clear, for: .widget)
         }
-        .configurationDisplayName("Universal Widget")
-        .description("Displays output from your scripts.")
+        .contentMarginsDisabled()
+        .configurationDisplayName("Script Widget")
+        .description("Display the output of your scripts.")
     }
 }

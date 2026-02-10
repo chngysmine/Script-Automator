@@ -39,7 +39,10 @@ class ViewportAwarePainter extends CustomPainter {
     final lineHeight = textPainter.height;
 
     // 2. Visible Range Calculation
-    final firstVisibleLine = (scrollOffset / lineHeight).floor();
+    final firstVisibleLine = (scrollOffset / lineHeight).floor().clamp(
+      0,
+      controller.lineCount,
+    );
     final visibleLineCount =
         (viewportHeight / lineHeight).ceil() + 1; // +1 buffer
     final lastVisibleLine = (firstVisibleLine + visibleLineCount).clamp(
@@ -66,7 +69,8 @@ class ViewportAwarePainter extends CustomPainter {
     );
 
     for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
-      final yOffset = (i * lineHeight) - scrollOffset;
+      final yOffset =
+          (i * lineHeight); // Absolute position, no scrollOffset subtraction
 
       // Draw Line Number
       final lineNum = (i + 1).toString();
@@ -124,13 +128,24 @@ class ViewportAwarePainter extends CustomPainter {
         }
       }
 
-      final linePainter = TextPainter(
-        text: textSpan,
-        textDirection: TextDirection.ltr,
-      )..layout();
+      // final linePainter = TextPainter(
+      //   text: textSpan,
+      //   textDirection: TextDirection.ltr,
+      // )..layout();
 
-      // Offset code by Gutter Width + Padding
-      linePainter.paint(canvas, Offset(gutterWidth + 8, yOffset));
+      // OFFSET Text Painting for now to debug input.
+      // linePainter.paint(canvas, Offset(gutterWidth + 8, yOffset));
+
+      // We ONLY paint syntax highlighting if we want to obscure the real text.
+      // For now, let's ENABLE standard text to ensure input works,
+      // and disable this painter's text.
+
+      // If we want Syntax Highlighting, we MUST paint text and make TextField transparent.
+      // The issue is likely implicit: The TextField is there, but maybe the custom painter
+      // is drawing over it or the constraints are wrong?
+
+      // 4. Paint Text (DISABLED - Using Native TextField)
+      // linePainter.paint(canvas, Offset(gutterWidth + 8, yOffset));
     }
 
     // 4. Paint Cursor / Selection
@@ -138,36 +153,29 @@ class ViewportAwarePainter extends CustomPainter {
       final cursorOffset = controller.selection.baseOffset;
       final pos = controller.getLineAndCol(cursorOffset);
       final lineIndex = pos.$1;
-      final colIndex = pos.$2;
 
       // Only draw if line is visible
       if (lineIndex >= firstVisibleLine && lineIndex < lastVisibleLine) {
         // Calculate X position
         // Precise way: Measure substring width
-        final lineStart = controller.getLine(lineIndex); // raw line
-        final prefix = (colIndex < lineStart.length)
-            ? lineStart.substring(0, colIndex)
-            : lineStart; // Clamping for safety
+        // final lineStart = controller.getLine(lineIndex); // raw line
+        // final prefix = (colIndex < lineStart.length)
+        //     ? lineStart.substring(0, colIndex)
+        //     : lineStart; // Clamping for safety
 
-        final prefixPainter = TextPainter(
-          text: TextSpan(
-            text: prefix,
-            style: textStyle,
-          ), // metrics measure needs same font
-          textDirection: TextDirection.ltr,
-        )..layout();
+        // final prefixPainter = TextPainter(
+        //   text: TextSpan(
+        //     text: prefix,
+        //     style: textStyle,
+        //   ), // metrics measure needs same font
+        //   textDirection: TextDirection.ltr,
+        // )..layout();
 
-        final x = prefixPainter.width + gutterWidth + 8; // Add Gutter offset!
-        final y = (lineIndex * lineHeight) - scrollOffset;
+        // final x = prefixPainter.width + gutterWidth + 8; // Unused
+        // final y = (lineIndex * lineHeight) - scrollOffset; // Unused
 
-        canvas.drawRect(
-          Rect.fromLTWH(x, y, 2, lineHeight), // 2px width cursor
-          Paint()..color = cursorColor,
-        );
+        // Cursor handled by TextField
       }
-    } else {
-      // Draw Selection Range (Simplified: Multiline not fully handled yet)
-      // Future Sprint 4.3 task.
     }
   }
 

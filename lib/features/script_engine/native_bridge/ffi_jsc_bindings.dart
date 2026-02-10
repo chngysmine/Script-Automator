@@ -163,6 +163,18 @@ typedef JSValueCreateJSONString_Dart =
       Pointer<Pointer<JSValue>>,
     );
 
+// void JSValueProtect(JSContextRef ctx, JSValueRef value);
+typedef JSValueProtect_C =
+    Void Function(Pointer<JSGlobalContext>, Pointer<JSValue>);
+typedef JSValueProtect_Dart =
+    void Function(Pointer<JSGlobalContext>, Pointer<JSValue>);
+
+// void JSValueUnprotect(JSContextRef ctx, JSValueRef value);
+typedef JSValueUnprotect_C =
+    Void Function(Pointer<JSGlobalContext>, Pointer<JSValue>);
+typedef JSValueUnprotect_Dart =
+    void Function(Pointer<JSGlobalContext>, Pointer<JSValue>);
+
 class JSCBindings {
   final DynamicLibrary _dylib;
 
@@ -182,11 +194,15 @@ class JSCBindings {
   late final JSValueMakeUndefined_Dart JSValueMakeUndefined;
   late final JSValueIsObject_Dart JSValueIsObject;
   late final JSValueCreateJSONString_Dart JSValueCreateJSONString;
+  late final JSValueProtect_Dart JSValueProtect;
+  late final JSValueUnprotect_Dart JSValueUnprotect;
+
   late final Pointer<NativeFunction<Void Function(Pointer<Void>)>>
   addresses_JSGlobalContextRelease;
-  late final CreateJSCValueRef_Dart CreateJSCValueRef;
-  late final Pointer<NativeFunction<Void Function(Pointer<Void>)>>
-  addresses_FinalizeJSCValue;
+
+  // Custom wrappers removed to avoid dependency on unlinked C code
+  // late final CreateJSCValueRef_Dart CreateJSCValueRef;
+  // late final Pointer<NativeFunction<Void Function(Pointer<Void>)>> addresses_FinalizeJSCValue;
 
   JSCBindings(this._dylib) {
     JSGlobalContextCreate = _dylib
@@ -252,15 +268,21 @@ class JSCBindings {
           JSValueCreateJSONString_Dart
         >('JSValueCreateJSONString');
 
+    JSValueProtect = _dylib
+        .lookupFunction<JSValueProtect_C, JSValueProtect_Dart>(
+          'JSValueProtect',
+        );
+    JSValueUnprotect = _dylib
+        .lookupFunction<JSValueUnprotect_C, JSValueUnprotect_Dart>(
+          'JSValueUnprotect',
+        );
+
     addresses_JSGlobalContextRelease = _dylib.lookup('JSGlobalContextRelease');
 
-    // Wrapper lookups (from Process)
-    final process = DynamicLibrary.process();
-    CreateJSCValueRef = process
-        .lookupFunction<CreateJSCValueRef_C, CreateJSCValueRef_Dart>(
-          'CreateJSCValueRef',
-        );
-    addresses_FinalizeJSCValue = process.lookup('FinalizeJSCValue');
+    // Remove reliance on custom C wrapper
+    // final process = DynamicLibrary.process();
+    // CreateJSCValueRef = process ...
+    // addresses_FinalizeJSCValue = process.lookup('FinalizeJSCValue');
   }
 }
 

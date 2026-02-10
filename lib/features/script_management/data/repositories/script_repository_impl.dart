@@ -4,11 +4,14 @@ import '../../domain/entities/script.dart';
 import '../datasources/script_local_data_source.dart';
 import '../models/script_model.dart';
 
+import '../../../../features/widget_renderer/data/services/widget_registry_service.dart';
+
 class ScriptRepositoryImpl implements ScriptRepository {
   final ScriptLocalDataSource _dataSource;
+  final WidgetRegistryService _widgetRegistry;
 
-  /// Constructs a [ScriptRepositoryImpl] with the given data source.
-  ScriptRepositoryImpl(this._dataSource);
+  /// Constructs a [ScriptRepositoryImpl] with the given data source and registry.
+  ScriptRepositoryImpl(this._dataSource, this._widgetRegistry);
 
   @override
   /// Retrieves a list of script metadata.
@@ -79,6 +82,10 @@ class ScriptRepositoryImpl implements ScriptRepository {
       );
 
       await _dataSource.saveScript(model, content: script.content);
+
+      // Sync to SQLite Registry for Widget Extension
+      await _widgetRegistry.syncScript(model);
+
       return const Right(unit);
     } catch (e) {
       return Left(StorageFailure(e.toString()));
@@ -89,9 +96,17 @@ class ScriptRepositoryImpl implements ScriptRepository {
   Future<Either<Failure, Unit>> deleteScript(String id) async {
     try {
       await _dataSource.deleteScript(id);
+
+      // Remove from SQLite Registry
+      await _widgetRegistry.removeScript(id);
+
       return const Right(unit);
     } catch (e) {
       return Left(StorageFailure(e.toString()));
     }
   }
+}
+
+extension FutureIgnore on Future {
+  void ignore() {}
 }

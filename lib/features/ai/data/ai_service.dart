@@ -4,7 +4,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class AIService {
   static const _apiKeyStorageKey = 'gemini_api_key';
   GenerativeModel? _model;
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final FlutterSecureStorage _storage;
+
+  AIService({FlutterSecureStorage? storage})
+    : _storage = storage ?? const FlutterSecureStorage();
 
   bool get isReady => _model != null;
 

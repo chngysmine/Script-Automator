@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+import 'package:app_group_directory/app_group_directory.dart';
+import 'package:flutter/foundation.dart';
 
 /// Exception thrown when a security violation is detected.
 class SecurityException implements Exception {
@@ -15,6 +17,13 @@ class VirtualFileSystemService {
 
   VirtualFileSystemService(String root)
     : rootDirectory = Directory(root).resolveSymbolicLinksSync();
+
+  String? _cachedSharedDirectory;
+
+  /// Pre-fetches the shared directory to enable synchronous operations.
+  Future<void> initSharedDirectory() async {
+    _cachedSharedDirectory = await getSharedDirectory();
+  }
 
   /// Initializes the VFS root directory.
   static Future<VirtualFileSystemService> create() async {
@@ -98,6 +107,58 @@ class VirtualFileSystemService {
     return canonicalPath;
   }
 
+  /// Synchronous version of _resolveAndValidatePath.
+  /// Requires initSharedDirectory() to be called first if accessing shared/.
+  String _resolveAndValidatePathSync(String relativePath) {
+    if (relativePath.contains('\u0000')) {
+      throw SecurityException("Null byte detected in path.");
+    }
+
+    String normalizedPath = path.normalize(relativePath);
+    if (path.isAbsolute(normalizedPath)) {
+      if (normalizedPath.startsWith(path.separator)) {
+        normalizedPath = normalizedPath.substring(1);
+      }
+    }
+
+    String baseDir = rootDirectory;
+    String effectiveRelativePath = normalizedPath;
+
+    if (normalizedPath.startsWith('shared/') || normalizedPath == 'shared') {
+      if (_cachedSharedDirectory == null) {
+        throw StateError(
+          "Shared directory not initialized. Call initSharedDirectory() first.",
+        );
+      }
+      baseDir = _cachedSharedDirectory!;
+      if (normalizedPath == 'shared') {
+        effectiveRelativePath = '.';
+      } else {
+        effectiveRelativePath = normalizedPath.substring(7);
+      }
+    }
+
+    final rawPath = path.join(baseDir, effectiveRelativePath);
+    String canonicalPath;
+    try {
+      if (File(rawPath).existsSync() || Link(rawPath).existsSync()) {
+        canonicalPath = File(rawPath).resolveSymbolicLinksSync();
+      } else {
+        canonicalPath = path.canonicalize(rawPath);
+      }
+    } catch (e) {
+      canonicalPath = path.canonicalize(rawPath);
+    }
+
+    if (!path.isWithin(baseDir, canonicalPath) && canonicalPath != baseDir) {
+      throw SecurityException(
+        "Access Denied: Path escapes sandbox ($relativePath -> $canonicalPath not in $baseDir)",
+      );
+    }
+
+    return canonicalPath;
+  }
+
   Future<String> readString(String relativePath) async {
     final absolutePath = await _resolveAndValidatePath(relativePath);
     final file = File(absolutePath);
@@ -113,6 +174,15 @@ class VirtualFileSystemService {
     // Ensure parent directory exists
     await file.parent.create(recursive: true);
     await file.writeAsString(content);
+  }
+
+  void writeStringSync(String relativePath, String content) {
+    final absolutePath = _resolveAndValidatePathSync(relativePath);
+    final file = File(absolutePath);
+    if (!file.parent.existsSync()) {
+      file.parent.createSync(recursive: true);
+    }
+    file.writeAsStringSync(content);
   }
 
   Future<bool> exists(String relativePath) async {
@@ -134,14 +204,42 @@ class VirtualFileSystemService {
     }
   }
 
-  // Helper for App Groups (iOS) - Phase 2 Step 3
+  // Helper for App Groups (iOS) - Phase 2 Step 3 (Real Implementation)
   Future<String> getSharedDirectory() async {
-    // REFACTOR: Fallback to local documents for verification test (AppGroup plugin removed)
-    final docsDir = await getApplicationDocumentsDirectory();
-    final sharedPath = path.join(docsDir.path, 'shared_container');
-    if (!await Directory(sharedPath).exists()) {
-      await Directory(sharedPath).create(recursive: true);
+    if (Platform.isIOS) {
+      try {
+        final directory = await AppGroupDirectory.getAppGroupDirectory(
+          'group.com.antigravity.script_automator',
+        ); // MUST MATCH XCODE ENTITLEMENTS
+        if (directory == null) {
+          throw SecurityException(
+            "App Group Container not found. Check Entitlements.",
+          );
+        }
+        return directory.path;
+      } catch (e) {
+        // Fallback for Simulator/No-App-Group environment
+        // We log a warning but proceed with local storage so the Engine doesn't crash.
+        // Widgets will NOT sync in this mode.
+        debugPrint("VFS: App Group failed ($e). Using local fallback.");
+
+        final docsDir = await getApplicationDocumentsDirectory();
+        final sharedPath = path.join(docsDir.path, 'shared_container');
+        if (!await Directory(sharedPath).exists()) {
+          await Directory(sharedPath).create(recursive: true);
+        }
+        return sharedPath;
+      }
+    } else {
+      // Android: Use internal storage for now (or external if needing share)
+      // For Widget share on Android, we typically use Context.filesDir
+      final docsDir = await getApplicationDocumentsDirectory();
+      // We partition it to simulate a shared zone
+      final sharedPath = path.join(docsDir.path, 'shared_container');
+      if (!await Directory(sharedPath).exists()) {
+        await Directory(sharedPath).create(recursive: true);
+      }
+      return sharedPath;
     }
-    return sharedPath;
   }
 }

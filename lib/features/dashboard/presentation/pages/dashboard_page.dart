@@ -7,11 +7,13 @@ import 'package:script_automator/features/script_management/domain/entities/scri
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
 import 'package:script_automator/features/editor/presentation/pages/editor_page.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/new_script_dialog.dart';
+import 'package:script_automator/features/dashboard/presentation/pages/gallery_page.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/staggered_script_grid.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_dock.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_drawer.dart';
 import 'package:script_automator/core/theme/liquid_page_route.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/liquid_search_bar.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/widget_guide_sheet.dart';
 
 class LiquidDashboardPage extends StatefulWidget {
   const LiquidDashboardPage({super.key});
@@ -94,19 +96,23 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
                     20,
                     100,
                   ), // Bottom padding for Dock
-                  sliver: SliverToBoxAdapter(
-                    child: _isLoading
-                        ? const Center(
-                            heightFactor: 5,
-                            child: CircularProgressIndicator(),
-                          )
-                        : AnimationLimiter(
-                            child: StaggeredScriptGrid(
-                              scripts: _scripts,
-                              onTap: _openEditor,
-                            ),
-                          ),
-                  ),
+                  sliver: _navIndex == 1
+                      ? const SliverToBoxAdapter(
+                          child: SizedBox(height: 600, child: GalleryPage()),
+                        )
+                      : SliverToBoxAdapter(
+                          child: _isLoading
+                              ? const Center(
+                                  heightFactor: 5,
+                                  child: CircularProgressIndicator(),
+                                )
+                              : AnimationLimiter(
+                                  child: StaggeredScriptGrid(
+                                    scripts: _scripts,
+                                    onTap: _openEditor,
+                                  ),
+                                ),
+                        ),
                 ),
               ],
             ),
@@ -191,7 +197,36 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
                   ),
                   child: const Icon(
                     Icons.menu_rounded,
-                    color: LiquidTheme.textDeep, // Standardized
+                    color: LiquidTheme.textDeep,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Widget Guide Button
+              GestureDetector(
+                onTap: () => showModalBottomSheet(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  isScrollControlled: true,
+                  builder: (_) => const WidgetGuideSheet(),
+                ),
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.widgets_rounded,
+                    color: LiquidTheme.primary,
                   ),
                 ),
               ),

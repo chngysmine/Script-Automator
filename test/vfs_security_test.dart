@@ -48,5 +48,25 @@ void main() {
       final content = await vfs.readString('subdir/file.txt');
       expect(content, 'Sub content');
     });
+
+    test('Should BLOCK symlink escape attack', () async {
+      // Create a symlink pointing outside root
+      final outsideDir = await Directory.systemTemp.createTemp('outside');
+      try {
+        final secretFile = File('${outsideDir.path}/secret.txt');
+        await secretFile.writeAsString('TOP SECRET');
+
+        final symlinkPath = '${tempDir.path}/evil_link';
+        await Link(symlinkPath).create(outsideDir.path);
+
+        // Attempt to read through symlink should be blocked
+        expect(
+          () async => await vfs.readString('evil_link/secret.txt'),
+          throwsA(isA<SecurityException>()),
+        );
+      } finally {
+        await outsideDir.delete(recursive: true);
+      }
+    });
   });
 }
