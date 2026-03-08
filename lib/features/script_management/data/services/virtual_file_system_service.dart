@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
-import 'package:app_group_directory/app_group_directory.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 
 /// Exception thrown when a security violation is detected.
@@ -208,15 +208,19 @@ class VirtualFileSystemService {
   Future<String> getSharedDirectory() async {
     if (Platform.isIOS) {
       try {
-        final directory = await AppGroupDirectory.getAppGroupDirectory(
+        const channel = MethodChannel(
+          'com.antigravity.script_automator/widget',
+        );
+        final String? pathStr = await channel.invokeMethod<String>(
+          'getAppGroupPath',
           'group.com.antigravity.script_automator',
-        ); // MUST MATCH XCODE ENTITLEMENTS
-        if (directory == null) {
+        );
+        if (pathStr == null) {
           throw SecurityException(
             "App Group Container not found. Check Entitlements.",
           );
         }
-        return directory.path;
+        return pathStr;
       } catch (e) {
         // Fallback for Simulator/No-App-Group environment
         // We log a warning but proceed with local storage so the Engine doesn't crash.

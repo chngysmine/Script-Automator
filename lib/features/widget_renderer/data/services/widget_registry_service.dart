@@ -1,6 +1,6 @@
 import 'dart:io';
-import 'package:app_group_directory/app_group_directory.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
 
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
@@ -80,8 +80,14 @@ class WidgetRegistryService {
   Future<Directory?> _getSharedDirectory() async {
     if (Platform.isIOS) {
       try {
-        final dir = await AppGroupDirectory.getAppGroupDirectory(_appGroupId);
-        if (dir != null) return dir;
+        const channel = MethodChannel(
+          'com.antigravity.script_automator/widget',
+        );
+        final String? path = await channel.invokeMethod<String>(
+          'getAppGroupPath',
+          _appGroupId,
+        );
+        if (path != null) return Directory(path);
       } catch (e) {
         debugPrint(
           "WidgetRegistryDB: App Group failed ($e). Using local fallback.",

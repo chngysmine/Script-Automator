@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'dart:ui';
+import 'package:script_automator/features/dashboard/presentation/pages/settings_page.dart';
 
 class GlassDrawer extends StatefulWidget {
   const GlassDrawer({super.key});
@@ -341,29 +342,39 @@ class _GlassDrawerState extends State<GlassDrawer>
   }
 
   Widget _buildGlassButton(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          colors: [
-            LiquidTheme.textPrimary.withValues(alpha: 0.15),
-            LiquidTheme.textPrimary.withValues(alpha: 0.05),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return GestureDetector(
+      onTap: () {
+        if (label == "Pro Settings") {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SettingsPage()),
+          );
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            colors: [
+              LiquidTheme.textPrimary.withValues(alpha: 0.15),
+              LiquidTheme.textPrimary.withValues(alpha: 0.05),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(
+            color: LiquidTheme.textPrimary.withValues(alpha: 0.2),
+          ),
         ),
-        border: Border.all(
-          color: LiquidTheme.textPrimary.withValues(alpha: 0.2),
-        ),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: LiquidTheme.textPrimary,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: LiquidTheme.textPrimary,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
         ),
       ),
     );

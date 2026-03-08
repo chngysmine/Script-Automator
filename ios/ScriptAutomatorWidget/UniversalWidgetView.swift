@@ -116,18 +116,21 @@ struct UniversalWidgetView: View {
     
     private func applyModifiers<Content: View>(_ modifiers: SASUPModifiers?, isRoot: Bool = false, @ViewBuilder content: () -> Content) -> some View {
         content()
-            .padding(modifiers?.padding?.toEdgeInsets() ?? EdgeInsets())
+            // Padding should be applied INSIDE elements for better containment
+            .padding(modifiers?.padding?.toEdgeInsets() ?? EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
             .frame(
                 width: modifiers?.width.map { CGFloat($0) },
                 height: modifiers?.height.map { CGFloat($0) }
             )
             .frame(
-                maxWidth: isRoot ? .infinity : nil,
-                maxHeight: isRoot ? .infinity : nil,
+                maxWidth: isRoot ? .infinity : (modifiers?.flex == 1 ? .infinity : nil),
+                maxHeight: isRoot ? .infinity : (modifiers?.flex == 1 ? .infinity : nil),
                 alignment: parseAlignment(modifiers?.alignment)
             )
             .background(parseBackground(modifiers?.background))
             .cornerRadius(modifiers?.cornerRadius ?? 0)
+            // If it's a root container, we ensure it doesn't clip its own glass effects
+            .clipped(antialiased: true)
     }
     
     private func parseAlignment(_ align: String?) -> Alignment {

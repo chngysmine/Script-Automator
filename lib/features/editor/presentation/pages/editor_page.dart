@@ -9,6 +9,7 @@ import '../../../../features/ai_integration/data/services/ollama_service.dart'; 
 import '../painters/viewport_aware_painter.dart';
 import '../widgets/keyboard_toolbar.dart';
 import '../widgets/console_log_widget.dart'; // Enhanced Console
+import '../widgets/editor_app_bar.dart';
 import '../syntax_highlighter.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import '../../../../features/script_management/domain/repositories/script_repository.dart';
@@ -36,7 +37,6 @@ class _EditorPageState extends State<EditorPage>
   final ScrollController _horizontalController = ScrollController();
   final FocusNode _focusNode = FocusNode();
   final List<ConsoleLogEntry> _logs = []; // Enhanced log entries
-  bool _showSuccessAnimation = false; // Script completion animation
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -85,9 +85,7 @@ class _EditorPageState extends State<EditorPage>
         // Auto-detect script completion
         if (log.contains('completed') ||
             log.contains('SUCCESS') ||
-            log.contains('✓')) {
-          _showSuccessAnimation = true;
-        }
+            log.contains('✓')) {}
       });
     });
 
@@ -254,17 +252,8 @@ class _EditorPageState extends State<EditorPage>
               level: LogLevel.success,
             ),
           );
-          _showSuccessAnimation = true;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              "Script executed. If this was a widget, check your Home Screen.",
-            ),
-            backgroundColor: LiquidTheme.primary,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        // Console log entry above already informs the user of success.
       }
     } catch (e) {
       setState(() {
@@ -336,7 +325,23 @@ class _EditorPageState extends State<EditorPage>
           SafeArea(
             child: Column(
               children: [
-                _buildLightAppBar(context),
+                EditorAppBar(
+                  scriptName: widget.script?.name ?? "Untitled",
+                  isSaving: _isSaving,
+                  onBack: () => Navigator.pop(context),
+                  onPlay: _runScript,
+                  onAiTap: () async {
+                    if (CodeForgeController.activeAiProvider == null) {
+                      if (context.mounted) {
+                        await _showAIOnboardingDialog(context);
+                      }
+                      if (CodeForgeController.activeAiProvider == null) return;
+                    }
+                    await _controller.triggerGhostText();
+                    HapticFeedback.lightImpact();
+                  },
+                  onAiLongPress: () => _showAIOnboardingDialog(context),
+                ),
                 Expanded(
                   child: FadeTransition(
                     opacity: _fadeAnim,
@@ -445,7 +450,7 @@ class _EditorPageState extends State<EditorPage>
                                                 TextInputType.multiline,
                                             showCursor: true,
                                             style: _kEditorTextStyle.copyWith(
-                                              color: const Color(0xFF1E293B),
+                                              color: Colors.transparent,
                                             ),
                                             strutStyle: const StrutStyle(
                                               fontSize: 13.5,
@@ -489,14 +494,6 @@ class _EditorPageState extends State<EditorPage>
                 child: _isLogExpanded
                     ? _buildConsoleSheet()
                     : _buildConsolePill(),
-              ),
-            ),
-
-          // 4. SUCCESS ANIMATION OVERLAY
-          if (_showSuccessAnimation)
-            Center(
-              child: ScriptSuccessOverlay(
-                onComplete: () => setState(() => _showSuccessAnimation = false),
               ),
             ),
 
@@ -557,94 +554,84 @@ class _EditorPageState extends State<EditorPage>
     );
   }
 
-  // Expanded Sheet (Standard App Logs)
   Widget _buildConsoleSheet() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-        child: Container(
-          height: 320,
-          margin: const EdgeInsets.only(left: 12, right: 12, bottom: 60),
-          decoration: BoxDecoration(
-            color: LiquidTheme.darkBackground.withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 40,
-                offset: const Offset(0, 20),
-              ),
-            ],
+    return Container(
+      height: 320,
+      margin: const EdgeInsets.only(left: 12, right: 12, bottom: 60),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 40,
+            offset: const Offset(0, 20),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Title Bar
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.05),
-                    ),
-                  ),
-                  color: Colors.black.withValues(alpha: 0.2),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
+              border: Border(
+                bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+              ),
+              color: Colors.black.withValues(alpha: 0.2),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => setState(() {
-                            _isLogExpanded = false;
-                            _showConsole = false;
-                          }),
-                          child: _buildStatusDot(const Color(0xFFEF4444)),
-                        ),
-                        const SizedBox(width: 8),
-                        _buildStatusDot(const Color(0xFFF59E0B)),
-                        const SizedBox(width: 8),
-                        _buildStatusDot(const Color(0xFF10B981)),
-                      ],
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        _isLogExpanded = false;
+                        _showConsole = false;
+                      }),
+                      child: _buildStatusDot(const Color(0xFFEF4444)),
                     ),
-                    const Text(
-                      "Console Output",
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        color: Colors.white54,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(width: 40),
+                    const SizedBox(width: 8),
+                    _buildStatusDot(const Color(0xFFF59E0B)),
+                    const SizedBox(width: 8),
+                    _buildStatusDot(const Color(0xFF10B981)),
                   ],
                 ),
-              ),
-              // Log Content
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _logs.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 6),
-                  itemBuilder: (context, index) {
-                    final log = _logs[index];
-                    return ConsoleLogItem(entry: log);
-                  },
+                const Text(
+                  "Console Output",
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Colors.white54,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 40),
+              ],
+            ),
           ),
-        ),
+          // Log Content
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: _logs.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 6),
+              itemBuilder: (context, index) {
+                final log = _logs[index];
+                return ConsoleLogItem(entry: log);
+              },
+            ),
+          ),
+        ],
       ),
-    ); // Close Container, BackdropFilter, ClipRRect
+    );
   }
 
   Widget _buildStatusDot(Color color) {
@@ -652,66 +639,6 @@ class _EditorPageState extends State<EditorPage>
       width: 12,
       height: 12,
       decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-
-  Widget _buildLightAppBar(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _buildGlassBtn(
-            context,
-            Icons.grid_view_rounded,
-            () => Navigator.pop(context),
-          ),
-          Text(
-            widget.script?.name ?? "Untitled",
-            style: const TextStyle(
-              color: Color(0xFF1E293B),
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
-            ),
-          ),
-          if (_isSaving)
-            const Padding(
-              padding: EdgeInsets.only(left: 8.0),
-              child: SizedBox(
-                width: 12,
-                height: 12,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-
-          _buildGlassBtn(
-            context,
-            Icons.auto_awesome,
-            () async {
-              // TAP: Trigger AI
-
-              // 1. If Not Configured, Show Onboarding
-              if (CodeForgeController.activeAiProvider == null) {
-                if (context.mounted) await _showAIOnboardingDialog(context);
-                if (CodeForgeController.activeAiProvider == null) return;
-              }
-
-              // 2. Provider Specific Checks
-              // With default fallback key, Gemini is always "ready" basic usage.
-
-              // 3. Trigger
-              await _controller.triggerGhostText();
-              HapticFeedback.lightImpact();
-            },
-            onLongPress: () {
-              // LONG PRESS: Re-Open Settings/Onboarding
-              _showAIOnboardingDialog(context);
-            },
-          ),
-          const SizedBox(width: 8),
-          _buildGlassBtn(context, Icons.play_arrow_rounded, _runScript),
-        ],
-      ),
     );
   }
 
@@ -978,42 +905,6 @@ class _EditorPageState extends State<EditorPage>
             child: const Text("Save"),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildGlassBtn(
-    BuildContext context,
-    IconData icon,
-    VoidCallback onTap, {
-    VoidCallback? onLongPress,
-    bool isPrimary = false,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: isPrimary
-              ? const Color(0xFF0EA5E9)
-              : Colors.white.withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Icon(
-          icon,
-          color: isPrimary ? Colors.white : const Color(0xFF334155),
-          size: 22,
-        ),
       ),
     );
   }

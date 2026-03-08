@@ -3,6 +3,10 @@ package com.antigravity.script_automator
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.MainScope
+import androidx.glance.appwidget.updateAll
+import android.util.Log
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.antigravity/paths"
@@ -22,7 +26,7 @@ class MainActivity : FlutterActivity() {
             if (call.method == "reloadTimelines") {
                 // Trigger Widget Update
                 try {
-                    kotlinx.coroutines.MainScope().launch {
+                    MainScope().launch {
                        ScriptAutomatorWidget().updateAll(context)
                        result.success(true)
                     }

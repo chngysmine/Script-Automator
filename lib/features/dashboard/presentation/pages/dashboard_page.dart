@@ -97,9 +97,7 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
                     100,
                   ), // Bottom padding for Dock
                   sliver: _navIndex == 1
-                      ? const SliverToBoxAdapter(
-                          child: SizedBox(height: 600, child: GalleryPage()),
-                        )
+                      ? const SliverToBoxAdapter(child: GalleryPage())
                       : SliverToBoxAdapter(
                           child: _isLoading
                               ? const Center(
@@ -139,100 +137,102 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
 
   Widget _buildSliverAppBar() {
     return SliverAppBar(
-      expandedHeight: 120,
+      expandedHeight: 140,
       backgroundColor: Colors.transparent,
       elevation: 0,
       pinned: false,
-      toolbarHeight: 0, // Custom layout
+      toolbarHeight: 0,
       flexibleSpace: FlexibleSpaceBar(
         background: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          padding: const EdgeInsets.fromLTRB(24, 60, 24, 20),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Good Morning,",
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: LiquidTheme.textLight, // Standardized
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  ShaderMask(
-                    shaderCallback: (bounds) {
-                      return LiquidTheme.brandDarkGradient.createShader(bounds);
-                    },
-                    blendMode: BlendMode.srcIn,
-                    child: const Text(
-                      "CodeForge",
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Good Morning,",
                       style: TextStyle(
-                        fontSize: 34,
-                        fontWeight: FontWeight.w800,
-                        color: LiquidTheme.textDeep, // Standardized Fallback
-                        letterSpacing: -1.5,
+                        fontSize: 14,
+                        color: LiquidTheme.textLight.withValues(alpha: 0.7),
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
                       ),
+                    ),
+                    const SizedBox(height: 2),
+                    ShaderMask(
+                      shaderCallback: (bounds) =>
+                          LiquidTheme.brandDarkGradient.createShader(bounds),
+                      blendMode: BlendMode.srcIn,
+                      child: const Text(
+                        "CodeForge",
+                        style: TextStyle(
+                          fontSize: 38,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -1.8,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Glass Buttons Group
+              Row(
+                children: [
+                  _buildHeaderButton(
+                    icon: Icons.menu_rounded,
+                    onTap: () => _scaffoldKey.currentState?.openDrawer(),
+                  ),
+                  const SizedBox(width: 12),
+                  _buildHeaderButton(
+                    icon: Icons.widgets_rounded,
+                    color: LiquidTheme.primary,
+                    onTap: () => showModalBottomSheet(
+                      context: context,
+                      backgroundColor: Colors.transparent,
+                      isScrollControlled: true,
+                      builder: (_) => const WidgetGuideSheet(),
                     ),
                   ),
                 ],
               ),
-              GestureDetector(
-                onTap: () => _scaffoldKey.currentState?.openDrawer(),
-                child: Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.menu_rounded,
-                    color: LiquidTheme.textDeep,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Widget Guide Button
-              GestureDetector(
-                onTap: () => showModalBottomSheet(
-                  context: context,
-                  backgroundColor: Colors.transparent,
-                  isScrollControlled: true,
-                  builder: (_) => const WidgetGuideSheet(),
-                ),
-                child: Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.widgets_rounded,
-                    color: LiquidTheme.primary,
-                  ),
-                ),
-              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    Color? color,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.8),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.5),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: color ?? LiquidTheme.textDeep, size: 22),
       ),
     );
   }

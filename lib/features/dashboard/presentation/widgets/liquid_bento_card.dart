@@ -74,6 +74,7 @@ class _LiquidBentoCardState extends State<LiquidBentoCard>
           onEnter: (_) => setState(() => _isHovered = true),
           onExit: (_) => setState(() => _isHovered = false),
           child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTapDown: (details) {
               HapticFeedback.lightImpact();
               _handleTapDown(details);

@@ -43,34 +43,96 @@ class CloudGalleryRepository implements GalleryRepository {
   Future<List<Map<String, String>>> _getLocalFallback() async {
     return [
       {
-        'name': 'Hello World',
-        'description': 'A simple starter script to test the engine.',
-        'content':
-            'print("Hello from Script Automator!");\nconsole.log("Engine is working!");',
-      },
-      {
-        'name': '⛅ Weather Widget',
-        'description': 'A beautiful weather widget with gradients and icons.',
+        'id': 'weather_pro_v1',
+        'name': 'Weather Pro',
+        'description':
+            'Premium weather widget with live gradients and animations.',
+        'author': 'Antigravity Team',
+        'category': 'Featured',
+        'version': '1.0.2',
+        'isFeatured': 'true',
         'content': '''
 // Weather Widget — Premium UI Template
 const widget = {
   type: "container",
   modifiers: {
     background: "linear-gradient(135deg, #667eea, #764ba2)",
-    cornerRadius: 20,
-    padding: { runtimeType: "all", value: 16 }
+    cornerRadius: 24,
+    padding: { runtimeType: "all", value: 20 }
   },
   children: [
-    { type: "text", content: "San Francisco", modifiers: { font: "title", color: "#FFFFFF" } },
-    { type: "spacer", modifiers: { height: 4 } },
-    { type: "text", content: "72°F — Partly Cloudy", modifiers: { font: "body", color: "#E0E0FF" } },
+    {
+      type: "row",
+      modifiers: { alignment: "spaceBetween" },
+      children: [
+        {
+          type: "column",
+          children: [
+             { type: "text", content: "San Francisco", modifiers: { font: "title", color: "#FFFFFF", fontSize: 22 } },
+             { type: "text", content: "Partly Cloudy", modifiers: { font: "body", color: "#E0E0FF", fontSize: 16 } }
+          ]
+        },
+        { type: "icon", content: "cloud.sun.fill", modifiers: { fontSize: 48, color: "#FFD700" } }
+      ]
+    },
+    { type: "spacer", modifiers: { height: 24 } },
+    { type: "text", content: "72°", modifiers: { font: "largeTitle", color: "#FFFFFF", fontSize: 56, fontWeight: "bold" } },
+    { type: "spacer", modifiers: { height: 12 } },
+    {
+       type: "row",
+       children: [
+         { type: "icon", content: "drop.fill", modifiers: { fontSize: 16, color: "#A5F3FC" } },
+         { type: "spacer", modifiers: { width: 4 } },
+         { type: "text", content: "15%", modifiers: { color: "#A5F3FC" } },
+         { type: "spacer", modifiers: { width: 16 } },
+         { type: "icon", content: "wind", modifiers: { fontSize: 16, color: "#A5F3FC" } },
+         { type: "spacer", modifiers: { width: 4 } },
+         { type: "text", content: "8 mph", modifiers: { color: "#A5F3FC" } }
+       ]
+    }
+  ]
+};
+renderWidget(JSON.stringify(widget));
+''',
+      },
+      {
+        'id': 'crypto_tracker',
+        'name': 'Crypto Tracker',
+        'description': 'Live Bitcoin and Ethereum prices.',
+        'author': 'Satoshi',
+        'category': 'Finance',
+        'version': '2.1.0',
+        'isFeatured': 'true',
+        'content': '''
+const widget = {
+  type: "container",
+  modifiers: { background: "#111827", cornerRadius: 20, padding: { runtimeType: "all", value: 16 } },
+  children: [
+    { type: "text", content: "MARKET", modifiers: { color: "#6B7280", fontSize: 12, fontWeight: "bold" } },
     { type: "spacer", modifiers: { height: 12 } },
     {
       type: "row",
+      modifiers: { alignment: "spaceBetween" },
       children: [
-        { type: "icon", content: "cloud.sun.fill", modifiers: { fontSize: 40, color: "#FFD700" } },
-        { type: "spacer", modifiers: { width: 12 } },
-        { type: "text", content: "H:78° L:65°", modifiers: { color: "#FFFFFF" } }
+        { type: "row", children: [
+            { type: "icon", content: "bitcoinsign.circle.fill", modifiers: { color: "#F7931A", fontSize: 24 } },
+            { type: "spacer", modifiers: { width: 8 } },
+            { type: "text", content: "BTC", modifiers: { color: "white", fontSize: 18, fontWeight: "bold" } }
+        ]},
+        { type: "text", content: "\$42,500", modifiers: { color: "#10B981", fontSize: 18 } }
+      ]
+    },
+    { type: "spacer", modifiers: { height: 12 } },
+    {
+      type: "row",
+      modifiers: { alignment: "spaceBetween" },
+      children: [
+         { type: "row", children: [
+            { type: "icon", content: "bolt.circle.fill", modifiers: { color: "#627EEA", fontSize: 24 } },
+            { type: "spacer", modifiers: { width: 8 } },
+            { type: "text", content: "ETH", modifiers: { color: "white", fontSize: 18, fontWeight: "bold" } }
+         ]},
+        { type: "text", content: "\$2,250", modifiers: { color: "#EF4444", fontSize: 18 } }
       ]
     }
   ]
@@ -79,23 +141,28 @@ renderWidget(JSON.stringify(widget));
 ''',
       },
       {
-        'name': '📝 Todo List',
-        'description': 'A task list widget with checkmarks.',
+        'id': 'todo_list',
+        'name': 'Minimalist Tasks',
+        'description': 'Keep track of your daily goals.',
+        'author': 'ProductivityInc',
+        'category': 'Productivity',
+        'version': '1.0.0',
+        'isFeatured': 'false',
         'content': '''
-const tasks = ["Buy groceries", "Review PR #42", "Call dentist"];
+const tasks = ["Review Code", "Team Meeting", "Deploy to Prod"];
 const children = tasks.map(t => ({
   type: "row",
   children: [
-    { type: "icon", content: "checkmark.circle.fill", modifiers: { fontSize: 18, color: "#34C759" } },
-    { type: "spacer", modifiers: { width: 8 } },
-    { type: "text", content: t, modifiers: { color: "#FFFFFF" } }
+    { type: "icon", content: "checkmark.circle.fill", modifiers: { fontSize: 20, color: "#10B981" } },
+    { type: "spacer", modifiers: { width: 12 } },
+    { type: "text", content: t, modifiers: { color: "#F3F4F6", fontSize: 16 } }
   ]
 }));
 const widget = {
   type: "container",
-  modifiers: { background: "#1C1C1E", cornerRadius: 16, padding: { runtimeType: "all", value: 12 } },
+  modifiers: { background: "#1F2937", cornerRadius: 16, padding: { runtimeType: "all", value: 12 } },
   children: [
-    { type: "text", content: "Today's Tasks", modifiers: { font: "title", color: "#FFFFFF" } },
+    { type: "text", content: "TASKS", modifiers: { color: "#9CA3AF", fontSize: 12, fontWeight: "bold" } },
     { type: "spacer", modifiers: { height: 8 } },
     ...children
   ]
@@ -104,30 +171,13 @@ renderWidget(JSON.stringify(widget));
 ''',
       },
       {
-        'name': '⏱️ Pomodoro Timer',
-        'description': 'A focus timer display widget.',
-        'content': '''
-const widget = {
-  type: "container",
-  modifiers: {
-    background: "linear-gradient(180deg, #FF6B6B, #EE5A24)",
-    cornerRadius: 20,
-    padding: { runtimeType: "all", value: 20 }
-  },
-  children: [
-    { type: "text", content: "Focus Time", modifiers: { font: "caption", color: "#FFE0E0" } },
-    { type: "spacer", modifiers: { height: 8 } },
-    { type: "text", content: "25:00", modifiers: { font: "largeTitle", color: "#FFFFFF" } },
-    { type: "spacer", modifiers: { height: 4 } },
-    { type: "text", content: "Stay focused!", modifiers: { font: "body", color: "#FFE0E0" } }
-  ]
-};
-renderWidget(JSON.stringify(widget));
-''',
-      },
-      {
-        'name': '📊 System Info',
-        'description': 'Display device and runtime information.',
+        'id': 'system_info',
+        'name': 'Device Stats',
+        'description': 'Monitor your system performance.',
+        'author': 'System',
+        'category': 'Utilities',
+        'version': '1.5',
+        'isFeatured': 'false',
         'content': '''
 const now = new Date();
 const widget = {
@@ -143,6 +193,16 @@ const widget = {
 };
 renderWidget(JSON.stringify(widget));
 ''',
+      },
+      {
+        'id': 'pomodoro',
+        'name': 'Pomodoro Timer',
+        'description': 'Focus timer with clean UI.',
+        'author': 'Antigravity Team',
+        'category': 'Productivity',
+        'version': '1.0',
+        'isFeatured': 'false',
+        'content': '// Pomodoro script...',
       },
     ];
   }

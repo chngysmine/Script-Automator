@@ -4,11 +4,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:app_group_directory/app_group_directory.dart';
+import 'package:flutter/services.dart';
 
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_node.dart';
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_type.dart';
 import 'package:script_automator/features/widget_renderer/domain/entities/sasup_modifiers.dart';
+import 'package:script_automator/features/widget_renderer/domain/entities/sasup_padding.dart';
 
 class HeadlessWidgetRenderingService {
   /// Saves the raw SASUP JSON directly to shared storage for native rendering.
@@ -132,12 +133,18 @@ class HeadlessWidgetRenderingService {
     );
     if (Platform.isIOS) {
       try {
-        debugPrint("HeadlessService: Requesting AppGroupDirectory...");
-        final directory = await AppGroupDirectory.getAppGroupDirectory(
+        debugPrint(
+          "HeadlessService: Requesting AppGroupDirectory via MethodChannel...",
+        );
+        const channel = MethodChannel(
+          'com.antigravity.script_automator/widget',
+        );
+        final String? path = await channel.invokeMethod<String>(
+          'getAppGroupPath',
           'group.com.antigravity.script_automator',
         );
-        debugPrint("HeadlessService: AppGroupDirectory returned: $directory");
-        if (directory != null) return directory;
+        debugPrint("HeadlessService: AppGroupPath returned: $path");
+        if (path != null) return Directory(path);
       } catch (e) {
         debugPrint(
           "HeadlessService: App Group error: $e. Falling back to local documents.",
@@ -222,13 +229,33 @@ class HeadlessWidgetRenderingService {
         final children = node.children?.map(_buildWidgetTree).toList() ?? [];
         final spacing = node.modifiers?.spacing?.toDouble() ?? 0.0;
 
+        // Auto-Polish: If no padding is specified for a Container, default to 16.0
+        // to prevent content from touching edges.
+        var effectiveModifiers = node.modifiers;
+        if (node.type == WidgetType.container &&
+            (effectiveModifiers?.padding == null)) {
+          effectiveModifiers = (effectiveModifiers ?? const SASUPModifiers())
+              .copyWith(
+                padding: const SASUPPadding(
+                  left: 16,
+                  top: 16,
+                  right: 16,
+                  bottom: 16,
+                ),
+              );
+        }
+
         widget = Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: _parseCrossAxis(node.modifiers?.alignment),
           mainAxisAlignment: _parseMainAxis(node.modifiers?.alignment),
           children: _applySpacingInService(children, spacing, Axis.vertical),
         );
-        break;
+        // Apply the modified modifiers (with default padding)
+        return _applyModifiers(widget, effectiveModifiers);
+      // Break is unreachable due to return, but let's stick to the structure pattern.
+      // We returned early to use effectiveModifiers.
+      // break; // Unreachable
       case WidgetType.row:
         final children = node.children?.map(_buildWidgetTree).toList() ?? [];
         final spacing = node.modifiers?.spacing?.toDouble() ?? 0.0;
@@ -407,33 +434,81 @@ class HeadlessWidgetRenderingService {
 
   // Simple Icon Parser (Material Icons)
   // In a real app, use a comprehensive map or font glyphs.
+  // Expanded Icon Parser (SF Symbols -> Material Icons)
   IconData _parseIconData(String? iconName) {
-    switch (iconName) {
-      case 'moon.stars.fill':
-        return Icons.nightlight_round;
-      case 'sun.max.fill':
-        return Icons.wb_sunny;
-      case 'cloud.fill':
-        return Icons.cloud;
-      case 'cloud.sun.fill':
-        return Icons.wb_cloudy;
-      case 'location.fill':
-        return Icons.location_on;
-      case 'drop.fill':
-        return Icons.water_drop;
-      case 'wind':
-        return Icons.air;
-      case 'thermometer.medium':
-        return Icons.thermostat;
-      case 'arrow.clockwise':
-        return Icons.refresh;
-      case 'arrow.up':
-        return Icons.arrow_upward;
-      case 'arrow.down':
-        return Icons.arrow_downward;
-      default:
-        return Icons.help_outline;
-    }
+    if (iconName == null) return Icons.help_outline;
+
+    // Normalize logic if needed
+    final name = iconName.toLowerCase();
+
+    // Map: SF Symbol Name -> Material Icon
+    const Map<String, IconData> iconMap = {
+      // Weather
+      'sun.max.fill': Icons.wb_sunny,
+      'sun.max': Icons.wb_sunny_outlined,
+      'moon.stars.fill': Icons.nightlight_round,
+      'moon.fill': Icons.nightlight,
+      'cloud.fill': Icons.cloud,
+      'cloud.sun.fill': Icons.wb_cloudy,
+      'cloud.rain.fill': Icons.grain,
+      'cloud.snow.fill': Icons.ac_unit,
+      'wind': Icons.air,
+      'drop.fill': Icons.water_drop,
+      'thermometer.medium': Icons.thermostat,
+
+      // System
+      'battery.100': Icons.battery_full,
+      'battery.25': Icons.battery_2_bar,
+      'wifi': Icons.wifi,
+      'airplane': Icons.flight,
+      'gear': Icons.settings,
+      'trash': Icons.delete,
+      'folder': Icons.folder,
+      'doc.on.doc': Icons.copy,
+      'square.and.arrow.up': Icons.ios_share,
+      'xmark': Icons.close,
+      'checkmark': Icons.check,
+      'checkmark.circle.fill': Icons.check_circle,
+      'exclamationmark.triangle.fill': Icons.warning,
+
+      // Media
+      'play.fill': Icons.play_arrow,
+      'pause.fill': Icons.pause,
+      'stop.fill': Icons.stop,
+      'speaker.wave.2.fill': Icons.volume_up,
+
+      // Communication
+      'envelope.fill': Icons.email,
+      'phone.fill': Icons.phone,
+      'message.fill': Icons.message,
+      'person.fill': Icons.person,
+      'person.2.fill': Icons.people,
+
+      // Time/Location
+      'clock.fill': Icons.access_time_filled,
+      'alarm.fill': Icons.alarm,
+      'location.fill': Icons.location_on,
+      'map.fill': Icons.map,
+      'calendar': Icons.calendar_today,
+
+      // Objects
+      'creditcard.fill': Icons.credit_card,
+      'cart.fill': Icons.shopping_cart,
+      'gift.fill': Icons.card_giftcard,
+      'tag.fill': Icons.local_offer,
+      'camera.fill': Icons.camera_alt,
+      'photo.fill': Icons.photo,
+      'book.closed.fill': Icons.book,
+
+      // Arrows
+      'arrow.right': Icons.arrow_forward,
+      'arrow.left': Icons.arrow_back,
+      'arrow.up': Icons.arrow_upward,
+      'arrow.down': Icons.arrow_downward,
+      'arrow.clockwise': Icons.refresh,
+    };
+
+    return iconMap[name] ?? Icons.help_outline;
   }
 
   CrossAxisAlignment _parseCrossAxis(String? align) {

@@ -29,6 +29,16 @@ import WidgetKit
              print("Native: Widget Timelines Reloaded")
          }
          result(nil)
+      } else if call.method == "getAppGroupPath" {
+         guard let groupId = call.arguments as? String else {
+             result(FlutterError(code: "INVALID_ARG", message: "Group ID must be a string", details: nil))
+             return
+         }
+         if let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupId) {
+             result(url.path)
+         } else {
+             result(nil)
+         }
       } else {
         result(FlutterMethodNotImplemented)
       }

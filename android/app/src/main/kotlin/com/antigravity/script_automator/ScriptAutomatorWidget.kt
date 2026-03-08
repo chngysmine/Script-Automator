@@ -20,19 +20,25 @@ class ScriptAutomatorWidget : GlanceAppWidget() {
         val filesDir = context.filesDir
         val jsonFile = File(filesDir, "sasup_ui.json")
         
+        var rootNode: JsonObject? = null
+        var errorMessage: String? = null
+        
+        if (jsonFile.exists()) {
+            try {
+                val json = jsonFile.readText()
+                val rootObject = JsonParser.parseString(json).asJsonObject
+                rootNode = rootObject.getAsJsonObject("root")
+            } catch (e: Exception) {
+                errorMessage = e.message
+            }
+        }
+
         provideContent {
             GlanceTheme {
-                if (jsonFile.exists()) {
-                    try {
-                        val json = jsonFile.readText()
-                        val rootObject = JsonParser.parseString(json).asJsonObject
-                        val rootNode = rootObject.getAsJsonObject("root")
-                        GlanceJsonParser.RenderNode(rootNode)
-                    } catch (e: Exception) {
-                        Text("Widget Error: ${e.message?.take(50)}")
-                    }
-                } else {
-                    Text("No widget output yet. Run a script with renderWidget() first.")
+                when {
+                    rootNode != null -> GlanceJsonParser.RenderNode(rootNode, isRoot = true)
+                    errorMessage != null -> Text("Widget Error: ${errorMessage.take(50)}")
+                    else -> Text("Run a script to see widget!")
                 }
             }
         }
