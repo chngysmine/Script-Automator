@@ -37,8 +37,8 @@ object GlanceJsonParser {
 
         when (type) {
             "column" -> {
-                val horizontalAlign = parseAlignment(modifiers.get("alignment")?.asString, true) as Alignment.Horizontal
-                val verticalAlign = parseAlignment(modifiers.get("alignment")?.asString, false) as Alignment.Vertical
+                val horizontalAlign = parseHorizontalAlignment(modifiers.get("alignment")?.asString)
+                val verticalAlign = parseVerticalAlignment(modifiers.get("alignment")?.asString)
                 Column(
                     modifier = glanceModifier,
                     horizontalAlignment = horizontalAlign,
@@ -48,8 +48,8 @@ object GlanceJsonParser {
                 }
             }
             "row" -> {
-                val horizontalAlign = parseAlignment(modifiers.get("alignment")?.asString, true) as Alignment.Horizontal
-                val verticalAlign = parseAlignment(modifiers.get("alignment")?.asString, false) as Alignment.Vertical
+                val horizontalAlign = parseHorizontalAlignment(modifiers.get("alignment")?.asString)
+                val verticalAlign = parseVerticalAlignment(modifiers.get("alignment")?.asString)
                  Row(
                     modifier = glanceModifier,
                     horizontalAlignment = horizontalAlign,
@@ -254,19 +254,19 @@ object GlanceJsonParser {
         }
     }
 
-    private fun parseAlignment(align: String?, isHorizontal: Boolean): Any {
-        return if (isHorizontal) {
-             when (align) {
-                "center", "spaceAround", "spaceEvenly" -> Alignment.CenterHorizontally
-                "end", "bottomEnd", "topEnd" -> Alignment.End
-                else -> Alignment.Start
-            }
-        } else {
-             when (align) {
-                "center", "spaceAround", "spaceEvenly" -> Alignment.CenterVertically
-                "end", "bottomCenter", "bottomEnd" -> Alignment.Bottom
-                else -> Alignment.Top
-            }
+    private fun parseHorizontalAlignment(align: String?): Alignment.Horizontal {
+        return when (align) {
+            "center", "spaceAround", "spaceEvenly" -> Alignment.CenterHorizontally
+            "end", "bottomEnd", "topEnd" -> Alignment.End
+            else -> Alignment.Start
+        }
+    }
+
+    private fun parseVerticalAlignment(align: String?): Alignment.Vertical {
+        return when (align) {
+            "center", "spaceAround", "spaceEvenly" -> Alignment.CenterVertically
+            "end", "bottomCenter", "bottomEnd" -> Alignment.Bottom
+            else -> Alignment.Top
         }
     }
 }

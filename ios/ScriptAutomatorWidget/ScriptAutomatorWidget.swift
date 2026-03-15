@@ -37,17 +37,19 @@ struct Provider: AppIntentTimelineProvider {
         if let id = scriptId {
             // Specific Script
             fileURL = directory.appendingPathComponent("sasup_ui_\(id).json")
+            
+            // If the specific script file doesn't exist, it means it's empty or deleted.
+            // DO NOT fallback to the global sasup_ui.json, as that belongs to potentially another script.
+            if !fileManager.fileExists(atPath: fileURL.path) {
+                return (nil, "Script Output Not Found")
+            }
         } else {
-            // Fallback: Latest Run (sasup_ui.json)
+            // Fallback: Latest Run (sasup_ui.json) when no specific script is selected
             fileURL = directory.appendingPathComponent("sasup_ui.json")
-        }
-        
-        // Debug Check: If file doesn't exist, return specific error
-        if !fileManager.fileExists(atPath: fileURL.path) {
-             if scriptId == nil {
-                 return (nil, nil) // Normal first launch state
-             }
-             return (nil, "Script Output Not Found")
+            
+            if !fileManager.fileExists(atPath: fileURL.path) {
+                return (nil, nil) // Normal first launch state
+            }
         }
         
         do {

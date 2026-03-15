@@ -1,8 +1,8 @@
 # CODEBASE MAP — Script Automator
 
-> Last Updated: 2026-03-07 | Audit: 100% codebase read
+> Last Updated: 2026-03-08 | Audit: 100% codebase read
 > Architecture: Flutter + Native (QuickJS/JSC) + iOS WidgetKit + Android Glance
-> **Overall Completion: ~55%** (Pha 1: 75%, Pha 2: 55%, Pha 3: 45% ↑, Pha 4: 25%)
+> **Overall Completion: ~60%** (Pha 1: 85% ↑, Pha 2: 70% ↑, Pha 3: 45%, Pha 4: 25%)
 
 ## Data Flow Diagram
 
@@ -142,11 +142,11 @@ Script Execution:
 ### Native Widget Extensions
 | File | Purpose | Status |
 |------|---------|--------|
-| `ios/.../UniversalWidgetView.swift` | SwiftUI renderer | ⚠️ `lineLimit(1)` hardcoded |
+| `ios/.../UniversalWidgetView.swift` | SwiftUI renderer | ✅ STABLE (Fixed lineLimit clipping) |
 | `ios/.../ScriptAutomatorWidget.swift` | Widget entry point | ✅ STABLE |
-| `ios/.../ScriptDatabase.swift` | SQLite reader | 🔴 **App Group ID SAI** |
+| `ios/.../ScriptDatabase.swift` | SQLite reader | ✅ STABLE (Fixed in Chunk 2 — App Group ID) |
 | `ios/.../ScriptSelectionIntent.swift` | Widget config intent | ✅ STABLE |
-| `android/.../GlanceJsonParser.kt` | Glance renderer | ⚠️ alignment API sai cho Column/Row |
+| `android/.../GlanceJsonParser.kt` | Glance renderer | ✅ STABLE (Fixed Alignment API) |
 | `android/.../ScriptAutomatorWidget.kt` | Widget entry | ✅ STABLE |
 
 ---
@@ -155,12 +155,12 @@ Script Execution:
 
 | ID | Severity | File | Line | Mô tả |
 |----|----------|------|------|--------|
-| BUG-01 | 🔴 CRITICAL | `ScriptDatabase.swift` | 14 | App Group ID sai: `group.com.scriptautomator` ≠ `group.com.antigravity.script_automator` |
+| BUG-01 | ✅ FIXED | `ScriptDatabase.swift` | 14 | App Group ID sai → Sửa thành `group.com.antigravity.script_automator` (Chunk 2) |
 | BUG-02 | ✅ FIXED | `viewport_aware_painter.dart` | — | Syntax highlighting ENABLED + selection highlight (Chunk 1) |
-| BUG-03 | 🔴 HIGH | `main.dart` | — | Không có `WidgetsBindingObserver` → Hive không flush khi background |
+| BUG-03 | ✅ FIXED | `main.dart` | — | Thêm `WidgetsBindingObserver` để flush Hive khi background (Chunk 2) |
 | BUG-04 | ⚠️ MEDIUM | `gemini_service.dart` | 21 | Model `gemini-pro` deprecated |
-| BUG-05 | ⚠️ MEDIUM | `UniversalWidgetView.swift` | 61 | `.lineLimit(1)` trên mọi Text |
-| BUG-06 | ⚠️ MEDIUM | `GlanceJsonParser.kt` | 40-41 | `verticalAlignment` cho Column (API chỉ nhận `horizontalAlignment`) |
+| BUG-05 | ✅ FIXED | `UniversalWidgetView.swift` | 61 | Đã xóa `.lineLimit(1)` trên mọi Text (Chunk 3) |
+| BUG-06 | ✅ FIXED | `GlanceJsonParser.kt` | 40-41 | Đã sửa casting `Alignment.Horizontal` và `Alignment.Vertical` (Chunk 3) |
 | BUG-07 | ⚠️ MEDIUM | `liquid_search_bar.dart` | — | SearchBar không có TextField (decorative only) |
 | BUG-08 | ⚠️ MEDIUM | `dashboard_page.dart` | — | Dock index 3, 4 → blank screen |
 | BUG-09 | ⚠️ LOW | `glass_drawer.dart` | — | Text dùng `textPrimary` (white) trên dark bg → gần vô hình |
@@ -201,13 +201,14 @@ Script Execution:
 5. ~~SnackBar đè console~~ ✅
 6. ~~ScriptSuccessOverlay~~ ✅ removed
 
-### Ưu tiên 2: Storage — Data Persistence
-4. Sửa App Group ID (BUG-01)
-5. Thêm WidgetsBindingObserver (BUG-03)
+### ✅ Ưu tiên 2: Storage — DONE (Chunk 2)
+4. ~~Sửa App Group ID (BUG-01)~~ ✅
+5. ~~Thêm WidgetsBindingObserver (BUG-03)~~ ✅
 
-### Ưu tiên 3: Widget Rendering
-6. Sửa lineLimit(1) (BUG-05)
-7. Sửa alignment API (BUG-06)
+### ✅ Ưu tiên 3: Widget Rendering — DONE (Chunk 3)
+6. ~~Sửa lineLimit(1) (BUG-05)~~ ✅
+7. ~~Sửa alignment API (BUG-06)~~ ✅
+8. ~~Thêm logic deleteWidgetUI để xóa Widget cũ khi Script lỗi/trống~~ ✅
 
 ### Ưu tiên 4: Dashboard Polish
 8. SearchBar thật (BUG-07)

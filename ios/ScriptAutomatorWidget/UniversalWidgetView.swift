@@ -58,7 +58,7 @@ struct UniversalWidgetView: View {
                     .foregroundColor(ColorParser.parse(node.modifiers?.color ?? "#000000"))
                     .fontWeight(parseWeight(node.modifiers?.font))
                     .minimumScaleFactor(0.5) // Autoscale to fit
-                    .lineLimit(1) // Prevent multi-line clipping
+                    // Removed hardcoded .lineLimit(1) to allow multiline content
             }
         case "icon":
             applyModifiers(node.modifiers, isRoot: isRoot) {

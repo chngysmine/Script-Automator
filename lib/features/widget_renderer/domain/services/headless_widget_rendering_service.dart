@@ -37,6 +37,8 @@ class HeadlessWidgetRenderingService {
       final defaultFile = File('${directory.path}/sasup_ui.json');
       await defaultFile.writeAsString(jsonPayload, flush: true);
 
+      await _triggerWidgetReload();
+
       debugPrint("HeadlessService: Native JSON saved to ${jsonFile.path}");
       return 'file://${jsonFile.path}';
     } catch (e, stack) {
@@ -85,10 +87,53 @@ class HeadlessWidgetRenderingService {
       final defaultFile = File('${directory.path}/sasup_ui.json');
       await defaultFile.writeAsString(jsonPayload, flush: true);
 
+      await _triggerWidgetReload();
+
       return 'file://${jsonFile.path}';
     } catch (e, stack) {
       debugPrint("Headless Render Error: $e\n$stack");
       throw Exception("Headless Render Failed: $e");
+    }
+  }
+
+  /// Deletes the cached JSON and PNG UI files for a given script.
+  /// Called when a script is deleted or emptied, preventing stale UI from showing on native widgets.
+  Future<void> deleteWidgetUI(String scriptId) async {
+    try {
+      final directory = await _getSharedDirectory();
+
+      final jsonFile = File('${directory.path}/sasup_ui_$scriptId.json');
+      if (await jsonFile.exists()) await jsonFile.delete();
+
+      final pngFile = File('${directory.path}/sasup_ui_$scriptId.png');
+      if (await pngFile.exists()) await pngFile.delete();
+
+      // Aggressively delete the fallback sasup_ui.json as well to prevent
+      // unconfigured widgets from showing stale data.
+      final fallbackJson = File('${directory.path}/sasup_ui.json');
+      if (await fallbackJson.exists()) await fallbackJson.delete();
+
+      await _triggerWidgetReload();
+
+      debugPrint(
+        "HeadlessService: Deleted cached UI & Triggered Reload for $scriptId",
+      );
+    } catch (e) {
+      debugPrint("Failed to delete widget UI cache for $scriptId: $e");
+    }
+  }
+
+  /// Triggers a refresh of all Native Widgets (iOS via MethodChannel).
+  Future<void> _triggerWidgetReload() async {
+    if (Platform.isIOS) {
+      try {
+        const channel = MethodChannel(
+          'com.antigravity.script_automator/widget',
+        );
+        await channel.invokeMethod('reloadTimelines');
+      } catch (e) {
+        debugPrint("Failed to reload timelines: $e");
+      }
     }
   }
 

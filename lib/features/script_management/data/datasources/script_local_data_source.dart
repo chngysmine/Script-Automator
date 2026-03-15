@@ -29,6 +29,9 @@ abstract class ScriptLocalDataSource {
 
   /// Deletes a script by ID.
   Future<void> deleteScript(String id);
+
+  /// Flushes pending data to persistent storage safely.
+  Future<void> flushData();
 }
 
 /// Implementation of [ScriptLocalDataSource] using Hive CE LazyBox.
@@ -191,5 +194,23 @@ class ScriptLocalDataSourceImpl implements ScriptLocalDataSource {
     } catch (e) {
       throw CacheException("Failed to delete script: $e");
     }
+  }
+
+  @override
+  Future<void> flushData() async {
+    return _saveLock.synchronized(() async {
+      try {
+        if (_metadataBox != null && _metadataBox!.isOpen) {
+          await _metadataBox!.compact();
+        }
+        if (_contentBox != null && _contentBox!.isOpen) {
+          await _contentBox!.compact();
+        }
+      } catch (e) {
+        // Log gracefully during background
+        // ignore: avoid_print
+        print("flushData error: $e");
+      }
+    });
   }
 }

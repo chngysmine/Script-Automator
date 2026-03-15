@@ -37,6 +37,8 @@ Future<void> _setupDI() async {
   // Initialize secure storage and boxes
   try {
     await localDataSource.init();
+    // Register localDataSource to GetIt to be accessible from MyApp lifecycle listener
+    GetIt.I.registerSingleton<ScriptLocalDataSource>(localDataSource);
   } catch (e) {
     debugPrint("Failed to init local data source: $e");
     // Handle migration or recovery here
@@ -96,8 +98,37 @@ Future<void> _setupDI() async {
   }
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      // Flush safely to the persistent storage to prevent data loss on OS kill
+      if (GetIt.I.isRegistered<ScriptLocalDataSource>()) {
+        GetIt.I<ScriptLocalDataSource>().flushData();
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -20,6 +20,7 @@ import 'dart:math';
 import 'dart:convert';
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_node.dart';
 import 'package:script_automator/features/widget_renderer/presentation/widgets/sasup_renderer.dart';
+import 'package:script_automator/features/widget_renderer/domain/services/headless_widget_rendering_service.dart';
 
 class EditorPage extends StatefulWidget {
   final Script? script;
@@ -42,6 +43,7 @@ class _EditorPageState extends State<EditorPage>
   late Animation<double> _fadeAnim;
   bool _showConsole = false;
   bool _isLogExpanded = false;
+  bool _isLoadingContent = false;
 
   // Phase 4 Integration: Real Engine
   final ScriptRunnerService _runnerService = GetIt.I<ScriptRunnerService>();
@@ -63,19 +65,7 @@ class _EditorPageState extends State<EditorPage>
     );
     _animController.forward();
 
-    final initialText = widget.script?.content ?? "// Start coding...";
-    _inputController.text = initialText;
-    _controller.setText(_inputController.text);
-
-    // Auto-Save Logic
-    _inputController.addListener(() {
-      if (_controller.text != _inputController.text) {
-        _controller.setText(_inputController.text);
-        _controller.selection = _inputController.selection;
-        _onTextChanged(); // Trigger Debounce Save
-        setState(() {});
-      }
-    });
+    _initScriptContent();
 
     // Listen to Real Engine Logs
     _logSubscription = _runnerService.logs.listen((log) {
@@ -94,6 +84,49 @@ class _EditorPageState extends State<EditorPage>
       if (!mounted) return;
       _showLivePreview(jsonString);
     });
+  }
+
+  Future<void> _initScriptContent() async {
+    if (widget.script != null) {
+      setState(() => _isLoadingContent = true);
+      // Fetch full content (Dual-Store architecture passes only Metadata from Dashboard)
+      final result = await _repository.getScriptDetail(widget.script!.id);
+      result.fold(
+        (failure) {
+          debugPrint("Failed to load script content: ${failure.message}");
+          _initializeEditorWithText("// Error loading content.");
+        },
+        (fullScript) {
+          _initializeEditorWithText(
+            fullScript.content.isEmpty
+                ? "// Start coding..."
+                : fullScript.content,
+          );
+        },
+      );
+    } else {
+      _initializeEditorWithText("// Start coding...");
+    }
+  }
+
+  void _initializeEditorWithText(String text) {
+    if (!mounted) return;
+    _inputController.text = text;
+    _controller.setText(_inputController.text);
+
+    // Only attach Auto-Save Logic AFTER initial load to prevent overwriting
+    _inputController.addListener(_handleTextInput);
+
+    setState(() => _isLoadingContent = false);
+  }
+
+  void _handleTextInput() {
+    if (_controller.text != _inputController.text) {
+      _controller.setText(_inputController.text);
+      _controller.selection = _inputController.selection;
+      _onTextChanged(); // Trigger Debounce Save
+      setState(() {});
+    }
   }
 
   // --- Auto Save ---
@@ -150,8 +183,8 @@ class _EditorPageState extends State<EditorPage>
       );
       _repository.saveScript(finalScript);
     }
-    // _controller.dispose(); // Do not dispose here if passed from outside, but here it is local.
-    // However, EditorPage State owns it.
+
+    _inputController.removeListener(_handleTextInput);
     _controller.dispose();
     _inputController.dispose();
     _verticalController.dispose();
@@ -240,10 +273,19 @@ class _EditorPageState extends State<EditorPage>
     });
 
     try {
+      final scriptId = widget.script?.id ?? 'manual_run';
+      
+      // ALWLAYS proactively clear the Widget UI before running to ensure no "ghost" old UI 
+      // is left behind if the script succeeds but simply doesn't call renderWidget().
+      if (GetIt.I.isRegistered<HeadlessWidgetRenderingService>()) {
+         await GetIt.I<HeadlessWidgetRenderingService>().deleteWidgetUI(scriptId);
+      }
+
       await _runnerService.runScript(
         _controller.text,
-        widget.script?.id ?? 'manual_run',
+        scriptId,
       );
+
       if (mounted) {
         setState(() {
           _logs.add(
@@ -256,6 +298,14 @@ class _EditorPageState extends State<EditorPage>
         // Console log entry above already informs the user of success.
       }
     } catch (e) {
+      final scriptId = widget.script?.id ?? 'manual_run';
+      // Fallback: If script crashes entirely, also clear the widget to avoid stale data
+      if (GetIt.I.isRegistered<HeadlessWidgetRenderingService>()) {
+        await GetIt.I<HeadlessWidgetRenderingService>().deleteWidgetUI(
+          scriptId,
+        );
+      }
+
       setState(() {
         _logs.add(
           ConsoleLogEntry(
@@ -385,98 +435,112 @@ class _EditorPageState extends State<EditorPage>
                           ),
                         ],
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final contentWidth = max(
-                              constraints.maxWidth,
-                              _calculateMaxWidth(),
-                            );
-                            final contentHeight = max(
-                              constraints.maxHeight,
-                              _calculateHeight(),
-                            );
-
-                            return Scrollbar(
-                              controller: _verticalController,
-                              child: SingleChildScrollView(
-                                controller: _verticalController,
-                                child: SingleChildScrollView(
-                                  controller: _horizontalController,
-                                  scrollDirection: Axis.horizontal,
-                                  child: SizedBox(
-                                    width: contentWidth,
-                                    height: contentHeight,
-                                    child: Stack(
-                                      children: [
-                                        AnimatedBuilder(
-                                          animation: Listenable.merge([
-                                            _verticalController,
-                                            _horizontalController,
-                                            _controller,
-                                          ]),
-                                          builder: (context, _) => CustomPaint(
-                                            size: Size(
-                                              contentWidth,
-                                              contentHeight,
-                                            ),
-                                            painter: ViewportAwarePainter(
-                                              controller: _controller,
-                                              scrollOffset:
-                                                  _verticalController.hasClients
-                                                  ? _verticalController.offset
-                                                  : 0,
-                                              viewportHeight:
-                                                  constraints.maxHeight,
-                                              textStyle: _kEditorTextStyle,
-                                              gutterWidth: 44.0,
-                                              highlighter: SyntaxHighlighter(
-                                                baseStyle: _kEditorTextStyle,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            left: 52.0,
-                                            right: 8.0,
-                                          ),
-                                          child: TextField(
-                                            controller: _inputController,
-                                            focusNode: _focusNode,
-                                            maxLines: null,
-                                            keyboardType:
-                                                TextInputType.multiline,
-                                            showCursor: true,
-                                            style: _kEditorTextStyle.copyWith(
-                                              color: Colors.transparent,
-                                            ),
-                                            strutStyle: const StrutStyle(
-                                              fontSize: 13.5,
-                                              height: 1.6,
-                                              leading: 0,
-                                              forceStrutHeight: true,
-                                            ), // LOCK LINE HEIGHT
-                                            cursorColor: const Color(
-                                              0xFF0284C7,
-                                            ), // Sky 600
-                                            decoration: const InputDecoration(
-                                              border: InputBorder.none,
-                                              // contentPadding: EdgeInsets.only(top: 2), // Removed manual padding, relying on Strut
-                                              contentPadding: EdgeInsets.zero,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
+                      child: _isLoadingContent
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                color: LiquidTheme.primary,
                               ),
-                            );
-                          },
-                        ),
-                      ),
+                            )
+                          : ClipRRect(
+                              borderRadius: BorderRadius.circular(24),
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final contentWidth = max(
+                                    constraints.maxWidth,
+                                    _calculateMaxWidth(),
+                                  );
+                                  final contentHeight = max(
+                                    constraints.maxHeight,
+                                    _calculateHeight(),
+                                  );
+
+                                  return Scrollbar(
+                                    controller: _verticalController,
+                                    child: SingleChildScrollView(
+                                      controller: _verticalController,
+                                      child: SingleChildScrollView(
+                                        controller: _horizontalController,
+                                        scrollDirection: Axis.horizontal,
+                                        child: SizedBox(
+                                          width: contentWidth,
+                                          height: contentHeight,
+                                          child: Stack(
+                                            children: [
+                                              AnimatedBuilder(
+                                                animation: Listenable.merge([
+                                                  _verticalController,
+                                                  _horizontalController,
+                                                  _controller,
+                                                ]),
+                                                builder: (context, _) => CustomPaint(
+                                                  size: Size(
+                                                    contentWidth,
+                                                    contentHeight,
+                                                  ),
+                                                  painter: ViewportAwarePainter(
+                                                    controller: _controller,
+                                                    scrollOffset:
+                                                        _verticalController
+                                                            .hasClients
+                                                        ? _verticalController
+                                                              .offset
+                                                        : 0,
+                                                    viewportHeight:
+                                                        constraints.maxHeight,
+                                                    textStyle:
+                                                        _kEditorTextStyle,
+                                                    gutterWidth: 44.0,
+                                                    highlighter:
+                                                        SyntaxHighlighter(
+                                                          baseStyle:
+                                                              _kEditorTextStyle,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  left: 52.0,
+                                                  right: 8.0,
+                                                ),
+                                                child: TextField(
+                                                  controller: _inputController,
+                                                  focusNode: _focusNode,
+                                                  maxLines: null,
+                                                  keyboardType:
+                                                      TextInputType.multiline,
+                                                  showCursor: true,
+                                                  style: _kEditorTextStyle
+                                                      .copyWith(
+                                                        color:
+                                                            Colors.transparent,
+                                                      ),
+                                                  strutStyle: const StrutStyle(
+                                                    fontSize: 13.5,
+                                                    height: 1.6,
+                                                    leading: 0,
+                                                    forceStrutHeight: true,
+                                                  ), // LOCK LINE HEIGHT
+                                                  cursorColor: const Color(
+                                                    0xFF0284C7,
+                                                  ), // Sky 600
+                                                  decoration: const InputDecoration(
+                                                    border: InputBorder.none,
+                                                    // contentPadding: EdgeInsets.only(top: 2), // Removed manual padding, relying on Strut
+                                                    contentPadding:
+                                                        EdgeInsets.zero,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                     ),
                   ),
                 ),

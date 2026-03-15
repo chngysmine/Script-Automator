@@ -5,10 +5,14 @@ import '../datasources/script_local_data_source.dart';
 import '../models/script_model.dart';
 
 import '../../../../features/widget_renderer/data/services/widget_registry_service.dart';
+import '../../../../features/widget_renderer/domain/services/headless_widget_rendering_service.dart';
+import 'package:get_it/get_it.dart';
 
 class ScriptRepositoryImpl implements ScriptRepository {
   final ScriptLocalDataSource _dataSource;
   final WidgetRegistryService _widgetRegistry;
+  HeadlessWidgetRenderingService?
+  _rendererService; // Lazy loaded to prevent circular DI
 
   /// Constructs a [ScriptRepositoryImpl] with the given data source and registry.
   ScriptRepositoryImpl(this._dataSource, this._widgetRegistry);
@@ -99,6 +103,14 @@ class ScriptRepositoryImpl implements ScriptRepository {
 
       // Remove from SQLite Registry
       await _widgetRegistry.removeScript(id);
+
+      // Cleanup orphan UI files
+      try {
+        _rendererService ??= GetIt.I<HeadlessWidgetRenderingService>();
+        await _rendererService?.deleteWidgetUI(id);
+      } catch (e) {
+        // Fallback silently if DI is not fully booted
+      }
 
       return const Right(unit);
     } catch (e) {

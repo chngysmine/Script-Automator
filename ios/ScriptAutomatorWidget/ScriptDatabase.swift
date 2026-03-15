@@ -11,7 +11,7 @@ class ScriptDatabase {
     static let shared = ScriptDatabase()
     private var db: OpaquePointer?
     private let dbName = "widget_registry.db"
-    private let appGroupId = "group.com.scriptautomator"
+    private let appGroupId = "group.com.antigravity.script_automator"
 
     private init() {
         openDatabase()
@@ -19,7 +19,7 @@ class ScriptDatabase {
 
     private func openDatabase() {
         guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupId) else {
-            print("ScriptDatabase: Failed to get App Group container")
+            NSLog("ScriptDatabase ERROR: Failed to get App Group container. Check AppGroup entitlements for ID: \(appGroupId)")
             return
         }
 
