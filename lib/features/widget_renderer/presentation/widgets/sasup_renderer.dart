@@ -38,7 +38,10 @@ class SasupRenderer extends StatelessWidget {
         final children =
             node.children?.map((c) {
               final w = _buildWidget(c, isRoot: false);
-              return (c.modifiers?.flex == 1) ? Expanded(child: w) : w;
+              final flex = c.modifiers?.flex;
+              return (flex != null && flex > 0)
+                  ? Flexible(flex: flex, fit: FlexFit.loose, child: w)
+                  : w;
             }).toList() ??
             [];
         final spacing = node.modifiers?.spacing?.toDouble() ?? 0.0;
@@ -52,9 +55,13 @@ class SasupRenderer extends StatelessWidget {
         break;
       case WidgetType.row:
         final children =
-            node.children
-                ?.map((c) => _buildWidget(c, isRoot: false))
-                .toList() ??
+            node.children?.map((c) {
+              final w = _buildWidget(c, isRoot: false);
+              final flex = c.modifiers?.flex;
+              return (flex != null && flex > 0)
+                  ? Flexible(flex: flex, fit: FlexFit.loose, child: w)
+                  : w;
+            }).toList() ??
             [];
         final spacing = node.modifiers?.spacing?.toDouble() ?? 0.0;
 
@@ -124,10 +131,6 @@ class SasupRenderer extends StatelessWidget {
     // Apply basic modifiers (padding, size, background)
     widget = _applyModifiers(widget, node.modifiers ?? const SASUPModifiers());
 
-    // Wrap in Expanded if flex is set (only if inside a Flex container - Row/Column)
-    // Actually, in our rendering logic, the parent handles children.
-    // However, to keep it simple, if flex is 1 and it's not root, we might need a hint.
-    // For now, let's wrap children in Expanded inside Row/Column loop.
     return widget;
   }
 
@@ -176,10 +179,6 @@ class SasupRenderer extends StatelessWidget {
         );
       }
       w = Container(decoration: decoration, child: w);
-    }
-
-    if (mods.flex != null && mods.flex! > 0) {
-      w = Expanded(flex: mods.flex!, child: w);
     }
 
     if (mods.clickAction != null) {

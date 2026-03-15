@@ -28,6 +28,7 @@ struct SASUPModifiers: Decodable, Hashable {
     let color: String?
     let alignment: String?
     let spacing: Double?
+    let maxLines: Int? // Added for responsive lineLimit
 }
 
 struct SASUPPadding: Decodable, Hashable {

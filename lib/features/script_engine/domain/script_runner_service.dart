@@ -294,8 +294,14 @@ class ScriptRunnerService {
 
           currentScriptId = message['scriptId']; // Capture context
           try {
-            // ...
-            final result = engine.evaluate(script);
+            // Wrap script in an IIFE so `const/let` declarations don't pollute the global scope 
+            // and cause duplicate variable errors on subsequent runs.
+            final wrappedScript = '''
+              (function() {
+                $script
+              })();
+            ''';
+            final result = engine.evaluate(wrappedScript);
             logger.info("Result: $result");
           } catch (e) {
             String errorMsg = "Script Error: $e";

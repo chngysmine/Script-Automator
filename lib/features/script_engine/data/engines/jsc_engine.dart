@@ -107,9 +107,34 @@ class JSCEngine implements JSEngine, Finalizable {
     if (_ctx == null) return "";
     return using((Arena arena) {
       final exceptionPtr = arena<Pointer<JSValue>>();
-      // Simplified check: If it's an object (including Array), try JSON stringify.
+      
+      // Check if it's explicitly an Error object
       final isObject = _lib.JSValueIsObject(_ctx!, value);
       if (isObject == 1) {
+        exceptionPtr.value = nullptr;
+        // Try getting 'message' property
+        final msgPropStr = 'message'.toNativeUtf8(allocator: arena).cast<Char>();
+        final jsMsgProp = _lib.JSStringCreateWithUTF8CString(msgPropStr);
+        final hasMsg = _lib.JSObjectHasProperty(_ctx!, value.cast(), jsMsgProp);
+        
+        if (hasMsg == 1) {
+             final msgVal = _lib.JSObjectGetProperty(_ctx!, value.cast(), jsMsgProp, exceptionPtr);
+             _lib.JSStringRelease(jsMsgProp);
+             if (exceptionPtr.value == nullptr) {
+                final jsString = _lib.JSValueToStringCopy(_ctx!, msgVal, exceptionPtr);
+                if (jsString != nullptr) {
+                    final maxBytes = _lib.JSStringGetMaximumUTF8CStringSize(jsString);
+                    final buffer = arena<Char>(maxBytes);
+                    _lib.JSStringGetUTF8CString(jsString, buffer, maxBytes);
+                    final dartString = buffer.cast<Utf8>().toDartString();
+                    _lib.JSStringRelease(jsString);
+                    return dartString;
+                }
+             }
+        } else {
+             _lib.JSStringRelease(jsMsgProp);
+        }
+
         exceptionPtr.value = nullptr; // Clear for new call
         final jsonStringRef = _lib.JSValueCreateJSONString(
           _ctx!,
@@ -127,10 +152,15 @@ class JSCEngine implements JSEngine, Finalizable {
           final jsonStr = buffer.cast<Utf8>().toDartString();
           _lib.JSStringRelease(jsonStringRef);
 
-          try {
-            return jsonDecode(jsonStr);
-          } catch (e) {
-            return jsonStr;
+          // Only JSONDecode if we meant to parse it out, but for toString() just return it.
+          // Wait, returning JSON is useful for objects. But we shouldn't fail if it's {}.
+          if (jsonStr != "{}") {
+             try {
+               // If it's pure json, decoding and printing might not be what JS string does
+               return jsonStr; 
+             } catch (e) {
+               return jsonStr;
+             }
           }
         }
       }

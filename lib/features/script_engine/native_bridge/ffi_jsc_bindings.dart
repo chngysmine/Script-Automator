@@ -141,6 +141,36 @@ typedef JSObjectSetProperty_Dart =
       Pointer<Pointer<JSValue>>,
     );
 
+// bool JSObjectHasProperty(JSContextRef ctx, JSObjectRef object, JSStringRef propertyName);
+typedef JSObjectHasProperty_C =
+    Int8 Function(
+      Pointer<JSGlobalContext>,
+      Pointer<JSObject>,
+      Pointer<JSString>,
+    );
+typedef JSObjectHasProperty_Dart =
+    int Function(
+      Pointer<JSGlobalContext>,
+      Pointer<JSObject>,
+      Pointer<JSString>,
+    );
+
+// JSValueRef JSObjectGetProperty(JSContextRef ctx, JSObjectRef object, JSStringRef propertyName, JSValueRef* exception);
+typedef JSObjectGetProperty_C =
+    Pointer<JSValue> Function(
+      Pointer<JSGlobalContext>,
+      Pointer<JSObject>,
+      Pointer<JSString>,
+      Pointer<Pointer<JSValue>>,
+    );
+typedef JSObjectGetProperty_Dart =
+    Pointer<JSValue> Function(
+      Pointer<JSGlobalContext>,
+      Pointer<JSObject>,
+      Pointer<JSString>,
+      Pointer<Pointer<JSValue>>,
+    );
+
 // bool JSValueIsObject(JSContextRef ctx, JSValueRef value);
 typedef JSValueIsObject_C =
     Int8 Function(Pointer<JSGlobalContext>, Pointer<JSValue>);
@@ -191,6 +221,8 @@ class JSCBindings {
   JSObjectMakeFunctionWithCallback;
   late final JSContextGetGlobalObject_Dart JSContextGetGlobalObject;
   late final JSObjectSetProperty_Dart JSObjectSetProperty;
+  late final JSObjectHasProperty_Dart JSObjectHasProperty;
+  late final JSObjectGetProperty_Dart JSObjectGetProperty;
   late final JSValueMakeUndefined_Dart JSValueMakeUndefined;
   late final JSValueIsObject_Dart JSValueIsObject;
   late final JSValueCreateJSONString_Dart JSValueCreateJSONString;
@@ -253,6 +285,14 @@ class JSCBindings {
     JSObjectSetProperty = _dylib
         .lookupFunction<JSObjectSetProperty_C, JSObjectSetProperty_Dart>(
           'JSObjectSetProperty',
+        );
+    JSObjectHasProperty = _dylib
+        .lookupFunction<JSObjectHasProperty_C, JSObjectHasProperty_Dart>(
+          'JSObjectHasProperty',
+        );
+    JSObjectGetProperty = _dylib
+        .lookupFunction<JSObjectGetProperty_C, JSObjectGetProperty_Dart>(
+          'JSObjectGetProperty',
         );
     JSValueMakeUndefined = _dylib
         .lookupFunction<JSValueMakeUndefined_C, JSValueMakeUndefined_Dart>(

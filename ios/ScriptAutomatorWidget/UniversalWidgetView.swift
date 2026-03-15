@@ -17,7 +17,11 @@ struct UniversalWidgetView: View {
     private func renderNode(_ node: SASUPNode, isRoot: Bool = false) -> some View {
         let view = _renderRawNode(node, isRoot: isRoot)
         
-        if node.modifiers?.flex == 1 {
+        if isRoot {
+            GeometryReader { geometry in
+                view.frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
+            }
+        } else if node.modifiers?.flex == 1 {
             view.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             view
@@ -57,8 +61,8 @@ struct UniversalWidgetView: View {
                     .font(parseFont(node.modifiers))
                     .foregroundColor(ColorParser.parse(node.modifiers?.color ?? "#000000"))
                     .fontWeight(parseWeight(node.modifiers?.font))
-                    .minimumScaleFactor(0.5) // Autoscale to fit
-                    // Removed hardcoded .lineLimit(1) to allow multiline content
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(node.modifiers?.maxLines)
             }
         case "icon":
             applyModifiers(node.modifiers, isRoot: isRoot) {

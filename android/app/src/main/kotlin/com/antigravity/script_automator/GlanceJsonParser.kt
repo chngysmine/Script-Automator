@@ -20,7 +20,9 @@ import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.action.actionRunCallback
 import android.content.Intent
 import android.content.ComponentName
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.Log
 import com.google.gson.JsonObject
 
 object GlanceJsonParser {
@@ -38,21 +40,17 @@ object GlanceJsonParser {
         when (type) {
             "column" -> {
                 val horizontalAlign = parseHorizontalAlignment(modifiers.get("alignment")?.asString)
-                val verticalAlign = parseVerticalAlignment(modifiers.get("alignment")?.asString)
                 Column(
                     modifier = glanceModifier,
-                    horizontalAlignment = horizontalAlign,
-                    verticalAlignment = verticalAlign
+                    horizontalAlignment = horizontalAlign
                 ) {
                     RenderChildren(node)
                 }
             }
             "row" -> {
-                val horizontalAlign = parseHorizontalAlignment(modifiers.get("alignment")?.asString)
                 val verticalAlign = parseVerticalAlignment(modifiers.get("alignment")?.asString)
                  Row(
                     modifier = glanceModifier,
-                    horizontalAlignment = horizontalAlign,
                     verticalAlignment = verticalAlign
                 ) {
                     RenderChildren(node)
@@ -96,7 +94,9 @@ object GlanceJsonParser {
                 val uriString = node.get("content").asString
                 if (uriString.startsWith("file://")) {
                     val path = uriString.removePrefix("file://")
-                    val bitmap = BitmapFactory.decodeFile(path)
+                    // Safely downsample the image to prevent IPC TransactionTooLargeException
+                    // since Android widgets limit the total Binder transaction payload to 1MB.
+                    val bitmap = decodeSampledBitmapFromFile(path, reqWidth = 300, reqHeight = 300)
                     if (bitmap != null) {
                         Image(
                             provider = ImageProvider(bitmap),
@@ -104,6 +104,8 @@ object GlanceJsonParser {
                             modifier = glanceModifier,
                             contentScale = ContentScale.Crop
                         )
+                    } else {
+                        Log.e("GlanceJsonParser", "Failed to decode and sample image at path: $path")
                     }
                 }
             }
@@ -176,9 +178,7 @@ object GlanceJsonParser {
         }
         
         if (modifiers.has("flex") && modifiers.get("flex").asInt == 1) {
-            // In Column/Row, weight is handled differently, but for root it's fillMaxSize
-            // We handle weight via a different mechanism if needed, but flex:1 usually means fill
-            modifier = modifier.fillMaxWidth().fillMaxHeight()
+            modifier = modifier.defaultWeight()
         }
 
         // Background
@@ -268,5 +268,47 @@ object GlanceJsonParser {
             "end", "bottomCenter", "bottomEnd" -> Alignment.Bottom
             else -> Alignment.Top
         }
+    }
+
+    /**
+     * Safely reads an image from disk and downsamples it.
+     * Android Widgets communicate with the system via Binder IPC.
+     * Binder transactions are strictly limited to 1MB. Loading full-res
+     * images into memory will instantly Crash the widget process.
+     */
+    private fun decodeSampledBitmapFromFile(path: String, reqWidth: Int, reqHeight: Int): Bitmap? {
+        try {
+            // First decode with inJustDecodeBounds=true to check dimensions
+            val options = BitmapFactory.Options()
+            options.inJustDecodeBounds = true
+            BitmapFactory.decodeFile(path, options)
+
+            // Calculate inSampleSize
+            options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight)
+
+            // Decode bitmap with inSampleSize set
+            options.inJustDecodeBounds = false
+            return BitmapFactory.decodeFile(path, options)
+        } catch (e: Exception) {
+            Log.e("GlanceJsonParser", "Error decoding sampled bitmap", e)
+            return null
+        }
+    }
+
+    private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
+        val (height: Int, width: Int) = options.outHeight to options.outWidth
+        var inSampleSize = 1
+
+        if (height > reqHeight || width > reqWidth) {
+            val halfHeight: Int = height / 2
+            val halfWidth: Int = width / 2
+
+            // Calculate the largest inSampleSize value that is a power of 2 and keeps both
+            // height and width larger than the requested height and width.
+            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
     }
 }

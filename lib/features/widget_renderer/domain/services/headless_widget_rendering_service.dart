@@ -57,8 +57,10 @@ class HeadlessWidgetRenderingService {
       debugPrint(
         "HeadlessService: Starting renderAndSave (Texture Capture)...",
       );
-      final widget = _buildWidgetTree(node);
-      final image = await _captureWidgetOffScreen(widget);
+
+      // Force ignore flex on the absolute root node when rendering internally
+      final flutterWidget = _buildWidgetTree(node, isRoot: true);
+      final image = await _captureWidgetOffScreen(flutterWidget);
 
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw Exception("Failed to encode image");
@@ -265,13 +267,14 @@ class HeadlessWidgetRenderingService {
 
   // --- Core Parser: Mirroring SASUP Logic ---
 
-  Widget _buildWidgetTree(WidgetNode node) {
+  Widget _buildWidgetTree(WidgetNode node, {bool isRoot = false}) {
     Widget widget;
 
     switch (node.type) {
       case WidgetType.container:
       case WidgetType.column:
-        final children = node.children?.map(_buildWidgetTree).toList() ?? [];
+        final children =
+            node.children?.map((c) => _buildWidgetTree(c, isRoot: false)).toList() ?? [];
         final spacing = node.modifiers?.spacing?.toDouble() ?? 0.0;
 
         // Auto-Polish: If no padding is specified for a Container, default to 16.0
@@ -297,12 +300,14 @@ class HeadlessWidgetRenderingService {
           children: _applySpacingInService(children, spacing, Axis.vertical),
         );
         // Apply the modified modifiers (with default padding)
-        return _applyModifiers(widget, effectiveModifiers);
-      // Break is unreachable due to return, but let's stick to the structure pattern.
-      // We returned early to use effectiveModifiers.
-      // break; // Unreachable
+        return _applyModifiers(
+          widget,
+          effectiveModifiers,
+          ignoreFlex: isRoot,
+        );
       case WidgetType.row:
-        final children = node.children?.map(_buildWidgetTree).toList() ?? [];
+        final children =
+            node.children?.map((c) => _buildWidgetTree(c, isRoot: false)).toList() ?? [];
         final spacing = node.modifiers?.spacing?.toDouble() ?? 0.0;
 
         widget = Row(
@@ -311,29 +316,31 @@ class HeadlessWidgetRenderingService {
           mainAxisAlignment: _parseMainAxis(node.modifiers?.alignment),
           children: _applySpacingInService(children, spacing, Axis.horizontal),
         );
-        break;
+        return _applyModifiers(widget, node.modifiers, ignoreFlex: isRoot);
       case WidgetType.stack:
+        final children =
+            node.children?.map((c) => _buildWidgetTree(c, isRoot: false)).toList() ?? [];
         widget = Stack(
           alignment: Alignment.center,
-          children: node.children?.map(_buildWidgetTree).toList() ?? [],
+          children: children,
         );
-        break;
+        return _applyModifiers(widget, node.modifiers, ignoreFlex: isRoot);
       case WidgetType.text:
         widget = Text(
           node.content?.toString() ?? '',
           style: _parseTextStyle(node.modifiers),
         );
-        break;
+        return _applyModifiers(widget, node.modifiers, ignoreFlex: isRoot);
       case WidgetType.image:
         widget = _buildImage(node);
-        break;
+        return _applyModifiers(widget, node.modifiers, ignoreFlex: isRoot);
       case WidgetType.icon:
         widget = Icon(
           _parseIconData(node.content?.toString()),
           size: node.modifiers?.fontSize ?? 24,
           color: _parseColor(node.modifiers?.color ?? "#FFFFFF"),
         );
-        break;
+        return _applyModifiers(widget, node.modifiers, ignoreFlex: isRoot);
       case WidgetType.spacer:
         // When flex is 0 or null with explicit size, render as fixed gap
         final flex = node.modifiers?.flex;
@@ -352,9 +359,8 @@ class HeadlessWidgetRenderingService {
         return Expanded(flex: flex, child: content);
       default:
         widget = const SizedBox();
+        return _applyModifiers(widget, node.modifiers, ignoreFlex: isRoot);
     }
-
-    return _applyModifiers(widget, node.modifiers);
   }
 
   Widget _buildImage(WidgetNode node) {
