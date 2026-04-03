@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:script_automator/features/dashboard/presentation/pages/app_shell.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
-import 'package:script_automator/features/dashboard/presentation/pages/dashboard_page.dart';
 
 class LiquidSplashPage extends StatefulWidget {
   const LiquidSplashPage({super.key});
@@ -36,7 +36,7 @@ class _LiquidSplashPageState extends State<LiquidSplashPage>
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) =>
-                const LiquidDashboardPage(),
+                const AppShell(),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) =>
                     FadeTransition(opacity: animation, child: child),

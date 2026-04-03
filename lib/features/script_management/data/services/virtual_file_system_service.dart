@@ -185,6 +185,15 @@ class VirtualFileSystemService {
     file.writeAsStringSync(content);
   }
 
+  String readStringSync(String relativePath) {
+    final absolutePath = _resolveAndValidatePathSync(relativePath);
+    final file = File(absolutePath);
+    if (!file.existsSync()) {
+      throw FileSystemException("File not found", absolutePath);
+    }
+    return file.readAsStringSync();
+  }
+
   Future<bool> exists(String relativePath) async {
     try {
       final absolutePath = await _resolveAndValidatePath(relativePath);

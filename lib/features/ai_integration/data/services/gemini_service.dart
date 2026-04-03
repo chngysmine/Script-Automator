@@ -18,7 +18,7 @@ class GeminiService {
   }
 
   void _initModel(String apiKey) {
-    _model = GenerativeModel(model: 'gemini-pro', apiKey: apiKey);
+    _model = GenerativeModel(model: 'gemini-2.0-flash', apiKey: apiKey);
   }
 
   Future<void> setApiKey(String apiKey) async {

@@ -9,11 +9,18 @@ struct SASUPNode: Decodable, Hashable {
     let modifiers: SASUPModifiers?
     let children: [SASUPNode]?
     let content: String? // Text or Image URI
-    // let action: SASUPAction? // To implement later
+    let action: SASUPAction?
     
     enum CodingKeys: String, CodingKey {
-        case type, id, modifiers, children, content
+        case type, id, modifiers, children, content, action
     }
+}
+
+struct SASUPAction: Decodable, Hashable {
+    let type: String     // "runScript" | "openUrl"
+    let scriptId: String?
+    let actionId: String?
+    let url: String?
 }
 
 struct SASUPModifiers: Decodable, Hashable {

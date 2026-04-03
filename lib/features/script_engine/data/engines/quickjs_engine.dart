@@ -126,7 +126,11 @@ class QuickJSEngine implements JSEngine {
       // String
       // ... existing string logic ...
       final strPtr = _lib.JS_ToCString(_ctx!, val);
-      if (strPtr != nullptr) return strPtr.cast<Utf8>().toDartString();
+      if (strPtr != nullptr) {
+        final dartStr = strPtr.cast<Utf8>().toDartString();
+        _lib.JS_FreeCString(_ctx!, strPtr);
+        return dartStr;
+      }
       return "";
     }
     if (tag == -1) return val.u; // Int (JS_TAG_INT is -1)
@@ -150,6 +154,7 @@ class QuickJSEngine implements JSEngine {
       String? jsonStr;
       if (strPtr != nullptr) {
         jsonStr = strPtr.cast<Utf8>().toDartString();
+        _lib.JS_FreeCString(_ctx!, strPtr);
       }
       _lib.JS_FreeValue(_ctx!, jsonVal);
 
@@ -166,6 +171,7 @@ class QuickJSEngine implements JSEngine {
     final strPtr = _lib.JS_ToCString(_ctx!, val);
     if (strPtr != nullptr) {
       final str = strPtr.cast<Utf8>().toDartString();
+      _lib.JS_FreeCString(_ctx!, strPtr);
       return str;
     }
     return null;
@@ -191,6 +197,7 @@ class QuickJSEngine implements JSEngine {
         final strPtr = _lib.JS_ToCString(ctx, val);
         if (strPtr != nullptr) {
           arg0 = strPtr.cast<Utf8>().toDartString();
+          _lib.JS_FreeCString(ctx, strPtr);
         }
       }
 

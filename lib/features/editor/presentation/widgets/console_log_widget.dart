@@ -18,30 +18,40 @@ class ConsoleLogEntry {
 
   /// Parse a raw log string into a ConsoleLogEntry
   factory ConsoleLogEntry.fromRawLog(String log) {
-    LogLevel level = LogLevel.info;
-    String message = log;
-
-    // Detect log level from prefixes
-    if (log.startsWith('[ERROR]') || log.toLowerCase().contains('error')) {
-      level = LogLevel.error;
-      message = log.replaceFirst('[ERROR]', '').trim();
-    } else if (log.startsWith('[WARN]') ||
-        log.toLowerCase().contains('warning')) {
-      level = LogLevel.warning;
-      message = log.replaceFirst('[WARN]', '').trim();
-    } else if (log.startsWith('[SUCCESS]') ||
-        log.contains('✓') ||
-        log.contains('completed')) {
-      level = LogLevel.success;
-      message = log.replaceFirst('[SUCCESS]', '').trim();
-    } else if (log.startsWith('[DEBUG]')) {
-      level = LogLevel.debug;
-      message = log.replaceFirst('[DEBUG]', '').trim();
-    } else if (log.startsWith('[INFO]')) {
-      message = log.replaceFirst('[INFO]', '').trim();
+    LogLevel detectLevel() {
+      if (log.contains('[SEVERE]') || log.contains('[JS stderr]')) {
+        return LogLevel.error;
+      }
+      if (log.contains('[WARNING]') || log.contains('[JS warn]')) {
+        return LogLevel.warning;
+      }
+      if (log.contains('[JS debug]')) {
+        return LogLevel.debug;
+      }
+      // Also catch native runtime errors that might just have "Error:"
+      if (log.toLowerCase().contains('error:') || log.contains('Exception:')) {
+        return LogLevel.error;
+      }
+      return LogLevel.info; 
     }
 
-    return ConsoleLogEntry(message: message, level: level);
+    // Clean up the prefix for display
+    String displayMessage = log;
+    if (log.contains('[JS stdout] ')) {
+      displayMessage = log.replaceFirst('[JS stdout] ', '');
+    } else if (log.contains('[JS stderr] ')) {
+      displayMessage = log.replaceFirst('[JS stderr] ', '');
+    } else if (log.contains('[JS warn] ')) {
+      displayMessage = log.replaceFirst('[JS warn] ', '');
+    } else if (log.contains('[JS debug] ')) {
+      displayMessage = log.replaceFirst('[JS debug] ', '');
+    }
+
+    return ConsoleLogEntry(
+      timestamp: DateTime.now(),
+      message: displayMessage,
+      level: detectLevel(),
+    );
   }
 }
 

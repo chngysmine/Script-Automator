@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print
 import 'dart:async';
+import 'dart:convert';
 import 'dart:isolate';
 
 import 'dart:io';
@@ -8,12 +9,17 @@ import '../data/engines/jsc_engine.dart';
 import 'js_engine.dart';
 
 import 'package:logging/logging.dart';
+import 'package:script_automator/features/script_engine/domain/system_api_polyfills.dart';
 import 'package:flutter/services.dart';
 import '../../widget_renderer/domain/services/headless_widget_rendering_service.dart';
 import '../../script_management/data/services/virtual_file_system_service.dart';
+import '../../dashboard/domain/services/notification_service.dart';
+import '../../dashboard/data/services/user_stats_service.dart';
 
 import 'package:path_provider/path_provider.dart';
 import 'package:get_it/get_it.dart';
+
+import 'package:script_automator/features/script_engine/domain/system_api_handler.dart';
 
 /// Service responsible for managing the background Isolate and the JS Engine lifecycle.
 class ScriptRunnerService {
@@ -28,6 +34,8 @@ class ScriptRunnerService {
   final StreamController<String> _renderController =
       StreamController<String>.broadcast();
 
+  SystemAPIHandler? _apiHandler;
+
   /// Stream of logs and results from the JS Engine.
   Stream<String> get logs => _logController.stream;
 
@@ -39,6 +47,7 @@ class ScriptRunnerService {
   /// Initializes the service by spawning a background isolate.
   Future<void> initialize() async {
     if (_initCompleter != null) return _initCompleter!.future;
+    _apiHandler ??= SystemAPIHandler(); // Init handler on main isolate
     _initCompleter = Completer<void>();
 
     final receivePort = ReceivePort();
@@ -135,7 +144,10 @@ class ScriptRunnerService {
       _logController.add(
         '[Error] Script evaluation timed out after ${_evalTimeout.inSeconds}s. Restarting engine...',
       );
-      // Kill the hung isolate — supervisor will auto-restart
+      // Request graceful shutdown to allow engine.destroy() cleanup before kill.
+      // This prevents native memory leaks (QuickJS runtime / JSC context).
+      _toEnginePort?.send({'command': 'shutdown'});
+      await Future.delayed(const Duration(milliseconds: 200));
       _engineIsolate?.kill(priority: Isolate.immediate);
       _engineIsolate = null;
       _toEnginePort = null;
@@ -195,8 +207,35 @@ class ScriptRunnerService {
           "JSEngine Initialized in Isolate: ${Isolate.current.debugName}",
         );
 
+        // Inject System API Polyfills before any scripts run
+        engine.evaluate(SystemAPIPolyfills.allPolyfills);
+
         // --- BINDINGS ---
-        // Binding 1: Print
+        // Binding 1: Console Namespace (__native_console)
+        engine.registerGlobalFunction('__native_console', (argsJson) {
+          final str = argsJson as String;
+          final pipeIndex = str.indexOf('|');
+          if (pipeIndex == -1) {
+            logger.info("[JS stdout] $str");
+            return "logged";
+          }
+          final level = str.substring(0, pipeIndex);
+          final message = str.substring(pipeIndex + 1);
+          
+          switch (level) {
+            case 'error':
+              logger.severe("[JS stderr] $message");
+            case 'warn':
+              logger.warning("[JS warn] $message");
+            case 'debug':
+              logger.fine("[JS debug] $message");
+            default:
+              logger.info("[JS stdout] $message");
+          }
+          return "logged";
+        });
+
+        // Retain classic print purely as fallback/legacy alias
         engine.registerGlobalFunction('print', (message) {
           logger.info("[JS stdout] $message");
         });
@@ -210,9 +249,16 @@ class ScriptRunnerService {
             );
             return "error_no_context";
           }
+          String family = 'medium';
+          try {
+            family = engine.evaluate('Widget.getFamily()').toString();
+          } catch (e) {
+            // fallback gracefully
+          }
           mainSendPort.send({
             'type': 'sys_render',
             'payload': jsonString,
+            'family': family,
             'scriptId': currentScriptId,
           });
           return "queued_for_render";
@@ -260,6 +306,65 @@ class ScriptRunnerService {
             logger.severe("WriteFile Error: $e");
             return "error_io";
           }
+          return "error_invalid_args";
+        });
+
+        // Binding 4: Read File (Sync via VFS)
+        engine.registerGlobalFunction('readFile', (argsJson) {
+          try {
+            final path = argsJson as String;
+            logger.info("Reading file: $path");
+            final content = vfs.readStringSync(path);
+            return content;
+          } catch (e) {
+            logger.severe("ReadFile Error: $e");
+            return "error_io"; // Usually FileSystemException if not exists or SecurityException
+          }
+        });
+
+        // Binding 5: Async Fetch Bridge (JS will await the callback)
+        engine.registerGlobalFunction('__native_fetch_start', (argsJson) {
+           final requestStr = argsJson as String;
+           final reqData = jsonDecode(requestStr);
+           final reqId = reqData['__reqId'];
+           mainSendPort.send({
+             'type': 'sys_fetch', 'requestId': reqId, 'payload': requestStr, 'scriptId': currentScriptId,
+           });
+           return "pending";
+        });
+
+        // Binding 6: Async Device Info Bridge
+        engine.registerGlobalFunction('__native_device_info_start', (argsJson) {
+           final requestStr = argsJson as String;
+           final reqData = jsonDecode(requestStr);
+           final reqId = reqData['__reqId'];
+           final property = reqData['property'];
+           mainSendPort.send({
+             'type': 'sys_device', 'requestId': reqId, 'property': property, 'scriptId': currentScriptId,
+           });
+           return "pending";
+        });
+
+        // Binding 7: Async Keychain Bridge
+        engine.registerGlobalFunction('__native_keychain_start', (argsJson) {
+           final requestStr = argsJson as String;
+           final reqData = jsonDecode(requestStr);
+           final reqId = reqData['__reqId'];
+           mainSendPort.send({
+             'type': 'sys_keychain', 'requestId': reqId, 'payload': requestStr, 'scriptId': currentScriptId,
+           });
+           return "pending";
+        });
+
+        // Binding 8: Async Notification Bridge
+        engine.registerGlobalFunction('__native_notification_start', (argsJson) {
+           final requestStr = argsJson as String;
+           final reqData = jsonDecode(requestStr);
+           final reqId = reqData['__reqId'];
+           mainSendPort.send({
+             'type': 'sys_notification', 'requestId': reqId, 'payload': requestStr, 'scriptId': currentScriptId,
+           });
+           return "pending";
         });
 
         // --- HANDSHAKE: Initialization Complete ---
@@ -277,7 +382,6 @@ class ScriptRunnerService {
 
     // 6. Message Loop
     receivePort.listen((message) async {
-      // ... existing eval logic ...
       if (message is Map) {
         final command = message['command'];
         logger.info("Isolate received command: $command");
@@ -318,6 +422,23 @@ class ScriptRunnerService {
           } finally {
             currentScriptId = null; // Clear context
           }
+        } else if (command == 'response') {
+          // Handle asynchronous response from main isolate
+          final requestId = message['requestId'];
+          final responseString = message['response'] as String;
+          logger.info("Injecting async response for reqId: $requestId");
+
+          // Safely escape the JSON string for evaluation in JS
+          final escapedJson = jsonEncode(responseString);
+          
+          try {
+            engine.evaluate('__resolve_async_task($requestId, $escapedJson);');
+          } catch (e) {
+            logger.severe("Error resolving async promise: $e");
+          }
+        } else if (command == 'shutdown') {
+          logger.info("Shutdown command received — destroying engine");
+          engine.destroy();
         }
       }
     });
@@ -327,12 +448,106 @@ class ScriptRunnerService {
   void _handleIsolateMessage(dynamic message) {
     if (message is SendPort) {
       _toEnginePort = message;
-      if (!_initCompleter!.isCompleted) _initCompleter!.complete();
+      if (!(_initCompleter?.isCompleted ?? true)) {
+        _initCompleter?.complete();
+      }
     } else if (message is String) {
+      // Normal logs
       _logController.add(message);
-    } else if (message is Map && message['type'] == 'sys_render') {
-      // Handle Render Request from Isolate
-      _handleRenderRequest(message['payload'], message['scriptId']);
+      
+      if (message.startsWith('[INFO] Result:')) {
+        _pushNotification(
+          NotificationType.scriptRun,
+          'Script Completed',
+          message.replaceFirst('[INFO] Result:', '').trim(),
+        );
+        if (GetIt.I.isRegistered<UserStatsService>()) {
+          GetIt.I<UserStatsService>().recordRun(success: true);
+        }
+      } else if (message.startsWith('[Line ')) {
+        // QuickJS errors typically start with "[Line "
+        _pushNotification(
+          NotificationType.system,
+          'Script Error',
+          message,
+        );
+      } else if (message.startsWith('[SEVERE]')) {
+        _pushNotification(
+          NotificationType.system,
+          'Exception Caught',
+          message.replaceFirst('[SEVERE]', '').trim(),
+        );
+        if (GetIt.I.isRegistered<UserStatsService>()) {
+          GetIt.I<UserStatsService>().recordRun(success: false);
+        }
+      }
+    } else if (message is Map) {
+      final type = message['type'];
+      print("Main Isolate received sys_message: $type");
+      if (type == 'sys_render') {
+        _handleRenderRequest(message['payload'], message['family'], message['scriptId']);
+      } else if (type == 'sys_fetch') {
+        _handleFetchRequest(message);
+      } else if (type == 'sys_device') {
+        _handleDeviceRequest(message);
+      } else if (type == 'sys_keychain') {
+        _handleKeychainRequest(message);
+      } else if (type == 'sys_notification') {
+        _handleNotificationRequest(message);
+      }
+    }
+  }
+
+  void _handleFetchRequest(Map<dynamic, dynamic> message) async {
+    final requestId = message['requestId'];
+    final payload = message['payload'];
+    final scriptId = message['scriptId'];
+    
+    if (_apiHandler != null) {
+        final String result = await _apiHandler!.handleFetch(payload.toString());
+        _toEnginePort?.send({
+            'command': 'response', 'requestId': requestId, 'response': result, 'scriptId': scriptId,
+        });
+    }
+  }
+
+  void _handleDeviceRequest(Map<dynamic, dynamic> message) async {
+    final requestId = message['requestId'];
+    final property = message['property'];
+    final scriptId = message['scriptId'];
+    
+    if (_apiHandler != null) {
+        final String result = await _apiHandler!.handleDeviceInfo(property.toString());
+        _toEnginePort?.send({
+            'command': 'response', 'requestId': requestId, 'response': result, 'scriptId': scriptId,
+        });
+    }
+  }
+
+  void _handleKeychainRequest(Map<dynamic, dynamic> message) async {
+    final requestId = message['requestId'];
+    final payload = message['payload'];
+    final scriptId = message['scriptId'];
+    
+    if (_apiHandler != null) {
+        _apiHandler!.activeScriptId = scriptId;
+        final String result = await _apiHandler!.handleKeychain(payload.toString());
+        _toEnginePort?.send({
+            'command': 'response', 'requestId': requestId, 'response': result, 'scriptId': scriptId,
+        });
+    }
+  }
+
+  void _handleNotificationRequest(Map<dynamic, dynamic> message) async {
+    final requestId = message['requestId'];
+    final payload = message['payload'];
+    final scriptId = message['scriptId'];
+    
+    if (_apiHandler != null) {
+        final String result = await _apiHandler!.handleNotification(payload.toString());
+        _toEnginePort?.send({
+            'command': 'response', 'requestId': requestId, 'response': result, 'scriptId': scriptId,
+        });
     }
   }
 
@@ -341,9 +556,9 @@ class ScriptRunnerService {
   /// Uses **Native JSON Passthrough**: saves the raw SASUP JSON directly to
   /// shared storage so iOS SwiftUI and Android Glance render native components
   /// (text, gradients, icons) instead of a static PNG bitmap.
-  Future<void> _handleRenderRequest(String jsonString, String? scriptId) async {
+  Future<void> _handleRenderRequest(String jsonString, String? family, String? scriptId) async {
     try {
-      print("Main Isolate: Received Render Request for $scriptId");
+      print("Main Isolate: Received Render Request for $scriptId, family: $family");
       _renderController.add(jsonString); // Broadcast for Live Preview
 
       if (scriptId == null) throw Exception("Missing scriptId for render");
@@ -351,8 +566,18 @@ class ScriptRunnerService {
       final headlessService = GetIt.I<HeadlessWidgetRenderingService>();
 
       // Use Native JSON Passthrough (preferred) instead of PNG rasterization
-      final path = await headlessService.renderNativeJson(jsonString, scriptId);
+      final path = await headlessService.renderNativeJson(jsonString, scriptId, family ?? 'medium');
       _logController.add("[System] Rendered Widget (Native JSON) to: $path");
+      
+      _pushNotification(
+        NotificationType.widgetDeploy,
+        'Widget Deployed',
+        'Widget "$scriptId" rendered to Home Screen.',
+      );
+      
+      if (GetIt.I.isRegistered<UserStatsService>()) {
+        GetIt.I<UserStatsService>().recordWidgetDeploy();
+      }
 
       // Trigger Widget Reload via MethodChannel
       try {
@@ -370,15 +595,33 @@ class ScriptRunnerService {
     }
   }
 
-  /// Disposes the service and kills the background isolate.
+  /// Disposes the service, gracefully shuts down the engine, and kills the isolate.
   void dispose() {
     _isDisposed = true;
+    _toEnginePort?.send({'command': 'shutdown'});
     _engineIsolate?.kill();
     _engineIsolate = null;
-    _isDisposed = true; // Duplicate assignment harmless, just ensuring.
+    _toEnginePort = null;
 
     if (!_logController.isClosed) {
       _logController.close();
+    }
+    if (!_renderController.isClosed) {
+      _renderController.close();
+    }
+  }
+
+  void _pushNotification(NotificationType type, String title, String body) {
+    try {
+      if (GetIt.I.isRegistered<NotificationService>()) {
+        GetIt.I<NotificationService>().addNotification(
+          type: type,
+          title: title,
+          body: body,
+        );
+      }
+    } catch (_) {
+      // Fail silently if GetIt isn't ready
     }
   }
 }

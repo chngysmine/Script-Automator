@@ -4,6 +4,7 @@ import 'package:get_it/get_it.dart';
 import '../../../../core/data_structures/rope.dart';
 import '../../../../features/ai_integration/data/services/gemini_service.dart';
 import '../../../../features/ai_integration/data/services/ollama_service.dart';
+import '../../../../features/dashboard/data/services/user_stats_service.dart';
 import 'dart:async'; // Added for Timer
 
 /// Controller for the CodeForge Editor.
@@ -64,6 +65,9 @@ class CodeForgeController extends ChangeNotifier
     if (_ghostText != null && _ghostText!.isNotEmpty) {
       insert(_ghostText!);
       _ghostText = null;
+      if (GetIt.I.isRegistered<UserStatsService>()) {
+        GetIt.I<UserStatsService>().recordAiSuggestion();
+      }
     }
   }
 

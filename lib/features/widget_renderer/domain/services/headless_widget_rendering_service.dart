@@ -17,7 +17,7 @@ class HeadlessWidgetRenderingService {
   /// This is the **preferred** mode: iOS SwiftUI and Android Glance render the
   /// JSON tree natively (text, gradients, icons) instead of a static bitmap.
   /// Falls back to [renderAndSave] for complex UIs that can't be expressed natively.
-  Future<String> renderNativeJson(String jsonString, String scriptId) async {
+  Future<String> renderNativeJson(String jsonString, String scriptId, String family) async {
     try {
       debugPrint("HeadlessService: Native JSON Passthrough for $scriptId");
       final directory = await _getSharedDirectory();
@@ -25,7 +25,7 @@ class HeadlessWidgetRenderingService {
 
       // Parse and re-serialize to validate JSON structure
       final jsonMap = jsonDecode(jsonString);
-      final rootMap = {'root': jsonMap};
+      final rootMap = {'family': family, 'root': jsonMap};
       final sanitizedMap = _sanitizeForJson(rootMap);
       final jsonPayload = jsonEncode(sanitizedMap);
 
@@ -340,6 +340,13 @@ class HeadlessWidgetRenderingService {
           size: node.modifiers?.fontSize ?? 24,
           color: _parseColor(node.modifiers?.color ?? "#FFFFFF"),
         );
+        return _applyModifiers(widget, node.modifiers, ignoreFlex: isRoot);
+      case WidgetType.button:
+        // Buttons render as a Container with children in Flutter preview.
+        // Interactive behavior is handled natively (iOS AppIntent / Android Glance).
+        final children =
+            node.children?.map((c) => _buildWidgetTree(c, isRoot: false)).toList() ?? [];
+        widget = Stack(alignment: Alignment.center, children: children);
         return _applyModifiers(widget, node.modifiers, ignoreFlex: isRoot);
       case WidgetType.spacer:
         // When flex is 0 or null with explicit size, render as fixed gap

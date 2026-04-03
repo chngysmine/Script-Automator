@@ -66,6 +66,7 @@ struct Provider: AppIntentTimelineProvider {
 
 // Wrapper for Root
 struct SASUPRoot: Decodable {
+    let family: String?
     let root: SASUPNode
 }
 
@@ -78,10 +79,11 @@ struct SimpleEntry: TimelineEntry {
 
 struct ScriptAutomatorWidgetEntryView : View {
     var entry: Provider.Entry
+    @Environment(\.widgetFamily) var family
 
     var body: some View {
         if let node = entry.node {
-            UniversalWidgetView(node: node, isRoot: true)
+            UniversalWidgetView(node: node, isRoot: true, family: family)
                 .minimumScaleFactor(0.7) // Prevent tiny text
         } else {
             VStack {
@@ -107,6 +109,13 @@ struct ScriptAutomatorWidgetEntryView : View {
 }
 
 @main
+struct ScriptAutomatorWidgets: WidgetBundle {
+    var body: some Widget {
+        ScriptAutomatorWidget()
+        ScriptAutomatorLockScreenWidget()
+    }
+}
+
 struct ScriptAutomatorWidget: Widget {
     let kind: String = "ScriptAutomatorWidget"
 
@@ -118,5 +127,11 @@ struct ScriptAutomatorWidget: Widget {
         .contentMarginsDisabled()
         .configurationDisplayName("Script Widget")
         .description("Display the output of your scripts.")
+        .supportedFamilies([
+            .systemSmall,
+            .systemMedium,
+            .systemLarge,
+            .systemExtraLarge
+        ])
     }
 }

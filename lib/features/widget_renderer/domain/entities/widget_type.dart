@@ -19,4 +19,6 @@ enum WidgetType {
   container,
   @JsonValue('icon')
   icon,
+  @JsonValue('button')
+  button,
 }

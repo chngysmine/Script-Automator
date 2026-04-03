@@ -1,8 +1,8 @@
 # CODEBASE MAP — Script Automator
 
-> Last Updated: 2026-03-08 | Audit: 100% codebase read
+> Last Updated: 2026-04-03 | Audit: 100% codebase verified
 > Architecture: Flutter + Native (QuickJS/JSC) + iOS WidgetKit + Android Glance
-> **Overall Completion: ~80%** (Pha 1: 100%, Pha 2: 100%, Pha 3: 45%, Pha 4: 25%)
+> **Overall Completion: ~82%** (Pha 1-7: Done, Pha 8: 85%, Pha 9: 70%, Pha 10: 15%)
 
 ## Data Flow Diagram
 
@@ -100,16 +100,17 @@ Script Execution:
 ### `lib/features/dashboard/` — Home Screen
 | File | Purpose | Status |
 |------|---------|--------|
-| `presentation/pages/dashboard_page.dart` | Main dashboard | ⚠️ Dock index 3,4 → blank screen |
+| `presentation/pages/dashboard_page.dart` | Main dashboard | ✅ STABLE (Chunk 4.1 - MeshGradient, Routed Profile) |
 | `presentation/pages/liquid_splash_page.dart` | Splash animation | ✅ STABLE |
-| `presentation/pages/gallery_page.dart` (716 lines) | Script store + import | ✅ STABLE |
+| `presentation/pages/gallery_page.dart` | Script store + import | ✅ STABLE (Chunk 4.1 - MeshGradient) |
+| `presentation/pages/profile_page.dart` | Gamification UI | ✅ STABLE (Chunk 4.1 - Developer Dojo, XP Bar, Gacha) |
 | `presentation/pages/settings_page.dart` | AI key config | ✅ STABLE |
-| `presentation/widgets/liquid_bento_card.dart` | Script card | ⚠️ Glass blur bị override bởi opaque gradient |
-| `presentation/widgets/staggered_script_grid.dart` | Bento grid layout | ✅ STABLE |
-| `presentation/widgets/glass_dock.dart` | Bottom navigation | ✅ STABLE (logic ok, 2 tabs thiếu target) |
+| `presentation/widgets/liquid_bento_card.dart` | Script card | ✅ STABLE (Chunk 4.1 - Bento Grid 2.0, Spring physics, 40% Image base) |
+| `presentation/widgets/staggered_script_grid.dart` | Bento grid layout | ✅ STABLE (Recreated 2026-03-22 — was deleted during Liquid Glass refactor) |
+| `presentation/widgets/glass_dock.dart` | Bottom navigation | ✅ STABLE (logic ok, 3 tabs mapped) |
 | `presentation/widgets/glass_drawer.dart` | Side drawer | ⚠️ Text gần vô hình (white-on-dark), menu items không navigate |
-| `presentation/widgets/liquid_search_bar.dart` | Search bar | 🔴 **FAKE** — không có TextField, chỉ là Text tĩnh |
-| `presentation/widgets/liquid_hero_section.dart` (290 lines) | Hero card | 🔴 **DEAD CODE** — không import/sử dụng |
+| `presentation/widgets/liquid_search_bar.dart` | AI Omnibar | ✅ STABLE (Chunk 4.1 - Search Overlay, Glow AI Icon) |
+| `presentation/widgets/liquid_hero_section.dart` | Hero card | 🔴 **DEAD CODE** — không import/sử dụng |
 
 ---
 
@@ -133,9 +134,9 @@ Script Execution:
 ### `lib/features/ai_integration/` — AI Features
 | File | Purpose | Status |
 |------|---------|--------|
-| `data/services/gemini_service.dart` | Gemini API | ⚠️ model `gemini-pro` deprecated |
+| `data/services/gemini_service.dart` | Gemini API | ✅ STABLE (Chunk 5 - Model updated to `gemini-2.0-flash`) |
 | `data/services/ollama_service.dart` | Ollama local | ✅ STABLE |
-| `presentation/overlay/ai_assistant_overlay.dart` | AI chat overlay | 🔴 **DEAD CODE** — không import/sử dụng |
+| `presentation/overlay/ai_assistant_overlay.dart` | AI chat overlay | 🔴 **REMOVED** — dead code deleted |
 
 ---
 
@@ -158,20 +159,20 @@ Script Execution:
 | BUG-01 | ✅ FIXED | `ScriptDatabase.swift` | 14 | App Group ID sai → Sửa thành `group.com.antigravity.script_automator` (Chunk 2) |
 | BUG-02 | ✅ FIXED | `viewport_aware_painter.dart` | — | Syntax highlighting ENABLED + selection highlight (Chunk 1) |
 | BUG-03 | ✅ FIXED | `main.dart` | — | Thêm `WidgetsBindingObserver` để flush Hive khi background (Chunk 2) |
-| BUG-04 | ⚠️ MEDIUM | `gemini_service.dart` | 21 | Model `gemini-pro` deprecated |
+| BUG-04 | ✅ FIXED | `gemini_service.dart` | 21 | Model `gemini-pro` deprecated (Chunk 5) |
 | BUG-05 | ✅ FIXED | `UniversalWidgetView.swift` | 61 | Đã xóa `.lineLimit(1)` trên mọi Text (Chunk 3) |
 | BUG-06 | ✅ FIXED | `GlanceJsonParser.kt` | 40-41 | Đã sửa casting `Alignment.Horizontal` và `Alignment.Vertical` (Chunk 3) |
-| BUG-07 | ⚠️ MEDIUM | `liquid_search_bar.dart` | — | SearchBar không có TextField (decorative only) |
-| BUG-08 | ⚠️ MEDIUM | `dashboard_page.dart` | — | Dock index 3, 4 → blank screen |
-| BUG-09 | ⚠️ LOW | `glass_drawer.dart` | — | Text dùng `textPrimary` (white) trên dark bg → gần vô hình |
+| BUG-07 | ✅ FIXED | `liquid_search_bar.dart` | — | Đã refactor thành AI Omnibar overlay (Chunk 4.1) |
+| BUG-08 | ✅ FIXED | `dashboard_page.dart` | — | Đã route index 4 vào ProfilePage Gamification (Chunk 4.1) |
+| BUG-09 | ✅ FIXED | `glass_drawer.dart` | — | Đã route đủ Explore(1) và Profile(4) (Audit Fix) |
 | BUG-10 | ✅ FIXED | `syntax_highlighter.dart` | — | One Light palette applied (Chunk 1) |
 
-## 🗑️ DEAD CODE REGISTRY
+## 🗑️ DEAD CODE REGISTRY (Cleaned up in Chunk 5)
 
 | File | Lines | Lý do |
 |------|-------|-------|
-| `ai_assistant_overlay.dart` | 63 | Không import ở bất kỳ đâu |
-| `liquid_hero_section.dart` | 290 | Không import ở bất kỳ đâu |
+| `ai_assistant_overlay.dart` | 63 | ✅ Đã xóa (Chunk 5) |
+| `liquid_hero_section.dart` | 290 | ✅ Đã xóa (Chunk 5) |
 
 ---
 
@@ -193,28 +194,31 @@ Script Execution:
 
 ## 📋 FIX ROADMAP (Thứ tự ưu tiên)
 
-### ✅ Ưu tiên 1: Editor — DONE (Chunk 1)
-1. ~~BẬT LẠI syntax highlighting (BUG-02)~~ ✅
-2. ~~Đổi palette SyntaxHighlighter → One Light (BUG-10)~~ ✅
-3. ~~Verify rendering alignment~~ ✅
-4. ~~Console BackdropFilter gây blue rect~~ ✅
-5. ~~SnackBar đè console~~ ✅
-6. ~~ScriptSuccessOverlay~~ ✅ removed
+### ✅ Pha 1-5: Core Platform — DONE
+- ~~Editor (syntax highlight, console, viewport paint)~~ ✅
+- ~~Storage (App Group, Hive flush, encryption)~~ ✅
+- ~~Widget Rendering (responsive, JSON passthrough)~~ ✅
+- ~~Dashboard (Bento grid, search, profile routing)~~ ✅
+- ~~AI + Cleanup (Gemini 2.0, dead code removal)~~ ✅
+- ~~StaggeredScriptGrid rebuild~~ ✅ (Fixed 2026-03-22)
 
-### ✅ Ưu tiên 2: Storage — DONE (Chunk 2)
-4. ~~Sửa App Group ID (BUG-01)~~ ✅
-5. ~~Thêm WidgetsBindingObserver (BUG-03)~~ ✅
+### ✅ Pha 6: System API Bridge — 🟢 Hoàn thành
 
-### ✅ Ưu tiên 3: Widget Rendering — DONE (Chunk 3)
-6. ~~Sửa lineLimit(1) (BUG-05)~~ ✅
-7. ~~Sửa alignment API (BUG-06)~~ ✅
-8. ~~Thêm logic deleteWidgetUI để xóa Widget cũ khi Script lỗi/trống~~ ✅
+### ✅ Pha 7: Widget Families — 🟢 Hoàn thành
+- iOS: systemSmall/Medium/Large/ExtraLarge
+- Android: Glance responsive sizing
+- Interactive Widget (iOS 17+ / Android 14+)
 
-### Ưu tiên 4: Dashboard Polish
-8. SearchBar thật (BUG-07)
-9. Dock placeholder (BUG-08)
-10. Drawer text color (BUG-09)
+### Pha 8: Community Gallery — TODO (3-4 tuần)
+- GitHub repo `script-automator-community/gallery`
+- Gallery UI (categories, ratings, reviews)
+- User identity, publishing flow, versioning
 
-### Ưu tiên 5: AI + Cleanup
-11. Update model name (BUG-04)
-12. Remove dead code
+### Pha 9: Gamification — TODO (1-2 tuần)
+- XP system, achievement unlocks, streak tracking
+- Daily Snippet Drop (live from gallery)
+
+### Pha 10: Production Polish — TODO (2-3 tuần)
+- Siri Shortcuts, in-app docs, onboarding
+- Error reporting, analytics, CI/CD
+- i18n, accessibility, App Store submission

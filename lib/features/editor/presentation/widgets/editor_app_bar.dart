@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/ui/scale_button.dart';
 import 'dart:ui';
 
 class EditorAppBar extends StatelessWidget {
@@ -33,12 +34,12 @@ class EditorAppBar extends StatelessWidget {
             height: 56,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.65),
+              color: const Color(0xFF1E293B).withValues(alpha: 0.65), // Dark Slate glass
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
+                  color: Colors.black.withValues(alpha: 0.2),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -49,9 +50,9 @@ class EditorAppBar extends StatelessWidget {
               children: [
                 _buildActionButton(
                   context,
-                  Icons.grid_view_rounded,
+                  Icons.arrow_back_ios_new_rounded,
                   onBack,
-                  tooltip: "Gallery",
+                  tooltip: "Back",
                 ),
                 Expanded(
                   child: Center(
@@ -63,7 +64,7 @@ class EditorAppBar extends StatelessWidget {
                             scriptName,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              color: Color(0xFF1E293B),
+                              color: Colors.white, // Light text for dark mode
                               fontWeight: FontWeight.w700,
                               fontSize: 15,
                             ),
@@ -90,11 +91,9 @@ class EditorAppBar extends StatelessWidget {
                   children: [
                     _buildActionButton(
                       context,
-                      Icons.auto_awesome,
-                      onAiTap,
-                      onLongPress: onAiLongPress,
-                      isHighlight: true,
-                      tooltip: "AI Assistant",
+                      Icons.settings_rounded,
+                      () {}, // Note: Future settings drawer
+                      tooltip: "Settings",
                     ),
                     const SizedBox(width: 8),
                     _buildActionButton(
@@ -102,7 +101,7 @@ class EditorAppBar extends StatelessWidget {
                       Icons.play_arrow_rounded,
                       onPlay,
                       isHighlight: true,
-                      tooltip: "Run",
+                      tooltip: "Run/Play",
                     ),
                   ],
                 ),
@@ -122,36 +121,25 @@ class EditorAppBar extends StatelessWidget {
     bool isHighlight = false,
     String? tooltip,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: Tooltip(
-        message: tooltip ?? "",
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () {
-            HapticFeedback.lightImpact();
-            onTap();
-          },
-          onLongPress: onLongPress != null
-              ? () {
-                  HapticFeedback.mediumImpact();
-                  onLongPress();
-                }
-              : null,
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isHighlight
-                  ? LiquidTheme.primary.withValues(alpha: 0.1)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              color: isHighlight ? LiquidTheme.primary : LiquidTheme.textDeep,
-              size: 20,
-            ),
+    return Tooltip(
+      message: tooltip ?? "",
+      child: ScaleButton(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        scaleFactor: 0.85,
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: isHighlight
+                ? LiquidTheme.primary.withValues(alpha: 0.1)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            icon,
+            color: isHighlight ? LiquidTheme.primary : const Color(0xFFE2E8F0), // Light icons
+            size: 20,
           ),
         ),
       ),

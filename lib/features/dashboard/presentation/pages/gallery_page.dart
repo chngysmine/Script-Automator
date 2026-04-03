@@ -1,11 +1,13 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/premium_bento_card.dart';
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
 import 'package:script_automator/features/dashboard/domain/repositories/gallery_repository.dart';
 import 'package:script_automator/features/script_management/data/services/git_service.dart';
 import 'package:get_it/get_it.dart';
-import 'dart:ui';
 
 class GalleryPage extends StatefulWidget {
   const GalleryPage({super.key});
@@ -17,6 +19,15 @@ class GalleryPage extends StatefulWidget {
 class _GalleryPageState extends State<GalleryPage> {
   late Future<List<Map<String, String>>> _templatesFuture;
   final ScrollController _scrollController = ScrollController();
+  
+  // Filter & Sort State
+  String _searchQuery = "";
+  String _selectedCategory = "All";
+  String _sortOption = "Popular";
+  final TextEditingController _searchController = TextEditingController();
+
+  final List<String> _categories = ["All", "Weather", "Finance", "Utilities", "AI", "Games"];
+  final List<String> _sortOptions = ["Popular", "Newest", "A-Z"];
 
   @override
   void initState() {
@@ -27,6 +38,7 @@ class _GalleryPageState extends State<GalleryPage> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -48,14 +60,34 @@ class _GalleryPageState extends State<GalleryPage> {
         }
 
         final items = snapshot.data ?? [];
-        final featured = items.where((i) => i['isFeatured'] == 'true').toList();
-        final others = items.where((i) => i['isFeatured'] != 'true').toList();
+        
+        // Apply filters
+        var filteredList = items.where((i) {
+           final matchesSearch = _searchQuery.isEmpty || 
+                 (i['name']?.toLowerCase().contains(_searchQuery) ?? false) || 
+                 (i['author']?.toLowerCase().contains(_searchQuery) ?? false);
+           
+           final matchesCategory = _selectedCategory == "All" || (i['category'] == _selectedCategory);
+           
+           return matchesSearch && matchesCategory; 
+        }).toList();
+
+        // Apply sort
+        if (_sortOption == "A-Z") {
+           filteredList.sort((a, b) => (a['name'] ?? "").compareTo(b['name'] ?? ""));
+        } else if (_sortOption == "Newest") {
+           // Date sorting for real data
+           filteredList = filteredList.reversed.toList();
+        }
+
+        final featured = filteredList.where((i) => i['isFeatured'] == 'true').toList();
+        final others = filteredList.where((i) => i['isFeatured'] != 'true').toList();
 
         return CustomScrollView(
           controller: _scrollController,
-          shrinkWrap: true, // Added for better integration
-          physics:
-              const NeverScrollableScrollPhysics(), // Added for better integration
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
           slivers: [
             // Glass AppBar
             SliverAppBar(
@@ -66,7 +98,22 @@ class _GalleryPageState extends State<GalleryPage> {
               expandedHeight: 70,
               floating: true,
               pinned: true,
-              flexibleSpace: const ClipRRect(child: SizedBox.shrink()),
+              flexibleSpace: ClipRRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          width: 0.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               title: Text(
                 "Script Store",
                 style: LiquidTheme.lightTheme.textTheme.titleLarge?.copyWith(
@@ -78,7 +125,11 @@ class _GalleryPageState extends State<GalleryPage> {
               actions: [
                 _buildHeaderAction(
                   icon: Icons.search_rounded,
-                  onPressed: () {},
+                  onPressed: () {
+                     // The search bar is now embedded in the UI below, but this button
+                     // could focus the search input or open a specialized overlay.
+                     FocusScope.of(context).requestFocus(FocusNode()); 
+                  },
                 ),
                 _buildHeaderAction(
                   icon: Icons.cloud_download_rounded,
@@ -89,8 +140,119 @@ class _GalleryPageState extends State<GalleryPage> {
               ],
             ),
 
-            // 1. Featured Section
-            if (featured.isNotEmpty) ...[
+            // Filter & Search Bar
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                child: Column(
+                   children: [
+                      // Search Input
+                      Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+                          decoration: InputDecoration(
+                            hintText: "Search in gallery...",
+                            hintStyle: TextStyle(
+                              color: LiquidTheme.textLight.withValues(alpha: 0.5),
+                              fontSize: 14,
+                            ),
+                            prefixIcon: Icon(Icons.search_rounded, color: LiquidTheme.textLight.withValues(alpha: 0.5), size: 20),
+                            suffixIcon: _searchQuery.isNotEmpty 
+                               ? IconButton(
+                                   icon: const Icon(Icons.close, size: 16),
+                                   onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _searchQuery = "");
+                                   },
+                                 )
+                               : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Sort & Categories
+                      Row(
+                         children: [
+                            // Sort Dropdown
+                            Container(
+                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                               decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
+                               ),
+                               child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                     value: _sortOption,
+                                     icon: const Icon(Icons.sort_rounded, size: 16, color: LiquidTheme.textMedium),
+                                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: LiquidTheme.textDeep),
+                                     onChanged: (String? newValue) {
+                                        if (newValue != null) {
+                                           setState(() => _sortOption = newValue);
+                                        }
+                                     },
+                                     items: _sortOptions.map<DropdownMenuItem<String>>((String value) {
+                                        return DropdownMenuItem<String>(
+                                           value: value,
+                                           child: Text(value),
+                                        );
+                                     }).toList(),
+                                  ),
+                               ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Category Tabs horizontally scrolling
+                            Expanded(
+                               child: SizedBox(
+                                  height: 36,
+                                  child: ListView.builder(
+                                     scrollDirection: Axis.horizontal,
+                                     itemCount: _categories.length,
+                                     itemBuilder: (context, index) {
+                                        final cat = _categories[index];
+                                        final isSelected = _selectedCategory == cat;
+                                        return GestureDetector(
+                                           onTap: () => setState(() => _selectedCategory = cat),
+                                           child: Container(
+                                              margin: const EdgeInsets.only(right: 8),
+                                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                                              alignment: Alignment.center,
+                                              decoration: BoxDecoration(
+                                                 color: isSelected ? LiquidTheme.primary : Colors.white.withValues(alpha: 0.6),
+                                                 borderRadius: BorderRadius.circular(20),
+                                              ),
+                                              child: Text(
+                                                 cat,
+                                                 style: TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: isSelected ? Colors.white : LiquidTheme.textMedium,
+                                                 ),
+                                              ),
+                                           ),
+                                        );
+                                     },
+                                  ),
+                               ),
+                            ),
+                         ],
+                      ),
+                   ],
+                ),
+              ),
+            ),
+
+            // 1. Featured Section (hide if searching)
+            if (featured.isNotEmpty && _searchQuery.isEmpty) ...[
               const SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(24, 24, 24, 16),
@@ -113,7 +275,16 @@ class _GalleryPageState extends State<GalleryPage> {
                     scrollDirection: Axis.horizontal,
                     itemCount: featured.length,
                     itemBuilder: (context, index) {
-                      return _buildFeaturedCard(featured[index]);
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 16.0),
+                        child: SizedBox(
+                          width: 320,
+                          child: _buildBentoCardFromMap(
+                            featured[index],
+                            BentoSize.large,
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -121,6 +292,7 @@ class _GalleryPageState extends State<GalleryPage> {
             ],
 
             // 2. Main Feed
+            ...[
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(24, 40, 24, 16),
@@ -135,12 +307,35 @@ class _GalleryPageState extends State<GalleryPage> {
                 ),
               ),
             ),
-            SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                return _buildListItem(others[index]);
-              }, childCount: others.length),
-            ),
-            const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+            if (others.isEmpty)
+              SliverToBoxAdapter(
+                 child: Padding(
+                    padding: const EdgeInsets.all(40.0),
+                    child: Center(
+                       child: Text(
+                          "No scripts found matching $_searchQuery",
+                          style: TextStyle(color: LiquidTheme.textLight.withValues(alpha: 0.8)),
+                       ),
+                    ),
+                 ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 0.85,
+                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    return _buildBentoCardFromMap(others[index], BentoSize.small);
+                  }, childCount: others.length),
+                ),
+              ),
+              const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+            ],
           ],
         );
       },
@@ -149,111 +344,19 @@ class _GalleryPageState extends State<GalleryPage> {
 
   // --- Components ---
 
-  Widget _buildFeaturedCard(Map<String, String> item) {
-    return GestureDetector(
+  Widget _buildBentoCardFromMap(Map<String, String> item, BentoSize size) {
+    final displayScript = Script(
+      id: item['id'] ?? 'unknown',
+      name: item['name'] ?? 'Unknown Script',
+      content: item['scriptUrl'] ?? '', // Content is empty initially
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    return PremiumBentoCard(
+      script: displayScript,
+      size: size,
       onTap: () => _showPreview(context, item),
-      child: Container(
-        width: 320,
-        margin: const EdgeInsets.only(right: 20, bottom: 20, top: 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(36),
-          color: Colors.white.withValues(alpha: 0.25),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 30,
-              offset: const Offset(0, 15),
-            ),
-          ],
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.4),
-            width: 1.5,
-          ),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(36),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-            child: Stack(
-              children: [
-                // Liquid Accent Orb
-                Positioned(
-                  right: -30,
-                  top: -30,
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: LiquidTheme.primary.withValues(alpha: 0.15),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: LiquidTheme.primary.withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Text(
-                          "PREMIUM",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(
-                          Icons.rocket_launch_rounded,
-                          color: LiquidTheme.primary,
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        item['name']!,
-                        style: const TextStyle(
-                          color: LiquidTheme.textDeep,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -1.2,
-                          height: 1,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        "by ${item['author'] ?? 'Antigravity Team'}",
-                        style: TextStyle(
-                          color: LiquidTheme.textDeep.withValues(alpha: 0.6),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -286,112 +389,6 @@ class _GalleryPageState extends State<GalleryPage> {
           ),
         ),
         onPressed: onPressed,
-      ),
-    );
-  }
-
-  Widget _buildListItem(Map<String, String> item) {
-    return GestureDetector(
-      onTap: () => _showPreview(context, item),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          color: Colors.white.withValues(alpha: 0.15),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.3),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: LiquidTheme.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: const Icon(
-                      Icons.extension_rounded,
-                      color: LiquidTheme.primary,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item['name']!,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 17,
-                            color: LiquidTheme.textDeep,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item['description']!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: LiquidTheme.textDeep.withValues(alpha: 0.6),
-                            height: 1.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  _buildGetButton(),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGetButton() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      decoration: BoxDecoration(
-        color: LiquidTheme.primary,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: LiquidTheme.primary.withValues(alpha: 0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: const Text(
-        "GET",
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w900,
-          fontSize: 12,
-          letterSpacing: 0.5,
-        ),
       ),
     );
   }
@@ -472,7 +469,13 @@ class _GalleryPageState extends State<GalleryPage> {
                 ),
                 onPressed: () {
                   Navigator.pop(context);
-                  _installScript(context, item);
+                  final content = item['content'] ?? '';
+                  final url = item['scriptUrl'] ?? '';
+                  if (content.isEmpty && url.isNotEmpty) {
+                    _processUrlImport(url);
+                  } else {
+                    _installScript(context, item);
+                  }
                 },
                 child: const Text(
                   "Install Script",
@@ -507,27 +510,18 @@ class _GalleryPageState extends State<GalleryPage> {
                       color: LiquidTheme.textMedium,
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    "Preview Code",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(12),
+                  const SizedBox(height: 16),
+                  if ((item['scriptUrl'] ?? '').isNotEmpty)
+                    Row(
+                      children: [
+                        const Icon(Icons.cloud_download_outlined, size: 16, color: Colors.grey),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Cloud Script (Lazy Load)",
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                        ),
+                      ],
                     ),
-                    child: Text(
-                      item['content']!,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        color: Colors.white70,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 40),
                 ],
               ),

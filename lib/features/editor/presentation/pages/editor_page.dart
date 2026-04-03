@@ -21,6 +21,8 @@ import 'dart:convert';
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_node.dart';
 import 'package:script_automator/features/widget_renderer/presentation/widgets/sasup_renderer.dart';
 import 'package:script_automator/features/widget_renderer/domain/services/headless_widget_rendering_service.dart';
+import 'package:script_automator/features/editor/domain/editor_history.dart';
+import 'package:script_automator/features/dashboard/data/services/user_stats_service.dart';
 
 class EditorPage extends StatefulWidget {
   final Script? script;
@@ -43,6 +45,10 @@ class _EditorPageState extends State<EditorPage>
   late Animation<double> _fadeAnim;
   bool _showConsole = false;
   bool _isLogExpanded = false;
+  
+  final EditorHistory _history = EditorHistory();
+  bool _isUndoRedoAction = false;
+  
   bool _isLoadingContent = false;
 
   // Phase 4 Integration: Real Engine
@@ -113,6 +119,7 @@ class _EditorPageState extends State<EditorPage>
     if (!mounted) return;
     _inputController.text = text;
     _controller.setText(_inputController.text);
+    _history.record(_inputController.text, 0);
 
     // Only attach Auto-Save Logic AFTER initial load to prevent overwriting
     _inputController.addListener(_handleTextInput);
@@ -121,9 +128,12 @@ class _EditorPageState extends State<EditorPage>
   }
 
   void _handleTextInput() {
+    if (_isUndoRedoAction) return;
+    
     if (_controller.text != _inputController.text) {
       _controller.setText(_inputController.text);
       _controller.selection = _inputController.selection;
+      _history.record(_inputController.text, _inputController.selection.baseOffset);
       _onTextChanged(); // Trigger Debounce Save
       setState(() {});
     }
@@ -162,6 +172,18 @@ class _EditorPageState extends State<EditorPage>
 
     // Save to Hive + Sync to SQLite (Widget)
     await _repository.saveScript(updatedScript);
+    
+    // Track lines written for gamification
+    if (GetIt.I.isRegistered<UserStatsService>()) {
+      final lineCount = '\n'.allMatches(updatedScript.content).length + 1;
+      final previousLines = widget.script?.content != null
+          ? '\n'.allMatches(widget.script!.content).length + 1
+          : 0;
+      final delta = lineCount - previousLines;
+      if (delta > 0) {
+        GetIt.I<UserStatsService>().recordLinesWritten(delta);
+      }
+    }
 
     if (mounted) {
       setState(() => _isSaving = false);
@@ -274,17 +296,16 @@ class _EditorPageState extends State<EditorPage>
 
     try {
       final scriptId = widget.script?.id ?? 'manual_run';
-      
-      // ALWLAYS proactively clear the Widget UI before running to ensure no "ghost" old UI 
+
+      // ALWLAYS proactively clear the Widget UI before running to ensure no "ghost" old UI
       // is left behind if the script succeeds but simply doesn't call renderWidget().
       if (GetIt.I.isRegistered<HeadlessWidgetRenderingService>()) {
-         await GetIt.I<HeadlessWidgetRenderingService>().deleteWidgetUI(scriptId);
+        await GetIt.I<HeadlessWidgetRenderingService>().deleteWidgetUI(
+          scriptId,
+        );
       }
 
-      await _runnerService.runScript(
-        _controller.text,
-        scriptId,
-      );
+      await _runnerService.runScript(_controller.text, scriptId);
 
       if (mounted) {
         setState(() {
@@ -339,36 +360,33 @@ class _EditorPageState extends State<EditorPage>
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          // 1. DASHBOARD BACKGROUND (Aurora + Orbs) - MODE: WARM SUNSET
+          // 1. Sleek Dark Background (Dark Aurora + Deep Orbs)
           Container(
-            decoration: const BoxDecoration(gradient: LiquidTheme.roseGradient),
+            decoration: const BoxDecoration(gradient: LiquidTheme.brandDarkGradient),
           ),
           Positioned(
             top: -100,
             right: -50,
             child: _buildOrb(
               300,
-              const Color(0xFFFDA4AF).withValues(alpha: 0.3),
-            ), // Rose 300
+              LiquidTheme.primary.withValues(alpha: 0.15),
+            ),
           ),
           Positioned(
             bottom: 100,
             left: -50,
             child: _buildOrb(
               250,
-              const Color(0xFFFDBA74).withValues(alpha: 0.3),
-            ), // Orange 300
+              LiquidTheme.cyan.withValues(alpha: 0.1),
+            ),
           ),
 
-          // Heavy Blur for uniformity (Liquid Glass Effect)
+          // Moderate Blur for professional clean look
           BackdropFilter(
-            filter: ImageFilter.blur(
-              sigmaX: 25,
-              sigmaY: 25,
-            ), // Reduced slightly for sharpness
+            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
             child: Container(
-              color: Colors.white.withValues(alpha: 0.2),
-            ), // Light Tint
+              color: const Color(0xFF0F172A).withValues(alpha: 0.5), // Slate 900 tint
+            ),
           ),
 
           // 2. Editor Surface (PRISM GLASS: Tinted, not White)
@@ -396,42 +414,27 @@ class _EditorPageState extends State<EditorPage>
                   child: FadeTransition(
                     opacity: _fadeAnim,
                     child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      margin: EdgeInsets.zero, // Full-width edge-to-edge
                       decoration: BoxDecoration(
-                        // Glass Tint for Contrast against Sunset
+                        // Dark Deep Glass for Professional Code Editor
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            const Color(
-                              0xFFFFFFFF,
-                            ).withValues(alpha: 0.85), // White 85%
-                            const Color(
-                              0xFFF8FAFC,
-                            ).withValues(alpha: 0.65), // Slate 50 65%
+                            const Color(0xFF1E293B).withValues(alpha: 0.6), // Slate 800
+                            const Color(0xFF0F172A).withValues(alpha: 0.8), // Slate 900
                           ],
                         ),
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          width: 1.5,
+                          color: Colors.white.withValues(alpha: 0.1),
+                          width: 1.0,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(
-                              0xFF64748B,
-                            ).withValues(alpha: 0.1), // Slate Shadow
-                            blurRadius: 40,
-                            offset: const Offset(0, 20),
-                          ),
-                          BoxShadow(
-                            color: Colors.white.withValues(
-                              alpha: 0.4,
-                            ), // Inner reflection simulation
-                            blurRadius: 0,
-                            offset: const Offset(0, 0),
-                            spreadRadius:
-                                1, // Inset border effect via spread (hacky)
+                            color: Colors.black.withValues(alpha: 0.4),
+                            blurRadius: 30,
+                            offset: const Offset(0, 15),
                           ),
                         ],
                       ),
@@ -549,17 +552,30 @@ class _EditorPageState extends State<EditorPage>
             ),
           ),
 
-          // 3. CROSS-PLATFORM CONSOLE (Dark Theme, No Fake Text)
+          // 3. CROSS-PLATFORM CONSOLE (DraggableScrollableSheet)
           if (_showConsole)
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: EdgeInsets.only(bottom: bottomInset),
-                child: _isLogExpanded
-                    ? _buildConsoleSheet()
-                    : _buildConsolePill(),
+            if (!_isLogExpanded)
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: bottomInset),
+                  child: _buildConsolePill(),
+                ),
+              )
+            else
+              Positioned.fill(
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: bottomInset),
+                  child: DraggableScrollableSheet(
+                    initialChildSize: 0.4,
+                    minChildSize: 0.1,
+                    maxChildSize: 0.8,
+                    builder: (context, scrollController) {
+                      return _buildDraggableConsoleSheet(scrollController);
+                    },
+                  ),
+                ),
               ),
-            ),
 
           Positioned(
             bottom: bottomInset,
@@ -568,13 +584,45 @@ class _EditorPageState extends State<EditorPage>
             child: KeyboardToolbar(
               onInsert: _insertText,
               onTab: () => _insertText("  "),
-              onUndo: () {},
-              onRedo: () {},
+              onUndo: _handleUndo,
+              onRedo: _handleRedo,
             ),
           ),
         ],
       ),
     );
+  }
+
+  void _handleUndo() {
+    final snapshot = _history.undo();
+    if (snapshot == null) return;
+    
+    _isUndoRedoAction = true;
+    _inputController.text = snapshot.text;
+    _inputController.selection = TextSelection.collapsed(
+      offset: snapshot.cursorPosition.clamp(0, snapshot.text.length),
+    );
+    _controller.setText(snapshot.text);
+    _isUndoRedoAction = false;
+    
+    _onTextChanged();
+    setState(() {});
+  }
+
+  void _handleRedo() {
+    final snapshot = _history.redo();
+    if (snapshot == null) return;
+    
+    _isUndoRedoAction = true;
+    _inputController.text = snapshot.text;
+    _inputController.selection = TextSelection.collapsed(
+      offset: snapshot.cursorPosition.clamp(0, snapshot.text.length),
+    );
+    _controller.setText(snapshot.text);
+    _isUndoRedoAction = false;
+    
+    _onTextChanged();
+    setState(() {});
   }
 
   // Minimal Pill (Generic System Status)
@@ -618,82 +666,98 @@ class _EditorPageState extends State<EditorPage>
     );
   }
 
-  Widget _buildConsoleSheet() {
+  Widget _buildDraggableConsoleSheet(ScrollController scrollController) {
     return Container(
-      height: 320,
-      margin: const EdgeInsets.only(left: 12, right: 12, bottom: 60),
+      margin: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        color: const Color(0xE6121212), // 90% opacity solid dark
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.1),
+          width: 0.5,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 40,
-            offset: const Offset(0, 20),
+            color: Colors.black.withValues(alpha: 0.8),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Title Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
-              border: Border(
-                bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
-              ),
-              color: Colors.black.withValues(alpha: 0.2),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => setState(() {
-                        _isLogExpanded = false;
-                        _showConsole = false;
-                      }),
-                      child: _buildStatusDot(const Color(0xFFEF4444)),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildStatusDot(const Color(0xFFF59E0B)),
-                    const SizedBox(width: 8),
-                    _buildStatusDot(const Color(0xFF10B981)),
-                  ],
-                ),
-                const Text(
-                  "Console Output",
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    color: Colors.white54,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10), // Less blurry
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Drag Handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(2.5),
                   ),
                 ),
-                const SizedBox(width: 40),
-              ],
-            ),
+              ),
+              // Title Bar
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => setState(() {
+                            _isLogExpanded = false;
+                          }),
+                          child: _buildStatusDot(const Color(0xFFEF4444)),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildStatusDot(const Color(0xFFF59E0B)),
+                        const SizedBox(width: 8),
+                        _buildStatusDot(const Color(0xFF10B981)),
+                      ],
+                    ),
+                    const Text(
+                      "Console Output",
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 40),
+                  ],
+                ),
+              ),
+              const Divider(color: Colors.white10, height: 1),
+              // Log Content
+              Expanded(
+                child: ListView.separated(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _logs.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final log = _logs[index];
+                    return ConsoleLogItem(entry: log);
+                  },
+                ),
+              ),
+            ],
           ),
-          // Log Content
-          Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: _logs.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 6),
-              itemBuilder: (context, index) {
-                final log = _logs[index];
-                return ConsoleLogItem(entry: log);
-              },
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -997,7 +1061,7 @@ class _EditorPageState extends State<EditorPage>
 const TextStyle _kEditorTextStyle = TextStyle(
   fontFamily: 'monospace',
   fontSize: 13.5,
-  color: LiquidTheme.textDeep,
+  color: Color(0xFFE2E8F0), // Slate 200 light text for dark mode
   height: 1.6, // FIXED LINE HEIGHT matches TextField StrutStyle
   fontFeatures: [FontFeature.tabularFigures()],
   fontWeight: FontWeight.w500,

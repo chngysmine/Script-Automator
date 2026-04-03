@@ -48,3 +48,6 @@ app.*.map.json
 .cxx/
 /android/.cxx/
 /android/app/.cxx/
+
+# Agent
+.agent/rules

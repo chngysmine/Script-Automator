@@ -1,12 +1,16 @@
 import SwiftUI
+import WidgetKit
+import AppIntents
 
 struct UniversalWidgetView: View {
     let node: SASUPNode
     let isRoot: Bool
+    let family: WidgetFamily?
     
-    init(node: SASUPNode, isRoot: Bool = false) {
+    init(node: SASUPNode, isRoot: Bool = false, family: WidgetFamily? = nil) {
         self.node = node
         self.isRoot = isRoot
+        self.family = family
     }
     
     var body: some View {
@@ -15,7 +19,7 @@ struct UniversalWidgetView: View {
     
     @ViewBuilder
     private func renderNode(_ node: SASUPNode, isRoot: Bool = false) -> some View {
-        let view = _renderRawNode(node, isRoot: isRoot)
+        let view = _renderRawNode(node, isRoot: isRoot, family: family)
         
         if isRoot {
             GeometryReader { geometry in
@@ -29,7 +33,7 @@ struct UniversalWidgetView: View {
     }
 
     @ViewBuilder
-    private func _renderRawNode(_ node: SASUPNode, isRoot: Bool = false) -> some View {
+    private func _renderRawNode(_ node: SASUPNode, isRoot: Bool = false, family: WidgetFamily? = nil) -> some View {
         switch node.type {
         case "container":
             applyModifiers(node.modifiers, isRoot: isRoot) {
@@ -55,14 +59,33 @@ struct UniversalWidgetView: View {
                     renderChildren(node.children)
                 }
             }
+        case "button":
+            if #available(iOS 17.0, macOS 14.0, watchOS 10.0, *),
+               let action = node.action, action.type == "runScript",
+               let actionId = action.actionId, let scriptId = action.scriptId {
+                let intent = WidgetInteractionIntent(scriptId: scriptId, actionId: actionId)
+                applyModifiers(node.modifiers, isRoot: isRoot) {
+                    Button(intent: intent) {
+                        ZStack {
+                            renderChildren(node.children)
+                        }
+                    }
+                    .buttonStyle(.plain) // Prevent system coloring
+                }
+            } else {
+                // Fallback for older iOS versions
+                applyModifiers(node.modifiers, isRoot: isRoot) {
+                    ZStack { renderChildren(node.children) }
+                }
+            }
         case "text":
             applyModifiers(node.modifiers, isRoot: isRoot) {
                 Text(node.content ?? "")
-                    .font(parseFont(node.modifiers))
+                    .font(parseFont(node.modifiers, family: family))
                     .foregroundColor(ColorParser.parse(node.modifiers?.color ?? "#000000"))
                     .fontWeight(parseWeight(node.modifiers?.font))
                     .minimumScaleFactor(0.6)
-                    .lineLimit(node.modifiers?.maxLines)
+                    .lineLimit(node.modifiers?.maxLines ?? (family == .systemSmall ? 2 : nil))
             }
         case "icon":
             applyModifiers(node.modifiers, isRoot: isRoot) {
@@ -111,7 +134,7 @@ struct UniversalWidgetView: View {
     private func renderChildren(_ children: [SASUPNode]?) -> some View {
         if let children = children {
             ForEach(children.indices, id: \.self) { index in
-                UniversalWidgetView(node: children[index], isRoot: false)
+                UniversalWidgetView(node: children[index], isRoot: false, family: family)
             }
         }
     }
@@ -226,17 +249,18 @@ struct UniversalWidgetView: View {
         }
     }
     
-    private func parseFont(_ mods: SASUPModifiers?) -> Font {
+    private func parseFont(_ mods: SASUPModifiers?, family: WidgetFamily?) -> Font {
         if let size = mods?.fontSize {
-            // Custom Size
-            return .system(size: size, weight: parseWeight(mods?.font), design: .rounded)
+            // Apply a slight scale-down if it's a small widget to prevent overflow
+            let adjustedSize = (family == .systemSmall) ? size * 0.8 : size
+            return .system(size: adjustedSize, weight: parseWeight(mods?.font), design: .rounded)
         }
         
         switch mods?.font {
-        case "title": return .title.bold()
-        case "subtitle": return .headline // Apple style
+        case "title": return (family == .systemSmall) ? .headline : .title.bold()
+        case "subtitle": return (family == .systemSmall) ? .subheadline : .headline // Apple style
         case "caption": return .caption
-        default: return .body
+        default: return (family == .systemSmall) ? .caption : .body
         }
     }
 }

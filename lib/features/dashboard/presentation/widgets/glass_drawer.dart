@@ -2,9 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'dart:ui';
 import 'package:script_automator/features/dashboard/presentation/pages/settings_page.dart';
+import 'package:get_it/get_it.dart';
+import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
+import 'package:script_automator/core/theme/liquid_page_route.dart';
 
+/// A frosted-glass side drawer providing navigation to all main sections.
+///
+/// Each tile maps to a nav index consumed by [AppShell.onNavigate]:
+/// - 0: Dashboard
+/// - 3: Gallery
+/// - 5: Notifications
 class GlassDrawer extends StatefulWidget {
-  const GlassDrawer({super.key});
+  final int currentNavIndex;
+  final Function(int) onNavigate;
+
+  const GlassDrawer({
+    super.key,
+    required this.currentNavIndex,
+    required this.onNavigate,
+  });
 
   @override
   State<GlassDrawer> createState() => _GlassDrawerState();
@@ -21,7 +37,6 @@ class _GlassDrawerState extends State<GlassDrawer>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    // Start animation when drawer opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _controller.forward();
     });
@@ -41,7 +56,6 @@ class _GlassDrawerState extends State<GlassDrawer>
       width: 300,
       child: Stack(
         children: [
-          // 1. Portal Background (Mesh Gradient)
           Positioned.fill(
             child: ClipRRect(
               borderRadius: const BorderRadius.horizontal(
@@ -49,46 +63,33 @@ class _GlassDrawerState extends State<GlassDrawer>
               ),
               child: Stack(
                 children: [
-                  // Deep Space Base
                   Container(
                     color: LiquidTheme.darkBackground.withValues(alpha: 0.6),
                   ),
-
-                  // Aurora Mesh 1
                   Positioned(
                     top: -100,
                     left: -50,
                     child: _buildOrb(300, Colors.purple.withValues(alpha: 0.3)),
                   ),
-                  // Aurora Mesh 2
                   Positioned(
                     bottom: 100,
                     right: -50,
                     child: _buildOrb(250, Colors.cyan.withValues(alpha: 0.3)),
                   ),
-
-                  // Holographic Blur
                   BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: LiquidTheme.textPrimary.withValues(
-                          alpha: 0.1,
-                        ), // Ultra-thin glass
+                        color: Colors.white.withValues(alpha: 0.7),
                         border: Border(
                           right: BorderSide(
-                            color: LiquidTheme.textPrimary.withValues(
-                              alpha: 0.1,
-                            ),
+                            color: Colors.white.withValues(alpha: 0.5),
                             width: 1,
                           ),
                         ),
                       ),
                     ),
                   ),
-
-                  // Noise Texture Overlay (Simulated with Grainy Image or Gradient)
-                  // For performance, we'll use a subtle gradient overlay
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -106,16 +107,13 @@ class _GlassDrawerState extends State<GlassDrawer>
               ),
             ),
           ),
-
-          // 2. 3D Content
           SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Profile Section
                 _buildAnimatedItem(
                   index: 0,
-                  total: 8,
+                  total: 7,
                   child: Padding(
                     padding: const EdgeInsets.all(32.0),
                     child: Column(
@@ -139,32 +137,39 @@ class _GlassDrawerState extends State<GlassDrawer>
                               ),
                             ],
                           ),
-                          child: const CircleAvatar(
-                            radius: 36,
-                            backgroundImage: NetworkImage(
-                              "https://i.pravatar.cc/300",
+                          child: Container(
+                            width: 72,
+                            height: 72,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [LiquidTheme.primary, LiquidTheme.cyan],
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.person_rounded,
+                              size: 36,
+                              color: Colors.white,
                             ),
                           ),
                         ),
                         const SizedBox(height: 24),
                         const Text(
-                          "CodeForge",
+                          "Script Automator",
                           style: TextStyle(
                             fontFamily: 'Inter',
-                            fontWeight: FontWeight.bold,
-                            fontSize: 28,
-                            color: LiquidTheme.textPrimary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 24,
+                            color: LiquidTheme.textDeep,
                             letterSpacing: -0.5,
                           ),
                         ),
                         Text(
-                          "Pro Workspace",
+                          "Workspace",
                           style: TextStyle(
                             fontFamily: 'Inter',
-                            color: LiquidTheme.textPrimary.withValues(
-                              alpha: 0.6,
-                            ),
-                            fontWeight: FontWeight.w500,
+                            color: LiquidTheme.textLight,
+                            fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),
                         ),
@@ -172,49 +177,70 @@ class _GlassDrawerState extends State<GlassDrawer>
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 20),
-
-                // Navigation Items
                 _buildAnimatedItem(
                   index: 1,
-                  total: 8,
+                  total: 7,
                   child: _buildGlassTile(
                     Icons.dashboard_rounded,
                     "Dashboard",
-                    isActive: true,
+                    isActive: widget.currentNavIndex == 0,
+                    onTap: () => widget.onNavigate(0),
                   ),
                 ),
                 _buildAnimatedItem(
                   index: 2,
-                  total: 8,
-                  child: _buildGlassTile(Icons.code_rounded, "My Scripts"),
+                  total: 7,
+                  child: _buildGlassTile(
+                    Icons.explore_rounded,
+                    "Explore",
+                    isActive: widget.currentNavIndex == 1,
+                    onTap: () => widget.onNavigate(1),
+                  ),
                 ),
                 _buildAnimatedItem(
                   index: 3,
-                  total: 8,
-                  child: _buildGlassTile(Icons.extension_rounded, "Extensions"),
+                  total: 7,
+                  child: _buildGlassTile(
+                    Icons.storefront_rounded,
+                    "Script Store",
+                    isActive: widget.currentNavIndex == 3,
+                    onTap: () => widget.onNavigate(3),
+                  ),
                 ),
                 _buildAnimatedItem(
                   index: 4,
-                  total: 8,
-                  child: _buildGlassTile(Icons.analytics_rounded, "Analytics"),
+                  total: 7,
+                  child: _buildGlassTile(
+                    Icons.person_rounded,
+                    "Profile",
+                    isActive: widget.currentNavIndex == 4,
+                    onTap: () => widget.onNavigate(4),
+                  ),
                 ),
                 _buildAnimatedItem(
                   index: 5,
-                  total: 8,
-                  child: _buildGlassTile(Icons.cloud_sync_rounded, "Sync"),
+                  total: 7,
+                  child: StreamBuilder<int>(
+                    stream: GetIt.I<NotificationService>().unreadCount,
+                    builder: (context, snapshot) {
+                      return _buildGlassTile(
+                        Icons.notifications_rounded,
+                        "Notifications",
+                        isActive: widget.currentNavIndex == 5,
+                        badgeCount: snapshot.data ?? 0,
+                        onTap: () => widget.onNavigate(5),
+                      );
+                    },
+                  ),
                 ),
-
                 const Spacer(),
-
-                // Bottom Actions
                 _buildAnimatedItem(
                   index: 6,
-                  total: 8,
+                  total: 7,
                   child: Padding(
                     padding: const EdgeInsets.all(32),
-                    child: _buildGlassButton("Pro Settings"),
+                    child: _buildGlassButton("Settings"),
                   ),
                 ),
               ],
@@ -242,7 +268,6 @@ class _GlassDrawerState extends State<GlassDrawer>
     required int total,
     required Widget child,
   }) {
-    // Staggered delay based on index
     final double start = (index / total) * 0.5;
     final double end = start + 0.5;
 
@@ -276,7 +301,7 @@ class _GlassDrawerState extends State<GlassDrawer>
           opacity: fade.value,
           child: Transform(
             transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.001) // Perspective
+              ..setEntry(3, 2, 0.001)
               ..setTranslationRaw(slide.value, 0, 0)
               ..rotateY(rotate.value),
             alignment: Alignment.centerLeft,
@@ -288,54 +313,83 @@ class _GlassDrawerState extends State<GlassDrawer>
     );
   }
 
-  Widget _buildGlassTile(IconData icon, String label, {bool isActive = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        decoration: BoxDecoration(
-          color: isActive
-              ? LiquidTheme.textPrimary.withValues(alpha: 0.1)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: isActive
-              ? Border.all(
-                  color: LiquidTheme.textPrimary.withValues(alpha: 0.2),
-                )
-              : null,
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: LiquidTheme.textPrimary.withValues(
-                alpha: isActive ? 1.0 : 0.6,
+  Widget _buildGlassTile(
+    IconData icon,
+    String label, {
+    bool isActive = false,
+    int badgeCount = 0,
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          decoration: BoxDecoration(
+            color: isActive
+                ? LiquidTheme.primary.withValues(alpha: 0.15)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: isActive
+                ? Border.all(color: LiquidTheme.primary.withValues(alpha: 0.3))
+                : Border.all(color: Colors.transparent),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: isActive
+                    ? LiquidTheme.primary
+                    : LiquidTheme.textMedium.withValues(alpha: 0.8),
+                size: 22,
               ),
-              size: 22,
-            ),
-            const SizedBox(width: 16),
-            Text(
-              label,
-              style: TextStyle(
-                color: LiquidTheme.textPrimary.withValues(
-                  alpha: isActive ? 1.0 : 0.6,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: isActive
+                        ? LiquidTheme.primary
+                        : LiquidTheme.textDeep,
+                    fontSize: 16,
+                    fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                fontSize: 16,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
               ),
-            ),
-            if (isActive) ...[
-              const Spacer(),
-              Container(
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                  color: Colors.cyan,
-                  shape: BoxShape.circle,
+              if (badgeCount > 0) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    badgeCount > 99 ? '99+' : badgeCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
+              ] else if (isActive) ...[
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: LiquidTheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -344,12 +398,7 @@ class _GlassDrawerState extends State<GlassDrawer>
   Widget _buildGlassButton(String label) {
     return GestureDetector(
       onTap: () {
-        if (label == "Pro Settings") {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SettingsPage()),
-          );
-        }
+        Navigator.push(context, LiquidPageRoute(page: const SettingsPage()));
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -357,22 +406,27 @@ class _GlassDrawerState extends State<GlassDrawer>
           borderRadius: BorderRadius.circular(20),
           gradient: LinearGradient(
             colors: [
-              LiquidTheme.textPrimary.withValues(alpha: 0.15),
-              LiquidTheme.textPrimary.withValues(alpha: 0.05),
+              Colors.white.withValues(alpha: 0.8),
+              Colors.white.withValues(alpha: 0.5),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          border: Border.all(
-            color: LiquidTheme.textPrimary.withValues(alpha: 0.2),
-          ),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.5)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         alignment: Alignment.center,
         child: Text(
           label,
           style: const TextStyle(
-            color: LiquidTheme.textPrimary,
-            fontWeight: FontWeight.w600,
+            color: LiquidTheme.textDeep,
+            fontWeight: FontWeight.w800,
             letterSpacing: 0.5,
           ),
         ),

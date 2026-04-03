@@ -125,6 +125,9 @@ typedef JS_JSONStringify_Wrapper_C =
 typedef JS_JSONStringify_Wrapper_Dart =
     JSValue Function(Pointer<JSContext>, JSValue);
 
+typedef JS_FreeCString_C = Void Function(Pointer<JSContext>, Pointer<Char>);
+typedef JS_FreeCString_Dart = void Function(Pointer<JSContext>, Pointer<Char>);
+
 // Struct wrapper for NativeFinalizer
 final class JSValueRef extends Opaque {}
 
@@ -157,6 +160,7 @@ class QuickJSBindings {
   late final JS_NewFloat64_Wrapper_Dart JS_NewFloat64;
   late final JS_NewBool_Wrapper_Dart JS_NewBool;
   late final JS_JSONStringify_Wrapper_Dart JS_JSONStringify;
+  late final JS_FreeCString_Dart JS_FreeCString;
   late final CreateJSValueRef_Dart CreateJSValueRef;
   late final Pointer<NativeFunction<Void Function(Pointer<Void>)>>
   addresses_FinalizeJSValue;
@@ -238,6 +242,10 @@ class QuickJSBindings {
           JS_JSONStringify_Wrapper_C,
           JS_JSONStringify_Wrapper_Dart
         >('JS_JSONStringify_Wrapper');
+    JS_FreeCString = _dylib
+        .lookupFunction<JS_FreeCString_C, JS_FreeCString_Dart>(
+          'JS_FreeCString',
+        );
     CreateJSValueRef = _dylib
         .lookupFunction<CreateJSValueRef_C, CreateJSValueRef_Dart>(
           'CreateJSValueRef',

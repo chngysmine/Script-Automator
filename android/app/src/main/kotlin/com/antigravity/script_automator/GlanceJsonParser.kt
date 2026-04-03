@@ -137,6 +137,15 @@ object GlanceJsonParser {
                     RenderChildren(node)
                 }
             }
+            "button" -> {
+                // Interactive widgets on Android (Buttons)
+                androidx.glance.layout.Box(
+                    modifier = glanceModifier,
+                    contentAlignment = Alignment.Center
+                ) {
+                    RenderChildren(node)
+                }
+            }
         }
     }
 

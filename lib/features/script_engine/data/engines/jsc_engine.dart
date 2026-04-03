@@ -253,7 +253,10 @@ class JSCEngine implements JSEngine, Finalizable {
   // JSHandle createHandle removed as it relied on missing native symbols.
   // If needed in future, implement manual JSValueProtect/Unprotect.
 
-  /// Destroys the engine context and releases resources.
+  /// Destroys the engine context and releases all native resources.
+  ///
+  /// Detaches the [NativeFinalizer] first to prevent a double-free if the
+  /// Dart GC collects this object after manual destruction.
   @override
   void destroy() {
     for (var cb in _keptAliveCallbacks) {
@@ -264,6 +267,7 @@ class JSCEngine implements JSEngine, Finalizable {
     HostObjectRegistry().clear();
 
     if (_ctx != null && _ctx != nullptr) {
+      _finalizer.detach(this);
       _lib.JSGlobalContextRelease(_ctx!);
       _ctx = nullptr;
     }

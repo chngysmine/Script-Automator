@@ -82,17 +82,17 @@ class SyntaxHighlighter {
   /// font family, size, height, and weight. Token colors are derived from it.
   SyntaxHighlighter({required this.baseStyle})
     : commentStyle = baseStyle.copyWith(
-        color: const Color(0xFFA0A1A7), // One Light: Gray 400
+        color: const Color(0xFF5C6370), // One Dark: Gray
         fontStyle: FontStyle.italic,
       ),
       stringStyle = baseStyle.copyWith(
-        color: const Color(0xFF50A14F), // One Light: Green
+        color: const Color(0xFF98C379), // One Dark: Green
       ),
       numberStyle = baseStyle.copyWith(
-        color: const Color(0xFF986801), // One Light: Amber/Brown
+        color: const Color(0xFFD19A66), // One Dark: Amber
       ),
       keywordStyle = baseStyle.copyWith(
-        color: const Color(0xFFA626A4), // One Light: Purple/Magenta
+        color: const Color(0xFFC678DD), // One Dark: Purple
         fontWeight: FontWeight.w600,
       );
 

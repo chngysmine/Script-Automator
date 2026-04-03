@@ -83,7 +83,7 @@ class ViewportAwarePainter extends CustomPainter {
     // ----- 3. Gutter Background -----
     canvas.drawRect(
       Rect.fromLTWH(0, 0, gutterWidth, size.height),
-      Paint()..color = const Color(0xFFF1F5F9).withValues(alpha: 0.6),
+      Paint()..color = const Color(0xFF0D1117).withValues(alpha: 0.5), // Dark gutter
     );
 
     // Gutter right-edge separator
@@ -91,7 +91,7 @@ class ViewportAwarePainter extends CustomPainter {
       Offset(gutterWidth, 0),
       Offset(gutterWidth, size.height),
       Paint()
-        ..color = const Color(0xFFE2E8F0).withValues(alpha: 0.7)
+        ..color = const Color(0xFF30363D).withValues(alpha: 0.8) // Subtle border
         ..strokeWidth = 0.5,
     );
 
@@ -105,9 +105,9 @@ class ViewportAwarePainter extends CustomPainter {
       final lineNumSpan = TextSpan(
         text: (i + 1).toString(),
         style: textStyle.copyWith(
-          color: const Color(0xFF94A3B8),
-          fontSize: 11,
-          fontWeight: FontWeight.w400,
+          color: const Color(0xFF6E7681), // GitHub Dark line numbers
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
         ),
       );
       final lineNumPainter = TextPainter(
