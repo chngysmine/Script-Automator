@@ -8,7 +8,6 @@ import 'package:script_automator/features/dashboard/presentation/pages/explore_p
 import 'package:script_automator/features/dashboard/presentation/pages/gallery_page.dart';
 import 'package:script_automator/features/dashboard/presentation/pages/profile_page.dart';
 import 'package:script_automator/features/dashboard/presentation/pages/notification_page.dart';
-import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_dock.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_drawer.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/new_script_dialog.dart';
@@ -87,66 +86,15 @@ class AppShellState extends State<AppShell> {
       extendBody: true,
       backgroundColor: LiquidTheme.darkBackground,
 
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.sort_rounded, color: Colors.white),
-          onPressed: openDrawer,
-        ),
-        actions: [
-          StreamBuilder<int>(
-            stream: GetIt.I<NotificationService>().unreadCount,
-            builder: (context, snapshot) {
-              final unread = snapshot.data ?? 0;
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.notifications_none_rounded,
-                        color: Colors.white),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        LiquidPageRoute(page: const NotificationPage()),
-                      );
-                    },
-                  ),
-                  if (unread > 0)
-                    Positioned(
-                      top: 12,
-                      right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.redAccent,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          unread > 9 ? '9+' : unread.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-
       drawer: GlassDrawer(
         currentNavIndex: _navIndex,
         onNavigate: (index) {
           Navigator.pop(context);
           if (index == 5) {
             Navigator.push(
-                context, LiquidPageRoute(page: const NotificationPage()));
+              context,
+              LiquidPageRoute(page: const NotificationPage()),
+            );
           } else {
             setState(() => _navIndex = index);
           }
@@ -187,7 +135,9 @@ class AppShellState extends State<AppShell> {
     switch (_navIndex) {
       case 0:
         return LiquidDashboardPage(
-            key: const ValueKey('dashboard'), onMenuTap: openDrawer);
+          key: const ValueKey('dashboard'),
+          onMenuTap: openDrawer,
+        );
       case 1:
         return const ExplorePage(key: ValueKey('explore'));
       case 3:
@@ -196,7 +146,9 @@ class AppShellState extends State<AppShell> {
         return const ProfilePage(key: ValueKey('profile'));
       default:
         return LiquidDashboardPage(
-            key: const ValueKey('dashboard_fallback'), onMenuTap: openDrawer);
+          key: const ValueKey('dashboard_fallback'),
+          onMenuTap: openDrawer,
+        );
     }
   }
 }

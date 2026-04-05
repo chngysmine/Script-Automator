@@ -6,6 +6,8 @@ import 'package:get_it/get_it.dart';
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
 import 'package:script_automator/features/dashboard/data/services/user_preferences_service.dart';
 import 'package:script_automator/features/dashboard/data/services/user_stats_service.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/glass_header_actions.dart';
+import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
 
 /// Profile page displaying the user's script statistics, contribution heatmap,
 /// achievements, and collections.
@@ -79,7 +81,6 @@ class _ProfilePageState extends State<ProfilePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 16),
               _buildProfileHeader(context),
               const SizedBox(height: 24),
               _buildStatsRow()
@@ -93,19 +94,13 @@ class _ProfilePageState extends State<ProfilePage> {
                   .animate(delay: 200.ms)
                   .fadeIn(duration: 500.ms),
               const SizedBox(height: 28),
-              _buildSectionTitle(
-                "Achievements",
-                onSeeAllTap: () => _showComingSoon(context, "All Achievements"),
-              ),
+              _buildSectionTitle("Achievements"),
               const SizedBox(height: 12),
               _buildAchievementsScroll(
                 context,
               ).animate(delay: 300.ms).fadeIn().slideX(begin: 0.05),
               const SizedBox(height: 28),
-              _buildSectionTitle(
-                "Collections",
-                onSeeAllTap: () => _showComingSoon(context, "All Collections"),
-              ),
+              _buildSectionTitle("Collections"),
               const SizedBox(height: 12),
               _buildCollectionsGrid(
                 context,
@@ -118,52 +113,99 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  void _showComingSoon(BuildContext context, String title) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("$title — Coming Soon"),
-        backgroundColor: LiquidTheme.primary,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   Widget _buildProfileHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [LiquidTheme.primary, LiquidTheme.cyan],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: LiquidTheme.primary.withValues(alpha: 0.4),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(3),
-              child: Container(
-                decoration: const BoxDecoration(
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white,
+                  gradient: const LinearGradient(
+                    colors: [LiquidTheme.primary, LiquidTheme.cyan],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: LiquidTheme.primary.withValues(alpha: 0.4),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
-                child: const Icon(
-                  Icons.person_rounded,
-                  size: 36,
-                  color: LiquidTheme.primary,
+                child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                    ),
+                    child: const Icon(
+                      Icons.person_rounded,
+                      size: 36,
+                      color: LiquidTheme.primary,
+                    ),
+                  ),
                 ),
               ),
-            ),
+              Positioned(
+                bottom: -4,
+                right: -4,
+                child: GestureDetector(
+                  onTap: () async {
+                    final result =
+                        await showModalBottomSheet<Map<String, String>>(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => EditProfileSheet(
+                            currentName: _displayName,
+                            currentBio: _bio,
+                          ),
+                        );
+
+                    if (result != null) {
+                      final prefs = GetIt.I<UserPreferencesService>();
+                      final newName = result['name'] ?? _displayName;
+                      final newBio = result['bio'] ?? _bio;
+                      await prefs.setDisplayName(newName);
+                      await prefs.setBio(newBio);
+                      if (mounted) {
+                        setState(() {
+                          _displayName = newName;
+                          _bio = newBio;
+                        });
+                      }
+                    }
+                  },
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: LiquidTheme.textDeep,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.edit_rounded,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -193,45 +235,13 @@ class _ProfilePageState extends State<ProfilePage> {
               ],
             ),
           ),
-          GestureDetector(
-            onTap: () async {
-              final result = await showModalBottomSheet<Map<String, String>>(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (context) => EditProfileSheet(
-                  currentName: _displayName,
-                  currentBio: _bio,
-                ),
+          StreamBuilder<int>(
+            stream: GetIt.I<NotificationService>().unreadCount,
+            builder: (context, snapshot) {
+              return GlassHeaderActions(
+                hasNotificationBadge: (snapshot.data ?? 0) > 0,
               );
-
-              if (result != null) {
-                final prefs = GetIt.I<UserPreferencesService>();
-                final newName = result['name'] ?? _displayName;
-                final newBio = result['bio'] ?? _bio;
-                await prefs.setDisplayName(newName);
-                await prefs.setBio(newBio);
-                if (mounted) {
-                  setState(() {
-                    _displayName = newName;
-                    _bio = newBio;
-                  });
-                }
-              }
             },
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: LiquidTheme.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.edit_rounded,
-                size: 18,
-                color: LiquidTheme.primary,
-              ),
-            ),
           ),
         ],
       ),
@@ -528,8 +538,9 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildAchievementsScroll(BuildContext context) {
-    if (!GetIt.I.isRegistered<UserStatsService>())
+    if (!GetIt.I.isRegistered<UserStatsService>()) {
       return const SizedBox.shrink();
+    }
     return FutureBuilder<Map<String, bool>>(
       future: GetIt.I<UserStatsService>().getAchievementStatus(),
       builder: (context, snapshot) {

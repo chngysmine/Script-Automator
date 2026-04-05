@@ -12,8 +12,9 @@ class UserStatsService {
     if (_box != null &&
         _box!.isOpen &&
         _activityBox != null &&
-        _activityBox!.isOpen)
+        _activityBox!.isOpen) {
       return;
+    }
     _box = await Hive.openBox<int>(_boxName);
     _activityBox = await Hive.openBox<int>(_activityBoxName);
   }

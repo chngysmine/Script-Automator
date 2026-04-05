@@ -4,6 +4,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
 import 'package:script_automator/features/dashboard/domain/repositories/gallery_repository.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/glass_header_actions.dart';
+import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:http/http.dart' as http;
 
@@ -136,14 +138,29 @@ class _ExplorePageState extends State<ExplorePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Explore",
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        color: LiquidTheme.textDeep,
-                        letterSpacing: -1.2,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Text(
+                          "Explore",
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                            color: LiquidTheme.textDeep,
+                            letterSpacing: -1.2,
+                          ),
+                        ),
+                        StreamBuilder<int>(
+                          stream: GetIt.I<NotificationService>().unreadCount,
+                          builder: (context, snapshot) {
+                            final unread = snapshot.data ?? 0;
+                            return GlassHeaderActions(
+                              hasNotificationBadge: unread > 0,
+                            );
+                          },
+                        ),
+                      ],
                     ).animate().fadeIn(duration: 300.ms),
                     const SizedBox(height: 16),
                     Container(
