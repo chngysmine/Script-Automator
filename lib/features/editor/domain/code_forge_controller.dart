@@ -4,6 +4,7 @@ import 'package:get_it/get_it.dart';
 import '../../../../core/data_structures/rope.dart';
 import '../../../../features/ai_integration/data/services/gemini_service.dart';
 import '../../../../features/ai_integration/data/services/ollama_service.dart';
+import '../../../../features/ai_integration/data/services/openai_service.dart';
 import '../../../../features/dashboard/data/services/user_stats_service.dart';
 import 'dart:async'; // Added for Timer
 
@@ -244,8 +245,8 @@ class CodeForgeController extends ChangeNotifier
   // --- AI Integration ---
 
   // Helper enum for AI Provider
-  // 'gemini' by default (Zero Setup via Fallback Key)
-  static String? activeAiProvider = 'gemini';
+  // 'openai' by default
+  static String? activeAiProvider = 'openai';
 
   /// Triggers AI Ghost Text generation
   Future<void> triggerGhostText() async {
@@ -256,7 +257,12 @@ class CodeForgeController extends ChangeNotifier
     final contextStr = text.substring(0, cursorOffset);
     String? completion;
 
-    if (activeAiProvider == 'gemini') {
+    if (activeAiProvider == 'openai') {
+      // OpenAI Integration
+      if (!GetIt.I.isRegistered<OpenAIService>()) return;
+      final openAiService = GetIt.I<OpenAIService>();
+      completion = await openAiService.completeCode(contextStr);
+    } else if (activeAiProvider == 'gemini') {
       // Gemini Integration
       if (!GetIt.I.isRegistered<GeminiService>()) return;
       final geminiService = GetIt.I<GeminiService>();
@@ -267,7 +273,7 @@ class CodeForgeController extends ChangeNotifier
       }
       completion = await geminiService.completeCode(contextStr);
     } else {
-      // Ollama Integration (Default)
+      // Ollama Integration
       if (!GetIt.I.isRegistered<OllamaService>()) return;
       final ollamaService = GetIt.I<OllamaService>();
 

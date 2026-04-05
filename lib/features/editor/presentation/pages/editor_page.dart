@@ -802,11 +802,25 @@ class _EditorPageState extends State<EditorPage>
                     ),
                     const SizedBox(height: 16),
 
-                    // OPTION A: GEMINI
-                    // OPTION A: GEMINI (Instant)
+                    // OPTION A: OPENAI (Default)
                     _buildProviderCard(
-                      title: "Google Gemini (Instant)",
-                      subtitle: "Ready to use • Free Tier • Fast",
+                      title: "OpenAI ChatGPT",
+                      subtitle: "Requires API Key • Smartest • Fast",
+                      icon: Icons.chat_bubble_outline_rounded,
+                      isSelected:
+                          CodeForgeController.activeAiProvider == 'openai',
+                      onTap: () {
+                        setState(
+                          () => CodeForgeController.activeAiProvider = 'openai',
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // OPTION B: GEMINI
+                    _buildProviderCard(
+                      title: "Google Gemini",
+                      subtitle: "Fast • Standard Model",
                       icon: Icons.flash_on_rounded,
                       isSelected:
                           CodeForgeController.activeAiProvider == 'gemini',
@@ -814,12 +828,11 @@ class _EditorPageState extends State<EditorPage>
                         setState(
                           () => CodeForgeController.activeAiProvider = 'gemini',
                         );
-                        // No key check needed for basic usage
                       },
                     ),
                     const SizedBox(height: 12),
 
-                    // OPTION B: OLLAMA
+                    // OPTION C: OLLAMA
                     _buildProviderCard(
                       title: "Ollama (Local/Private)",
                       subtitle: "Runs on PC • Secure • No Internet",

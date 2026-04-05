@@ -20,6 +20,7 @@ import 'features/dashboard/data/repositories/cloud_gallery_repository.dart';
 import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
 import 'package:script_automator/features/dashboard/data/services/user_preferences_service.dart';
 import 'package:script_automator/features/dashboard/data/services/user_stats_service.dart';
+import 'features/ai_integration/data/services/openai_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -100,6 +101,12 @@ Future<void> _setupDI() async {
     final ollamaService = OllamaService(GetIt.I<FlutterSecureStorage>());
     await ollamaService.initialize();
     GetIt.I.registerSingleton<OllamaService>(ollamaService);
+  }
+
+  if (!GetIt.I.isRegistered<OpenAIService>()) {
+    final openAiService = OpenAIService(GetIt.I<FlutterSecureStorage>());
+    await openAiService.initialize();
+    GetIt.I.registerSingleton<OpenAIService>(openAiService);
   }
 
   // Use Cloud Repo with Fallback (replaces LocalGalleryRepository)

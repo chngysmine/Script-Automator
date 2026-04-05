@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/features/ai_integration/data/services/gemini_service.dart';
+import 'package:script_automator/features/ai_integration/data/services/openai_service.dart';
 import 'package:script_automator/features/dashboard/data/services/user_preferences_service.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/edit_profile_sheet.dart';
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
@@ -23,10 +24,16 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final _apiKeyController = TextEditingController();
+  final _geminiKeyController = TextEditingController();
+  final _openAiKeyController = TextEditingController();
   final GeminiService _geminiService = GetIt.I<GeminiService>();
-  bool _isLoading = false;
-  bool _hasKey = false;
+  final OpenAIService _openAiService = GetIt.I<OpenAIService>();
+  
+  bool _isLoadingGemini = false;
+  bool _isLoadingOpenAi = false;
+  
+  bool _hasGeminiKey = false;
+  bool _hasOpenAiKey = false;
 
   // App settings state
   bool _notificationsEnabled = true;
@@ -128,28 +135,54 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   void dispose() {
-    _apiKeyController.dispose();
+    _geminiKeyController.dispose();
+    _openAiKeyController.dispose();
     super.dispose();
   }
 
   Future<void> _checkKey() async {
-    final hasKey = await _geminiService.hasCustomApiKey();
-    setState(() => _hasKey = hasKey);
+    final hasGemini = await _geminiService.hasCustomApiKey();
+    final hasOpenAi = await _openAiService.hasCustomApiKey();
+    setState(() {
+      _hasGeminiKey = hasGemini;
+      _hasOpenAiKey = hasOpenAi;
+    });
   }
 
-  Future<void> _saveKey() async {
-    final key = _apiKeyController.text.trim();
+  Future<void> _saveGeminiKey() async {
+    final key = _geminiKeyController.text.trim();
     if (key.isEmpty) return;
 
-    setState(() => _isLoading = true);
+    setState(() => _isLoadingGemini = true);
     await _geminiService.setApiKey(key);
     await _checkKey();
-    setState(() => _isLoading = false);
+    setState(() => _isLoadingGemini = false);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text("API Key Saved successfully!"),
+          content: const Text("Gemini API Key Saved successfully!"),
+          backgroundColor: LiquidTheme.primary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      FocusScope.of(context).unfocus();
+    }
+  }
+
+  Future<void> _saveOpenAiKey() async {
+    final key = _openAiKeyController.text.trim();
+    if (key.isEmpty) return;
+
+    setState(() => _isLoadingOpenAi = true);
+    await _openAiService.setApiKey(key);
+    await _checkKey();
+    setState(() => _isLoadingOpenAi = false);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("OpenAI API Key Saved successfully!"),
           backgroundColor: LiquidTheme.primary,
           behavior: SnackBarBehavior.floating,
         ),
@@ -311,8 +344,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _exportData() async {
     try {
-      setState(() => _isLoading = true);
-
       final repo = GetIt.I<ScriptRepository>();
       final scriptsResult = await repo.getScripts();
 
@@ -355,13 +386,8 @@ class _SettingsPageState extends State<SettingsPage> {
           subject: 'Script Automator Export',
         ),
       );
-
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Export failed: $e"),
@@ -414,7 +440,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 "AI CONFIGURATION",
               ).animate().fadeIn().slideY(begin: 0.1),
               const SizedBox(height: 12),
-              _buildAiCard().animate(delay: 50.ms).fadeIn().slideY(begin: 0.1),
+              _buildOpenAiCard().animate(delay: 50.ms).fadeIn().slideY(begin: 0.1),
+              const SizedBox(height: 16),
+              _buildGeminiCard().animate(delay: 55.ms).fadeIn().slideY(begin: 0.1),
 
               const SizedBox(height: 32),
 
@@ -541,23 +569,16 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildAiCard() {
+  Widget _buildOpenAiCard() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: 0.8),
-            Colors.white.withValues(alpha: 0.5),
-          ],
-        ),
+        color: Colors.white.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white, width: 2),
+        border: Border.all(color: LiquidTheme.primary.withValues(alpha: 0.3), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: LiquidTheme.primary.withValues(alpha: 0.05),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -575,7 +596,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
-                  Icons.auto_awesome,
+                  Icons.chat_bubble_outline_rounded,
                   color: LiquidTheme.primary,
                 ),
               ),
@@ -585,7 +606,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Gemini API Key",
+                      "OpenAI API Key (Default)",
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -593,7 +614,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     ),
                     Text(
-                      "Used for Ghost Text & Generation",
+                      "Used for ChatGPT Ghost Text",
                       style: TextStyle(
                         fontSize: 12,
                         color: LiquidTheme.textMedium,
@@ -606,13 +627,13 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 20),
           TextField(
-            controller: _apiKeyController,
+            controller: _openAiKeyController,
             obscureText: true,
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
             decoration: InputDecoration(
-              hintText: _hasKey
+              hintText: _hasOpenAiKey
                   ? "Key is configured (Hidden)"
-                  : "Paste API Key here...",
+                  : "Paste sk-... Key here...",
               hintStyle: TextStyle(
                 color: LiquidTheme.textMedium.withValues(alpha: 0.6),
               ),
@@ -644,7 +665,7 @@ class _SettingsPageState extends State<SettingsPage> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _isLoading ? null : _saveKey,
+              onPressed: _isLoadingOpenAi ? null : _saveOpenAiKey,
               style: ElevatedButton.styleFrom(
                 backgroundColor: LiquidTheme.primary,
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -653,7 +674,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 elevation: 0,
               ),
-              child: _isLoading
+              child: _isLoadingOpenAi
                   ? const SizedBox(
                       width: 20,
                       height: 20,
@@ -672,7 +693,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
             ),
           ),
-          if (_hasKey) ...[
+          if (_hasOpenAiKey) ...[
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -690,7 +711,172 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    "Actively using custom API Key",
+                    "Actively using OpenAI Key",
+                    style: TextStyle(
+                      color: Colors.green.shade700,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGeminiCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.8),
+            Colors.white.withValues(alpha: 0.5),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blueAccent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome,
+                  color: Colors.blueAccent,
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Gemini API Key (Optional)",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: LiquidTheme.textDeep,
+                      ),
+                    ),
+                    Text(
+                      "Used for Gemini code completion",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: LiquidTheme.textMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _geminiKeyController,
+            obscureText: true,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            decoration: InputDecoration(
+              hintText: _hasGeminiKey
+                  ? "Key is configured (Hidden)"
+                  : "Paste API Key here...",
+              hintStyle: TextStyle(
+                color: LiquidTheme.textMedium.withValues(alpha: 0.6),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: Colors.grey.withValues(alpha: 0.2),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: Colors.grey.withValues(alpha: 0.2),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: Colors.blueAccent),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isLoadingGemini ? null : _saveGeminiKey,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 0,
+              ),
+              child: _isLoadingGemini
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text(
+                      "Save Configuration",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+            ),
+          ),
+          if (_hasGeminiKey) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.green.shade600,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Actively using Gemini Key",
                     style: TextStyle(
                       color: Colors.green.shade700,
                       fontWeight: FontWeight.w700,

@@ -24,12 +24,17 @@ class UserPreferencesService {
   // Convenience getters
   Future<String> get displayName async => await get('display_name', defaultValue: 'My Workspace');
   Future<String> get bio async => await get('bio', defaultValue: 'Widget automation workspace');
+  Future<String?> get avatarPath async {
+    final path = await get('avatarPath', defaultValue: '');
+    return path.isEmpty ? null : path;
+  }
   Future<bool> get isDarkMode async => (await get('dark_mode')) == 'true';
   Future<bool> get notificationsEnabled async => (await get('notifications', defaultValue: 'true')) == 'true';
   
   // Convenience setters
   Future<void> setDisplayName(String name) => set('display_name', name);
   Future<void> setBio(String bio) => set('bio', bio);
+  Future<void> setAvatarPath(String path) => set('avatarPath', path);
   Future<void> setDarkMode(bool enabled) => set('dark_mode', enabled.toString());
   Future<void> setNotificationsEnabled(bool enabled) => set('notifications', enabled.toString());
 }

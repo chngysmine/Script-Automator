@@ -8,6 +8,10 @@ import 'package:script_automator/features/dashboard/data/services/user_preferenc
 import 'package:script_automator/features/dashboard/data/services/user_stats_service.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_header_actions.dart';
 import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 /// Profile page displaying the user's script statistics, contribution heatmap,
 /// achievements, and collections.
@@ -30,6 +34,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   String _displayName = 'My Workspace';
   String _bio = 'Widget automation workspace';
+  String? _avatarPath;
 
   @override
   void initState() {
@@ -53,6 +58,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final prefs = GetIt.I<UserPreferencesService>();
     final name = await prefs.displayName;
     final b = await prefs.bio;
+    final ap = await prefs.avatarPath;
 
     int totalRuns = 0;
     if (GetIt.I.isRegistered<UserStatsService>()) {
@@ -64,6 +70,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _displayName = name;
         _bio = b;
         _totalRuns = totalRuns;
+        _avatarPath = ap;
       });
     }
   }
@@ -137,17 +144,28 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ],
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(3),
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                    ),
-                    child: const Icon(
-                      Icons.person_rounded,
-                      size: 36,
-                      color: LiquidTheme.primary,
+                child: GestureDetector(
+                  onTap: _pickAvatar,
+                  child: Padding(
+                    padding: const EdgeInsets.all(3),
+                    child: Container(
+                      width: 72,
+                      height: 72,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: _avatarPath != null && File(_avatarPath!).existsSync()
+                          ? Image.file(
+                              File(_avatarPath!),
+                              fit: BoxFit.cover,
+                            )
+                          : const Icon(
+                              Icons.person_rounded,
+                              size: 36,
+                              color: LiquidTheme.primary,
+                            ),
                     ),
                   ),
                 ),
@@ -809,6 +827,22 @@ class _ProfilePageState extends State<ProfilePage> {
         }).toList(),
       ),
     );
+  }
+
+  Future<void> _pickAvatar() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (pickedFile != null) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final extension = p.extension(pickedFile.path);
+      final filename = 'avatar_${DateTime.now().millisecondsSinceEpoch}$extension';
+      final savedImage = await File(pickedFile.path).copy('${appDir.path}/$filename');
+      
+      await GetIt.I<UserPreferencesService>().setAvatarPath(savedImage.path);
+      if (mounted) {
+        setState(() => _avatarPath = savedImage.path);
+      }
+    }
   }
 }
 
