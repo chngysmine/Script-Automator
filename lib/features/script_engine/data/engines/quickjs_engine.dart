@@ -45,6 +45,7 @@ class QuickJSEngine implements JSEngine {
     if (_rt == nullptr) {
       throw JSEngineException('Failed to create QuickJS Runtime');
     }
+    _lib.ScriptEngineAttachInterruptHandler(_rt!);
     _ctx = _lib.JS_NewContext(_rt!);
     if (_ctx == nullptr) {
       throw JSEngineException('Failed to create QuickJS Context');
@@ -74,9 +75,15 @@ class QuickJSEngine implements JSEngine {
           .cast<Char>();
       final byteLen = (scriptPtr as Pointer<Utf8>).length;
 
+      _lib.ScriptEngineClearInterruptRequest();
       final val = _lib.JS_Eval(_ctx!, scriptPtr, byteLen, filenamePtr, 0);
 
       try {
+        if (_lib.JS_IsException(val) != 0) {
+          throw JSEngineException(
+            'JavaScript evaluation aborted (interrupt/error).',
+          );
+        }
         return _jsValueToDart(val);
       } finally {
         _lib.JS_FreeValue(_ctx!, val);
@@ -266,6 +273,8 @@ class QuickJSEngine implements JSEngine {
 
     // Clear registry if needed (or scoped to engine)
     HostObjectRegistry().clear();
+
+    _lib.ScriptEngineClearInterruptRequest();
 
     if (_ctx != nullptr) {
       _lib.JS_FreeContext(_ctx!);

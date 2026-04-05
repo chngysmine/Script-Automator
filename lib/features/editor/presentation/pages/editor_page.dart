@@ -4,7 +4,7 @@ import 'dart:async'; // StreamSubscription
 import 'package:get_it/get_it.dart';
 import '../../../../features/script_engine/domain/script_runner_service.dart';
 import '../../domain/code_forge_controller.dart';
-import '../../../../features/ai_integration/data/services/gemini_service.dart';
+import '../../../../features/ai_integration/data/services/openai_service.dart';
 import '../../../../features/ai_integration/data/services/ollama_service.dart'; // Import OllamaService
 import '../painters/viewport_aware_painter.dart';
 import '../widgets/keyboard_toolbar.dart';
@@ -926,9 +926,9 @@ class _EditorPageState extends State<EditorPage>
                 TextButton(
                   onPressed: () async {
                     Navigator.pop(context);
-                    await _showApiKeyDialog(context);
+                    await _showOpenAiApiKeyDialog(context);
                   },
-                  child: const Text("Use My Own Key"),
+                  child: const Text("Add OpenAI API Key"),
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
@@ -1000,26 +1000,28 @@ class _EditorPageState extends State<EditorPage>
     );
   }
 
-  Future<void> _showApiKeyDialog(BuildContext context) async {
+  Future<void> _showOpenAiApiKeyDialog(BuildContext context) async {
     final textController = TextEditingController();
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Enter Gemini API Key"),
+        title: const Text("OpenAI API Key"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              "To use AI features, please provide a valid Google Gemini API Key from aistudio.google.com.",
+              "Ghost completion uses OpenAI via dart_openai (chat completions). "
+              "Paste your key from platform.openai.com. Gemini is optional — set it in Settings.",
               style: TextStyle(fontSize: 13, color: Colors.grey),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: textController,
+              obscureText: true,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
                 labelText: "API Key",
-                hintText: "AIzaSy...",
+                hintText: "sk-...",
               ),
             ),
           ],
@@ -1032,13 +1034,13 @@ class _EditorPageState extends State<EditorPage>
           ElevatedButton(
             onPressed: () async {
               if (textController.text.isNotEmpty) {
-                await GetIt.I<GeminiService>().setApiKey(
+                await GetIt.I<OpenAIService>().setApiKey(
                   textController.text.trim(),
                 );
                 if (context.mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("API Key Saved!")),
+                    const SnackBar(content: Text("OpenAI key saved")),
                   );
                 }
               }

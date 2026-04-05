@@ -344,6 +344,69 @@ class _ExplorePageState extends State<ExplorePage> {
     }).toList();
   }
 
+  /// Cover from [coverUrl] when present; otherwise category gradient + icon.
+  Widget _buildScriptCoverThumbnail(
+    String coverUrl,
+    IconData icon,
+    Color color,
+  ) {
+    if (coverUrl.isEmpty) {
+      return _categoryCoverPlaceholder(icon, color);
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: Image.network(
+          coverUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) =>
+              _categoryCoverPlaceholder(icon, color),
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    color.withValues(alpha: 0.2),
+                    color.withValues(alpha: 0.05),
+                  ],
+                ),
+              ),
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: color.withValues(alpha: 0.85),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _categoryCoverPlaceholder(IconData icon, Color color) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            color.withValues(alpha: 0.2),
+            color.withValues(alpha: 0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, color: color, size: 22),
+    );
+  }
+
   Widget _buildCategoryChip(String label, bool isSelected) {
     return GestureDetector(
       onTap: () {
@@ -402,6 +465,7 @@ class _ExplorePageState extends State<ExplorePage> {
       final category = s['category'] ?? 'Utilities';
       final icon = _categoryIcons[category] ?? Icons.extension_rounded;
       final color = _categoryColors[category] ?? LiquidTheme.primary;
+      final coverUrl = (s['coverUrl'] ?? '').trim();
 
       return Container(
         margin: const EdgeInsets.only(bottom: 10),
@@ -413,20 +477,7 @@ class _ExplorePageState extends State<ExplorePage> {
         ),
         child: Row(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    color.withValues(alpha: 0.2),
-                    color.withValues(alpha: 0.05),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 22),
-            ),
+            _buildScriptCoverThumbnail(coverUrl, icon, color),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

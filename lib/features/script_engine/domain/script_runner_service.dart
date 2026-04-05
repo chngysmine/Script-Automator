@@ -20,6 +20,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:get_it/get_it.dart';
 
 import 'package:script_automator/features/script_engine/domain/system_api_handler.dart';
+import 'package:script_automator/features/script_engine/native_bridge/script_engine_interrupt_ffi.dart';
 
 /// Service responsible for managing the background Isolate and the JS Engine lifecycle.
 class ScriptRunnerService {
@@ -43,6 +44,11 @@ class ScriptRunnerService {
   Stream<String> get renderRequests => _renderController.stream;
 
   Completer<void>? _initCompleter;
+
+  /// Completes when the engine isolate acknowledges native [JSEngine.destroy].
+  Completer<void>? _engineShutdownCompleter;
+
+  static const _shutdownAckTimeout = Duration(seconds: 2);
 
   /// Initializes the service by spawning a background isolate.
   Future<void> initialize() async {
@@ -95,6 +101,7 @@ class ScriptRunnerService {
       _engineIsolate = null;
       _toEnginePort = null;
       _initCompleter = null;
+      _engineShutdownCompleter = null;
 
       print("Supervisor: Attempting to restart service...");
       initialize()
@@ -112,8 +119,10 @@ class ScriptRunnerService {
 
   /// Sends a script to the background isolate for evaluation.
   ///
-  /// If the script does not complete within [_evalTimeout], the isolate
-  /// is killed and the supervisor will automatically restart it.
+  /// If the script does not complete within [_evalTimeout], native QuickJS
+  /// interrupt is raised (Android), then a cooperative shutdown runs before
+  /// any isolate [kill]. On iOS (JSC), interrupt is unavailable — see
+  /// [signalQuickJsInterruptFromProcess].
   Future<void> runScript(String script, String scriptId) async {
     if (_engineIsolate == null) await initialize();
 
@@ -144,10 +153,20 @@ class ScriptRunnerService {
       _logController.add(
         '[Error] Script evaluation timed out after ${_evalTimeout.inSeconds}s. Restarting engine...',
       );
-      // Request graceful shutdown to allow engine.destroy() cleanup before kill.
-      // This prevents native memory leaks (QuickJS runtime / JSC context).
+      // Unblock QuickJS when stuck in JS_Eval (Dart ReceivePort cannot run until FFI returns).
+      signalQuickJsInterruptFromProcess();
+      await Future.delayed(const Duration(milliseconds: 400));
+      // Cooperative shutdown: wait for native destroy() to finish before kill.
+      _engineShutdownCompleter = Completer<void>();
       _toEnginePort?.send({'command': 'shutdown'});
-      await Future.delayed(const Duration(milliseconds: 200));
+      try {
+        await _engineShutdownCompleter!.future.timeout(_shutdownAckTimeout);
+      } on TimeoutException {
+        _logController.add(
+          '[Warning] Engine shutdown ack timed out; forcing isolate termination.',
+        );
+      }
+      _engineShutdownCompleter = null;
       _engineIsolate?.kill(priority: Isolate.immediate);
       _engineIsolate = null;
       _toEnginePort = null;
@@ -438,7 +457,11 @@ class ScriptRunnerService {
           }
         } else if (command == 'shutdown') {
           logger.info("Shutdown command received — destroying engine");
-          engine.destroy();
+          try {
+            engine.destroy();
+          } finally {
+            mainSendPort.send({'type': 'shutdown_ack'});
+          }
         }
       }
     });
@@ -483,6 +506,13 @@ class ScriptRunnerService {
       }
     } else if (message is Map) {
       final type = message['type'];
+      if (type == 'shutdown_ack') {
+        final c = _engineShutdownCompleter;
+        if (c != null && !c.isCompleted) {
+          c.complete();
+        }
+        return;
+      }
       print("Main Isolate received sys_message: $type");
       if (type == 'sys_render') {
         _handleRenderRequest(message['payload'], message['family'], message['scriptId']);
@@ -598,8 +628,19 @@ class ScriptRunnerService {
   /// Disposes the service, gracefully shuts down the engine, and kills the isolate.
   void dispose() {
     _isDisposed = true;
+    _engineShutdownCompleter = Completer<void>();
     _toEnginePort?.send({'command': 'shutdown'});
-    _engineIsolate?.kill();
+    unawaited(_disposeAfterShutdownAck());
+  }
+
+  Future<void> _disposeAfterShutdownAck() async {
+    try {
+      await _engineShutdownCompleter?.future.timeout(_shutdownAckTimeout);
+    } on TimeoutException {
+      // proceed to kill
+    }
+    _engineShutdownCompleter = null;
+    _engineIsolate?.kill(priority: Isolate.immediate);
     _engineIsolate = null;
     _toEnginePort = null;
 

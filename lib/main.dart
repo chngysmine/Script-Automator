@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
-import 'package:hive_ce_flutter/hive_flutter.dart';
+import 'package:hive_ce_flutter/adapters.dart';
+import 'core/storage/app_storage_paths.dart';
 import 'core/theme/liquid_theme.dart';
 import 'features/dashboard/presentation/pages/liquid_splash_page.dart';
 import 'features/script_management/domain/repositories/script_repository.dart';
@@ -14,6 +17,7 @@ import 'features/widget_renderer/domain/services/headless_widget_rendering_servi
 import 'features/widget_renderer/data/services/widget_registry_service.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:script_automator/core/security/app_secure_storage.dart';
 import 'features/ai_integration/data/services/gemini_service.dart';
 import 'features/ai_integration/data/services/ollama_service.dart';
 import 'features/dashboard/data/repositories/cloud_gallery_repository.dart';
@@ -29,8 +33,18 @@ void main() async {
 }
 
 Future<void> _setupDI() async {
-  // Phase 2: Data Layer (Production)
-  await Hive.initFlutter();
+  // Phase 2: Data Layer — Hive root matches App Group on iOS when available
+  // (see [AppStoragePaths.hiveRootDirectory]); mirrors [Hive.initFlutter] adapters.
+  final hiveDir = await AppStoragePaths.hiveRootDirectory();
+  Hive.init(hiveDir.path);
+  final colorAdapter = ColorAdapter();
+  if (!Hive.isAdapterRegistered(colorAdapter.typeId)) {
+    Hive.registerAdapter(colorAdapter);
+  }
+  final todAdapter = TimeOfDayAdapter();
+  if (!Hive.isAdapterRegistered(todAdapter.typeId)) {
+    Hive.registerAdapter(todAdapter);
+  }
   Hive.registerAdapter(ScriptModelAdapter());
 
   final encryptionService = EncryptionService();
@@ -48,7 +62,7 @@ Future<void> _setupDI() async {
 
   // Register Encryption/SecureStorage for AI Service
   if (!GetIt.I.isRegistered<FlutterSecureStorage>()) {
-    GetIt.I.registerLazySingleton(() => const FlutterSecureStorage());
+    GetIt.I.registerLazySingleton(AppSecureStorage.create);
   }
 
   // Phase 3: Widget Registry (SQLite)
@@ -149,7 +163,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         state == AppLifecycleState.detached) {
       // Flush safely to the persistent storage to prevent data loss on OS kill
       if (GetIt.I.isRegistered<ScriptLocalDataSource>()) {
-        GetIt.I<ScriptLocalDataSource>().flushData();
+        unawaited(GetIt.I<ScriptLocalDataSource>().flushData());
       }
     }
   }

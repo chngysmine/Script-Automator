@@ -1,5 +1,6 @@
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:script_automator/core/security/app_secure_storage.dart';
 
 class GeminiService {
   final FlutterSecureStorage _secureStorage;
@@ -10,7 +11,10 @@ class GeminiService {
   GeminiService(this._secureStorage);
 
   Future<void> initialize() async {
-    final apiKey = await _secureStorage.read(key: _kApiKeyKey);
+    final apiKey = await AppSecureStorage.readMigratingLegacy(
+      _secureStorage,
+      _kApiKeyKey,
+    );
     if (apiKey != null && apiKey.isNotEmpty) {
       _initModel(apiKey);
     }
@@ -31,7 +35,11 @@ class GeminiService {
   }
 
   Future<bool> hasCustomApiKey() async {
-    return (await _secureStorage.read(key: _kApiKeyKey)) != null;
+    return (await AppSecureStorage.readMigratingLegacy(
+          _secureStorage,
+          _kApiKeyKey,
+        )) !=
+        null;
   }
 
   /// Generates a full script based on a natural language prompt

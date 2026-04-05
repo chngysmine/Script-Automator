@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
@@ -392,10 +393,18 @@ class _GalleryPageState extends State<GalleryPage> {
   // --- Components ---
 
   Widget _buildBentoCardFromMap(Map<String, String> item, BentoSize size) {
+    final embedded = item['content'] ?? '';
+    final scriptUrl = item['scriptUrl'] ?? '';
+    final previewContent = embedded.isNotEmpty
+        ? embedded
+        : (scriptUrl.isNotEmpty
+            ? '// Remote script (gallery)\n// Tap card → Install to download'
+            : '');
+
     final displayScript = Script(
       id: item['id'] ?? 'unknown',
       name: item['name'] ?? 'Unknown Script',
-      content: item['scriptUrl'] ?? '', // Content is empty initially
+      content: previewContent,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -741,19 +750,77 @@ class _GalleryPageState extends State<GalleryPage> {
     BuildContext context,
     Map<String, String> item,
   ) async {
-    final repo = GetIt.I<ScriptRepository>();
-    final script = Script(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: item['name']!,
-      content: item['content']!,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-    await repo.saveScript(script);
+    final name = item['name'] ?? 'Untitled';
+    final existingContent = item['content'] ?? '';
+    final scriptUrl = item['scriptUrl'] ?? '';
+
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Installed ${item['name']}"),
+          content: Text("Installing $name..."),
+          backgroundColor: LiquidTheme.primary,
+          duration: const Duration(seconds: 10),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
+    String finalContent = existingContent;
+
+    if (finalContent.isEmpty && scriptUrl.isNotEmpty) {
+      try {
+        final response = await http
+            .get(Uri.parse(scriptUrl))
+            .timeout(const Duration(seconds: 15));
+        if (response.statusCode == 200) {
+          finalContent = response.body;
+        } else {
+          throw Exception('HTTP ${response.statusCode}');
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Failed to download $name: $e"),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    if (finalContent.isEmpty) {
+      finalContent =
+          '// $name\n// Installed from Gallery\n\n// Script content not available offline.';
+    }
+
+    final galleryId =
+        item['id'] ?? name.toLowerCase().replaceAll(' ', '_');
+    final galleryVersion = item['version'] ?? '1.0.0';
+
+    final repo = GetIt.I<ScriptRepository>();
+    final script = Script(
+      id: 'gallery_${name.toLowerCase().replaceAll(' ', '_')}',
+      name: name,
+      content: finalContent,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      settings: {
+        'gallery_id': galleryId,
+        'gallery_version': galleryVersion,
+        'gallery_script_url': scriptUrl,
+      },
+    );
+    await repo.saveScript(script);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Installed $name"),
           behavior: SnackBarBehavior.floating,
           backgroundColor: LiquidTheme.primary,
         ),

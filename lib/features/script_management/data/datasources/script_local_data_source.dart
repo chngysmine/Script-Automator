@@ -201,10 +201,10 @@ class ScriptLocalDataSourceImpl implements ScriptLocalDataSource {
     return _saveLock.synchronized(() async {
       try {
         if (_metadataBox != null && _metadataBox!.isOpen) {
-          await _metadataBox!.compact();
+          await _metadataBox!.flush();
         }
         if (_contentBox != null && _contentBox!.isOpen) {
-          await _contentBox!.compact();
+          await _contentBox!.flush();
         }
       } catch (e) {
         // Log gracefully during background

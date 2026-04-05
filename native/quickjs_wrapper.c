@@ -11,6 +11,33 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* -------------------------------------------------------------------------- */
+/* Cooperative interrupt: polled inside QuickJS bytecode loop (not Dart port). */
+/* Main isolate sets the flag via FFI while the engine isolate is inside       */
+/* JS_Eval — the handler runs on-thread and throws "interrupted".              */
+/* -------------------------------------------------------------------------- */
+
+static volatile int g_script_engine_interrupt_requested;
+
+static int script_engine_interrupt_cb(JSRuntime *rt, void *opaque) {
+  (void)rt;
+  (void)opaque;
+  return g_script_engine_interrupt_requested ? 1 : 0;
+}
+
+void ScriptEngine_AttachInterruptHandler(JSRuntime *rt) {
+  g_script_engine_interrupt_requested = 0;
+  JS_SetInterruptHandler(rt, script_engine_interrupt_cb, NULL);
+}
+
+void ScriptEngine_RequestInterrupt(void) { g_script_engine_interrupt_requested = 1; }
+
+void ScriptEngine_ClearInterruptRequest(void) {
+  g_script_engine_interrupt_requested = 0;
+}
+
+int JS_IsException_Wrapper(JSValueConst v) { return JS_IsException(v); }
+
 // Wrapper for inline functions that FFI cannot generate bindings for directly.
 
 JSValue JS_NewInt32_Wrapper(JSContext *ctx, int32_t val) {

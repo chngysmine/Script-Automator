@@ -51,3 +51,6 @@ app.*.map.json
 
 # Agent
 .agent/rules
+
+# Local secrets (see .env.example — prefer dart-define, not a committed .env)
+.env

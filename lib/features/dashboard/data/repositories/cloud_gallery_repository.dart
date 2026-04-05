@@ -43,6 +43,16 @@ class CloudGalleryRepository implements GalleryRepository {
   /// Parses the raw JSON index into the flat map format expected by the UI.
   List<Map<String, String>> _parseIndex(List<dynamic> data) {
     return data.map<Map<String, String>>((item) {
+      var coverUrl = '';
+      final shots = item['screenshots'];
+      if (shots is List) {
+        for (final s in shots) {
+          if (s is String && s.trim().isNotEmpty) {
+            coverUrl = s.trim();
+            break;
+          }
+        }
+      }
       return {
         'id': (item['id'] ?? '') as String,
         'name': (item['name'] ?? '') as String,
@@ -53,6 +63,7 @@ class CloudGalleryRepository implements GalleryRepository {
         'icon': (item['icon'] ?? 'gear') as String,
         'isFeatured': (item['isFeatured'] == true).toString(),
         'scriptUrl': (item['scriptUrl'] ?? '') as String,
+        'coverUrl': coverUrl,
       };
     }).toList();
   }
@@ -70,9 +81,11 @@ class CloudGalleryRepository implements GalleryRepository {
         'author': 'Antigravity',
         'category': 'Weather',
         'version': '2.0.1',
+        'icon': 'cloud.sun.fill',
         'isFeatured': 'true',
         'content': _kWeatherScript, // Embedded fallback
         'scriptUrl': '',
+        'coverUrl': '',
       },
       {
         'id': 'crypto_portfolio_tracker',
@@ -81,9 +94,11 @@ class CloudGalleryRepository implements GalleryRepository {
         'author': 'CryptoDevs',
         'category': 'Finance',
         'version': '1.0.0',
+        'icon': 'bitcoinsign.circle.fill',
         'isFeatured': 'false',
         'content': _kCryptoScript, // Embedded fallback
         'scriptUrl': '',
+        'coverUrl': '',
       },
       {
         'id': 'system_monitor',
@@ -92,9 +107,11 @@ class CloudGalleryRepository implements GalleryRepository {
         'author': 'Antigravity',
         'category': 'Utilities',
         'version': '1.5.0',
+        'icon': 'gear',
         'isFeatured': 'false',
         'content': _kSystemScript, // Embedded fallback
         'scriptUrl': '',
+        'coverUrl': '',
       },
     ];
   }

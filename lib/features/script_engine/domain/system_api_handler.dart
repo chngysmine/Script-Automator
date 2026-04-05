@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:script_automator/core/security/app_secure_storage.dart';
 
 /// Handles System API requests dispatched from the JS Engine Isolate.
 ///
@@ -159,7 +159,7 @@ class SystemAPIHandler {
       }
 
       final namespacedKey = 'script_${activeScriptId ?? 'unknown'}.$rawKey';
-      const storage = FlutterSecureStorage();
+      final storage = AppSecureStorage.create();
 
       switch (action) {
         case 'set':

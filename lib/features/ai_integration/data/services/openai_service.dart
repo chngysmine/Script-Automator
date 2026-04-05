@@ -1,9 +1,14 @@
 import 'package:dart_openai/dart_openai.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:script_automator/core/config/build_secrets.dart';
+import 'package:script_automator/core/security/app_secure_storage.dart';
 
 /// Service responsible for communicating with OpenAI's API.
 /// Uses the [dart_openai] package for native Dart bindings.
+///
+/// Key resolution order: secure storage (user) → `--dart-define=OPENAI_API_KEY=…`
+/// (see [BuildSecrets]). Do not commit real keys; use defines or in-app settings.
 class OpenAIService {
   static const String _storageKey = 'openai_api_key';
   
@@ -33,15 +38,27 @@ class OpenAIService {
   /// @return `Future<void>`
   Future<void> initialize() async {
     try {
-      final key = await _secureStorage.read(key: _storageKey);
-      if (key != null && key.isNotEmpty) {
-        OpenAI.apiKey = key;
+      final stored = await AppSecureStorage.readMigratingLegacy(
+        _secureStorage,
+        _storageKey,
+      );
+      if (stored != null && stored.isNotEmpty) {
+        OpenAI.apiKey = stored;
         _isConfigured = true;
-        debugPrint("[OpenAIService] Successfully initialized with stored key.");
-      } else {
-        _isConfigured = false;
-        debugPrint("[OpenAIService] No stored API key found.");
+        debugPrint("[OpenAIService] Initialized from secure storage.");
+        return;
       }
+
+      final fromBuild = BuildSecrets.openAiApiKey.trim();
+      if (fromBuild.isNotEmpty) {
+        OpenAI.apiKey = fromBuild;
+        _isConfigured = true;
+        debugPrint("[OpenAIService] Initialized from OPENAI_API_KEY dart-define.");
+        return;
+      }
+
+      _isConfigured = false;
+      debugPrint("[OpenAIService] No API key (secure storage or dart-define).");
     } catch (e) {
       _isConfigured = false;
       debugPrint("[OpenAIService] Error initializing: $e");
@@ -52,7 +69,10 @@ class OpenAIService {
   /// @return `Future<bool>` True if key exists
   Future<bool> hasCustomApiKey() async {
     try {
-      final key = await _secureStorage.read(key: _storageKey);
+      final key = await AppSecureStorage.readMigratingLegacy(
+        _secureStorage,
+        _storageKey,
+      );
       return key != null && key.isNotEmpty;
     } catch (e) {
       return false;

@@ -136,6 +136,20 @@ typedef CreateJSValueRef_C =
 typedef CreateJSValueRef_Dart =
     Pointer<JSValueRef> Function(Pointer<JSContext>, JSValue);
 
+typedef ScriptEngineAttachInterruptHandler_C =
+    Void Function(Pointer<JSRuntime>);
+typedef ScriptEngineAttachInterruptHandler_Dart =
+    void Function(Pointer<JSRuntime>);
+
+typedef ScriptEngineRequestInterrupt_C = Void Function();
+typedef ScriptEngineRequestInterrupt_Dart = void Function();
+
+typedef ScriptEngineClearInterruptRequest_C = Void Function();
+typedef ScriptEngineClearInterruptRequest_Dart = void Function();
+
+typedef JS_IsException_Wrapper_C = Int32 Function(JSValue);
+typedef JS_IsException_Wrapper_Dart = int Function(JSValue);
+
 /// FFI Bindings for the QuickJS Library.
 class QuickJSBindings {
   final DynamicLibrary _dylib;
@@ -162,6 +176,12 @@ class QuickJSBindings {
   late final JS_JSONStringify_Wrapper_Dart JS_JSONStringify;
   late final JS_FreeCString_Dart JS_FreeCString;
   late final CreateJSValueRef_Dart CreateJSValueRef;
+  late final ScriptEngineAttachInterruptHandler_Dart
+  ScriptEngineAttachInterruptHandler;
+  late final ScriptEngineRequestInterrupt_Dart ScriptEngineRequestInterrupt;
+  late final ScriptEngineClearInterruptRequest_Dart
+  ScriptEngineClearInterruptRequest;
+  late final JS_IsException_Wrapper_Dart JS_IsException;
   late final Pointer<NativeFunction<Void Function(Pointer<Void>)>>
   addresses_FinalizeJSValue;
 
@@ -250,6 +270,18 @@ class QuickJSBindings {
         .lookupFunction<CreateJSValueRef_C, CreateJSValueRef_Dart>(
           'CreateJSValueRef',
         );
+    ScriptEngineAttachInterruptHandler = _dylib.lookupFunction<
+        ScriptEngineAttachInterruptHandler_C,
+        ScriptEngineAttachInterruptHandler_Dart>('ScriptEngine_AttachInterruptHandler');
+    ScriptEngineRequestInterrupt = _dylib.lookupFunction<
+        ScriptEngineRequestInterrupt_C,
+        ScriptEngineRequestInterrupt_Dart>('ScriptEngine_RequestInterrupt');
+    ScriptEngineClearInterruptRequest = _dylib.lookupFunction<
+        ScriptEngineClearInterruptRequest_C,
+        ScriptEngineClearInterruptRequest_Dart>('ScriptEngine_ClearInterruptRequest');
+    JS_IsException = _dylib.lookupFunction<
+        JS_IsException_Wrapper_C,
+        JS_IsException_Wrapper_Dart>('JS_IsException_Wrapper');
     addresses_FinalizeJSValue = _dylib.lookup('FinalizeJSValue');
   }
 }

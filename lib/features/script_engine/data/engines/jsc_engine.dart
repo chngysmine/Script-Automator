@@ -7,6 +7,9 @@ import '../../native_bridge/ffi_jsc_bindings.dart';
 import '../../domain/host_object_registry.dart';
 import '../../domain/js_engine_exception.dart';
 
+/// JavaScriptCore on iOS. There is no equivalent to QuickJS
+/// [JS_SetInterruptHandler]; a tight `while(true){}` can block
+/// [evaluate] until the outer Dart timeout [Isolate.kill]s the engine isolate.
 class JSCEngine implements JSEngine, Finalizable {
   late JSCBindings _lib;
   Pointer<JSGlobalContext>? _ctx;

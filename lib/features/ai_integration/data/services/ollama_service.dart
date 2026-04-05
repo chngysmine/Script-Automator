@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:script_automator/core/security/app_secure_storage.dart';
 
 class OllamaService {
   final FlutterSecureStorage _secureStorage;
@@ -18,8 +19,14 @@ class OllamaService {
   OllamaService(this._secureStorage);
 
   Future<void> initialize() async {
-    final savedUrl = await _secureStorage.read(key: _kBaseUrlKey);
-    final savedModel = await _secureStorage.read(key: _kModelKey);
+    final savedUrl = await AppSecureStorage.readMigratingLegacy(
+      _secureStorage,
+      _kBaseUrlKey,
+    );
+    final savedModel = await AppSecureStorage.readMigratingLegacy(
+      _secureStorage,
+      _kModelKey,
+    );
     if (savedUrl != null) _baseUrl = savedUrl;
     if (savedModel != null) _model = savedModel;
   }
