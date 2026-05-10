@@ -16,9 +16,9 @@ import 'package:path_provider/path_provider.dart';
 class AppStoragePaths {
   AppStoragePaths._();
 
-  static const String _appGroupId = 'group.com.antigravity.script_automator';
+  static const String _appGroupId = 'group.com.js.scriptAutomator';
   static const MethodChannel _channel = MethodChannel(
-    'com.antigravity.script_automator/widget',
+    'com.js.scriptAutomator/widget',
   );
 
   /// Subdirectory inside the App Group for Hive files (keeps them separate

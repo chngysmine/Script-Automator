@@ -7,9 +7,7 @@ import 'package:script_automator/features/dashboard/presentation/pages/dashboard
 import 'package:script_automator/features/dashboard/presentation/pages/explore_page.dart';
 import 'package:script_automator/features/dashboard/presentation/pages/gallery_page.dart';
 import 'package:script_automator/features/dashboard/presentation/pages/profile_page.dart';
-import 'package:script_automator/features/dashboard/presentation/pages/notification_page.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_dock.dart';
-import 'package:script_automator/features/dashboard/presentation/widgets/glass_drawer.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/new_script_dialog.dart';
 
 import 'package:get_it/get_it.dart';
@@ -19,8 +17,10 @@ import 'package:script_automator/features/editor/presentation/pages/editor_page.
 
 /// The global navigation shell for the application.
 ///
-/// Ensures the [GlassDock] and [GlassDrawer] are persistent across all main
+/// Ensures the [GlassDock] is persistent across all main
 /// tabs: Dashboard, Explore, Gallery, and Profile.
+/// Navigation is handled exclusively by the bottom dock — sidebar/drawer
+/// has been removed in favor of header-level Settings/Notification buttons.
 class AppShell extends StatefulWidget {
   final int initialIndex;
 
@@ -32,7 +32,6 @@ class AppShell extends StatefulWidget {
 
 class AppShellState extends State<AppShell> {
   late int _navIndex;
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final ScriptRepository _repository = GetIt.I<ScriptRepository>();
 
   @override
@@ -44,11 +43,6 @@ class AppShellState extends State<AppShell> {
   /// Navigates to a specific tab index from anywhere in the shell.
   void setNavIndex(int index) {
     setState(() => _navIndex = index);
-  }
-
-  /// Opens the side drawer.
-  void openDrawer() {
-    _scaffoldKey.currentState?.openDrawer();
   }
 
   /// Creates a new script and opens the editor.
@@ -81,25 +75,9 @@ class AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: _scaffoldKey,
       extendBodyBehindAppBar: true,
       extendBody: true,
       backgroundColor: LiquidTheme.darkBackground,
-
-      drawer: GlassDrawer(
-        currentNavIndex: _navIndex,
-        onNavigate: (index) {
-          Navigator.pop(context);
-          if (index == 5) {
-            Navigator.push(
-              context,
-              LiquidPageRoute(page: const NotificationPage()),
-            );
-          } else {
-            setState(() => _navIndex = index);
-          }
-        },
-      ),
 
       body: Stack(
         children: [
@@ -134,9 +112,8 @@ class AppShellState extends State<AppShell> {
   Widget _buildBodyContent() {
     switch (_navIndex) {
       case 0:
-        return LiquidDashboardPage(
-          key: const ValueKey('dashboard'),
-          onMenuTap: openDrawer,
+        return const LiquidDashboardPage(
+          key: ValueKey('dashboard'),
         );
       case 1:
         return const ExplorePage(key: ValueKey('explore'));
@@ -145,9 +122,8 @@ class AppShellState extends State<AppShell> {
       case 4:
         return const ProfilePage(key: ValueKey('profile'));
       default:
-        return LiquidDashboardPage(
-          key: const ValueKey('dashboard_fallback'),
-          onMenuTap: openDrawer,
+        return const LiquidDashboardPage(
+          key: ValueKey('dashboard_fallback'),
         );
     }
   }

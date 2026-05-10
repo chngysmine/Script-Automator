@@ -1,4 +1,4 @@
-package com.antigravity.script_automator
+package com.js.scriptAutomator
 
 import android.content.Context
 import androidx.compose.runtime.Composable

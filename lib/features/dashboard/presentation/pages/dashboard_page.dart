@@ -3,21 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
+import 'package:script_automator/core/ui/glass_sliver_header.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
-import 'package:script_automator/features/editor/presentation/pages/editor_page.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/staggered_script_grid.dart';
-import 'package:script_automator/core/theme/liquid_page_route.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/liquid_search_bar.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_header_actions.dart';
 import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/script_preview_sheet.dart';
 
 /// The main dashboard view containing the user's scripts and header.
 /// Now embedded within [AppShell], stripped of its own Scaffold/Drawer/Dock.
 class LiquidDashboardPage extends StatefulWidget {
-  final VoidCallback onMenuTap;
-
-  const LiquidDashboardPage({super.key, required this.onMenuTap});
+  const LiquidDashboardPage({super.key});
 
   @override
   State<LiquidDashboardPage> createState() => _LiquidDashboardPageState();
@@ -55,19 +54,86 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Return just the scroll view, background and navigation are handled by AppShell
+    final topPadding = MediaQuery.of(context).padding.top;
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+
     return CustomScrollView(
       physics: const BouncingScrollPhysics(
         parent: AlwaysScrollableScrollPhysics(),
       ),
       slivers: [
-        _buildSliverAppBar(),
+        // ── Pinned Glass Header (fixed, NO collapse) ──
         SliverPersistentHeader(
           pinned: true,
-          delegate: _GlassSearchHeaderDelegate(),
+          delegate: GlassSliverHeaderDelegate(
+            height: topPadding + 90,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _greeting,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: colors.textCaption,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          ShaderMask(
+                            shaderCallback: (bounds) => LiquidTheme
+                                .brandDarkGradient
+                                .createShader(bounds),
+                            blendMode: BlendMode.srcIn,
+                            child: const Text(
+                              "CodeForge",
+                              style: TextStyle(
+                                fontSize: 30,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -1.5,
+                                height: 1.1,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Glass Buttons Group
+                    StreamBuilder<int>(
+                      stream: GetIt.I<NotificationService>().unreadCount,
+                      builder: (context, snapshot) {
+                        final unread = snapshot.data ?? 0;
+                        return GlassHeaderActions(
+                          hasNotificationBadge: unread > 0,
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
+
+        // ── Search Bar (scrollable, NOT pinned) ──
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: const LiquidSearchBar(),
+          ),
+        ),
+
+        // ── Script Grid ──
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
           sliver: SliverToBoxAdapter(
             child: _isLoading
                 ? const Center(
@@ -79,7 +145,7 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
                 : AnimationLimiter(
                     child: StaggeredScriptGrid(
                       scripts: _scripts,
-                      onTap: _openEditor,
+                      onTap: _openPreview,
                     ),
                   ),
           ),
@@ -88,98 +154,15 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
     );
   }
 
-  Widget _buildSliverAppBar() {
-    return SliverToBoxAdapter(
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _greeting,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: LiquidTheme.textLight.withValues(alpha: 0.7),
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    ShaderMask(
-                      shaderCallback: (bounds) =>
-                          LiquidTheme.brandDarkGradient.createShader(bounds),
-                      blendMode: BlendMode.srcIn,
-                      child: const Text(
-                        "CodeForge",
-                        style: TextStyle(
-                          fontSize: 38,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -1.8,
-                          height: 1,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Glass Buttons Group
-              StreamBuilder<int>(
-                stream: GetIt.I<NotificationService>().unreadCount,
-                builder: (context, snapshot) {
-                  final unread = snapshot.data ?? 0;
-                  return GlassHeaderActions(
-                    onMenuTap: widget.onMenuTap,
-                    hasNotificationBadge: unread > 0,
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openEditor(Script script) {
-    Navigator.push(
+  void _openPreview(Script script) {
+    ScriptPreviewSheet.show(
       context,
-      LiquidPageRoute(page: EditorPage(script: script)),
+      script,
+      onDeleted: () {
+        if (mounted) _loadScripts();
+      },
     ).then((_) {
-      if (mounted) {
-        _loadScripts();
-      }
+      if (mounted) _loadScripts();
     });
   }
-}
-
-class _GlassSearchHeaderDelegate extends SliverPersistentHeaderDelegate {
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return Container(
-      height: maxExtent,
-      color: Colors.transparent, // Allow Aurora to show through
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      alignment: Alignment.center,
-      child: const LiquidSearchBar(),
-    );
-  }
-
-  @override
-  double get maxExtent => 80;
-  @override
-  double get minExtent => 80;
-  @override
-  bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) =>
-      false;
 }

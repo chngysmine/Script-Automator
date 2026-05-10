@@ -44,6 +44,9 @@ class ViewportAwarePainter extends CustomPainter {
   /// Optional syntax highlighter for token-based coloring.
   final SyntaxHighlighter? highlighter;
 
+  /// Whether the editor is in dark mode.
+  final bool isDark;
+
   /// Creates a [ViewportAwarePainter] bound to [controller].
   ///
   /// [codePaddingLeft] must match the TextField's left content padding
@@ -58,6 +61,7 @@ class ViewportAwarePainter extends CustomPainter {
     this.gutterWidth = 48.0,
     this.codePaddingLeft = 4.0,
     this.highlighter,
+    this.isDark = true,
   }) : super(repaint: controller);
 
   @override
@@ -83,7 +87,10 @@ class ViewportAwarePainter extends CustomPainter {
     // ----- 3. Gutter Background -----
     canvas.drawRect(
       Rect.fromLTWH(0, 0, gutterWidth, size.height),
-      Paint()..color = const Color(0xFF0D1117).withValues(alpha: 0.5), // Dark gutter
+      Paint()
+        ..color = isDark
+            ? const Color(0xFF0D1117).withValues(alpha: 0.5)
+            : const Color(0xFFE2E8F0).withValues(alpha: 0.5),
     );
 
     // Gutter right-edge separator
@@ -91,7 +98,9 @@ class ViewportAwarePainter extends CustomPainter {
       Offset(gutterWidth, 0),
       Offset(gutterWidth, size.height),
       Paint()
-        ..color = const Color(0xFF30363D).withValues(alpha: 0.8) // Subtle border
+        ..color = isDark
+            ? const Color(0xFF30363D).withValues(alpha: 0.8)
+            : const Color(0xFFCBD5E1).withValues(alpha: 0.6)
         ..strokeWidth = 0.5,
     );
 
@@ -105,7 +114,9 @@ class ViewportAwarePainter extends CustomPainter {
       final lineNumSpan = TextSpan(
         text: (i + 1).toString(),
         style: textStyle.copyWith(
-          color: const Color(0xFF6E7681), // GitHub Dark line numbers
+          color: isDark
+              ? const Color(0xFF6E7681) // GitHub Dark
+              : const Color(0xFF94A3B8), // Slate 400
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
@@ -172,6 +183,7 @@ class ViewportAwarePainter extends CustomPainter {
         oldDelegate.viewportHeight != viewportHeight ||
         oldDelegate.controller != controller ||
         oldDelegate.textStyle != textStyle ||
-        oldDelegate.highlighter != highlighter;
+        oldDelegate.highlighter != highlighter ||
+        oldDelegate.isDark != isDark;
   }
 }

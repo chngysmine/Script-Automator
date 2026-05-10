@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
 
 import 'package:flutter/services.dart';
 
@@ -22,12 +22,15 @@ class _GlassDockState extends State<GlassDock> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+
     return Container(
       height: 72,
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9), // Solid White (Layer 2)
+        color: colors.dockBackground,
         borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: colors.dockBorder, width: 0.5),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.1),
@@ -39,17 +42,22 @@ class _GlassDockState extends State<GlassDock> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildDockItem(Icons.grid_view_rounded, 0),
-          _buildDockItem(Icons.search_rounded, 1),
-          _buildDockItem(Icons.add_rounded, 2, isFab: true),
-          _buildDockItem(Icons.analytics_rounded, 3),
-          _buildDockItem(Icons.person_rounded, 4),
+          _buildDockItem(Icons.grid_view_rounded, 0, colors),
+          _buildDockItem(Icons.search_rounded, 1, colors),
+          _buildDockItem(Icons.add_rounded, 2, colors, isFab: true),
+          _buildDockItem(Icons.analytics_rounded, 3, colors),
+          _buildDockItem(Icons.person_rounded, 4, colors),
         ],
       ),
     );
   }
 
-  Widget _buildDockItem(IconData icon, int index, {bool isFab = false}) {
+  Widget _buildDockItem(
+    IconData icon,
+    int index,
+    LiquidColors colors, {
+    bool isFab = false,
+  }) {
     final isSelected = widget.selectedIndex == index;
 
     if (isFab) {
@@ -62,17 +70,17 @@ class _GlassDockState extends State<GlassDock> {
           width: 50,
           height: 50,
           decoration: BoxDecoration(
-            color: LiquidTheme.textDeep, // Standardized
+            color: colors.textTitle,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: LiquidTheme.textDeep.withValues(alpha: 0.4),
+                color: colors.textTitle.withValues(alpha: 0.4),
                 blurRadius: 15,
                 offset: const Offset(0, 8),
               ),
             ],
           ),
-          child: Icon(icon, color: Colors.white, size: 28),
+          child: Icon(icon, color: colors.dockBackground, size: 28),
         ),
       );
     }
@@ -93,7 +101,7 @@ class _GlassDockState extends State<GlassDock> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.transparent,
+            color: isSelected ? colors.cardBackground : Colors.transparent,
             borderRadius: BorderRadius.circular(16),
             boxShadow: isSelected
                 ? [
@@ -108,9 +116,8 @@ class _GlassDockState extends State<GlassDock> {
           child: Icon(
             icon,
             color: isSelected
-                ? LiquidTheme
-                      .textDeep // Standardized
-                : LiquidTheme.textLight, // Standardized
+                ? colors.dockItemActive
+                : colors.dockItemInactive,
             size: 26,
           ),
         ),

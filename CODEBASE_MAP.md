@@ -156,7 +156,7 @@ Script Execution:
 
 | ID | Severity | File | Line | Mô tả |
 |----|----------|------|------|--------|
-| BUG-01 | ✅ FIXED | `ScriptDatabase.swift` | 14 | App Group ID sai → Sửa thành `group.com.antigravity.script_automator` (Chunk 2) |
+| BUG-01 | ✅ FIXED | `ScriptDatabase.swift` | 14 | App Group ID sai → Sửa thành `group.com.js.scriptAutomator` (Chunk 2) |
 | BUG-02 | ✅ FIXED | `viewport_aware_painter.dart` | — | Syntax highlighting ENABLED + selection highlight (Chunk 1) |
 | BUG-03 | ✅ FIXED | `main.dart` | — | Thêm `WidgetsBindingObserver` để flush Hive khi background (Chunk 2) |
 | BUG-04 | ✅ FIXED | `gemini_service.dart` | 21 | Model `gemini-pro` deprecated (Chunk 5) |

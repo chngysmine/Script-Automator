@@ -167,6 +167,46 @@ class NotificationService {
     await _saveToDisk();
   }
 
+  /// Returns only unread notifications.
+  List<AppNotification> getUnread() {
+    return _notifications.where((n) => !n.isRead).toList();
+  }
+
+  /// Returns only read notifications.
+  List<AppNotification> getRead() {
+    return _notifications.where((n) => n.isRead).toList();
+  }
+
+  /// Groups notifications by relative date: "Today", "Yesterday", "This Week", "Earlier".
+  Map<String, List<AppNotification>> groupByDate(List<AppNotification> items) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final weekAgo = today.subtract(const Duration(days: 7));
+
+    final Map<String, List<AppNotification>> groups = {};
+
+    for (final n in items) {
+      final date = DateTime(n.timestamp.year, n.timestamp.month, n.timestamp.day);
+      String key;
+      if (date == today) {
+        key = 'Today';
+      } else if (date == yesterday) {
+        key = 'Yesterday';
+      } else if (date.isAfter(weekAgo)) {
+        key = 'This Week';
+      } else {
+        key = 'Earlier';
+      }
+      groups.putIfAbsent(key, () => []);
+      groups[key]!.add(n);
+    }
+    return groups;
+  }
+
+  /// Returns a snapshot of all current notifications.
+  List<AppNotification> get allNotifications => List.from(_notifications);
+
   /// Removes a notification by [id].
   Future<void> dismiss(String id) async {
     _notifications.removeWhere((n) => n.id == id);

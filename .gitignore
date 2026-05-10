@@ -54,3 +54,9 @@ app.*.map.json
 
 # Local secrets (see .env.example — prefer dart-define, not a committed .env)
 .env
+
+# Firebase Config
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+firebase.json

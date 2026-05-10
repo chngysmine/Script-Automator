@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:script_automator/core/ui/scale_button.dart';
 import 'dart:ui';
 
@@ -24,6 +25,21 @@ class EditorAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+
+    // Adaptive glass: dark → dark glass, light → frosted white glass
+    final glassColor = isDark
+        ? LiquidTheme.darkBackground.withValues(alpha: 0.65)
+        : Colors.white.withValues(alpha: 0.75);
+    final borderColor = isDark
+        ? Colors.white.withValues(alpha: 0.1)
+        : const Color(0xFFE2E8F0);
+    final titleColor = colors.textTitle;
+    final iconDefaultColor = isDark
+        ? const Color(0xFFE2E8F0)
+        : const Color(0xFF475569); // Slate 600
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: ClipRRect(
@@ -34,12 +50,12 @@ class EditorAppBar extends StatelessWidget {
             height: 56,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B).withValues(alpha: 0.65), // Dark Slate glass
+              color: glassColor,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              border: Border.all(color: borderColor),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
+                  color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.06),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -53,6 +69,7 @@ class EditorAppBar extends StatelessWidget {
                   Icons.arrow_back_ios_new_rounded,
                   onBack,
                   tooltip: "Back",
+                  iconColor: iconDefaultColor,
                 ),
                 Expanded(
                   child: Center(
@@ -63,8 +80,8 @@ class EditorAppBar extends StatelessWidget {
                           child: Text(
                             scriptName,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white, // Light text for dark mode
+                            style: TextStyle(
+                              color: titleColor,
                               fontWeight: FontWeight.w700,
                               fontSize: 15,
                             ),
@@ -94,6 +111,7 @@ class EditorAppBar extends StatelessWidget {
                       Icons.settings_rounded,
                       () {}, // Note: Future settings drawer
                       tooltip: "Settings",
+                      iconColor: iconDefaultColor,
                     ),
                     const SizedBox(width: 8),
                     _buildActionButton(
@@ -102,6 +120,7 @@ class EditorAppBar extends StatelessWidget {
                       onPlay,
                       isHighlight: true,
                       tooltip: "Run/Play",
+                      iconColor: iconDefaultColor,
                     ),
                   ],
                 ),
@@ -120,6 +139,7 @@ class EditorAppBar extends StatelessWidget {
     VoidCallback? onLongPress,
     bool isHighlight = false,
     String? tooltip,
+    required Color iconColor,
   }) {
     return Tooltip(
       message: tooltip ?? "",
@@ -138,7 +158,7 @@ class EditorAppBar extends StatelessWidget {
           ),
           child: Icon(
             icon,
-            color: isHighlight ? LiquidTheme.primary : const Color(0xFFE2E8F0), // Light icons
+            color: isHighlight ? LiquidTheme.primary : iconColor,
             size: 20,
           ),
         ),

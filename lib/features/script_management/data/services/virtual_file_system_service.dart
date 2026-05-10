@@ -218,11 +218,11 @@ class VirtualFileSystemService {
     if (Platform.isIOS) {
       try {
         const channel = MethodChannel(
-          'com.antigravity.script_automator/widget',
+          'com.js.scriptAutomator/widget',
         );
         final String? pathStr = await channel.invokeMethod<String>(
           'getAppGroupPath',
-          'group.com.antigravity.script_automator',
+          'group.com.js.scriptAutomator',
         );
         if (pathStr == null) {
           throw SecurityException(

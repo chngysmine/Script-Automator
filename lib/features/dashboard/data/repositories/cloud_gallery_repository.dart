@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:script_automator/features/dashboard/domain/repositories/gallery_repository.dart';
 
 /// Fetches community gallery scripts from the GitHub-hosted index.
@@ -22,7 +23,7 @@ class CloudGalleryRepository implements GalleryRepository {
       : _client = client ?? http.Client();
 
   @override
-  Future<List<Map<String, String>>> getTemplates() async {
+  Future<List<Map<String, dynamic>>> getTemplates() async {
     try {
       final response = await _client
           .get(Uri.parse(_kGalleryIndexUrl))
@@ -30,7 +31,8 @@ class CloudGalleryRepository implements GalleryRepository {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
-        return _parseIndex(data);
+        final scripts = _parseIndex(data);
+        return await _filterBlockedScripts(scripts);
       }
       debugPrint('Gallery fetch failed with status: ${response.statusCode}');
       return _getOfflineFallback();
@@ -40,9 +42,40 @@ class CloudGalleryRepository implements GalleryRepository {
     }
   }
 
+  /// Queries the Supabase `script_moderation` table and strips out blocked items.
+  Future<List<Map<String, dynamic>>> _filterBlockedScripts(List<Map<String, dynamic>> rawScripts) async {
+    final client = _supabaseClient;
+    if (client == null) return rawScripts;
+    try {
+      final response = await client
+          .from('script_moderation')
+          .select('script_id')
+          .eq('is_blocked', true);
+          
+      final blockedIds = (response as List).map((row) => row['script_id'] as String).toSet();
+      if (blockedIds.isEmpty) return rawScripts;
+
+      final filtered = rawScripts.where((script) => !blockedIds.contains(script['id'])).toList();
+      debugPrint("Moderation: Removed ${rawScripts.length - filtered.length} blocked scripts from gallery.");
+      return filtered;
+    } catch (e) {
+      debugPrint('Moderation check failed (bypassing): $e');
+      return rawScripts;
+    }
+  }
+
+  /// Returns the Supabase client if initialized, null otherwise.
+  SupabaseClient? get _supabaseClient {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Parses the raw JSON index into the flat map format expected by the UI.
-  List<Map<String, String>> _parseIndex(List<dynamic> data) {
-    return data.map<Map<String, String>>((item) {
+  List<Map<String, dynamic>> _parseIndex(List<dynamic> data) {
+    return data.map<Map<String, dynamic>>((item) {
       var coverUrl = '';
       final shots = item['screenshots'];
       if (shots is List) {
@@ -64,6 +97,7 @@ class CloudGalleryRepository implements GalleryRepository {
         'isFeatured': (item['isFeatured'] == true).toString(),
         'scriptUrl': (item['scriptUrl'] ?? '') as String,
         'coverUrl': coverUrl,
+        'config': item['config'],
       };
     }).toList();
   }
@@ -72,13 +106,13 @@ class CloudGalleryRepository implements GalleryRepository {
   ///
   /// This ensures the Explore page is never entirely empty even without
   /// network connectivity. Scripts are simple, self-contained, and valid.
-  List<Map<String, String>> _getOfflineFallback() {
+  List<Map<String, dynamic>> _getOfflineFallback() {
     return [
       {
         'id': 'weather_pro_v2',
         'name': 'Weather Pro',
         'description': 'Beautiful weather widget with live gradients.',
-        'author': 'Antigravity',
+        'author': 'Script Automator Team',
         'category': 'Weather',
         'version': '2.0.1',
         'icon': 'cloud.sun.fill',
@@ -104,7 +138,7 @@ class CloudGalleryRepository implements GalleryRepository {
         'id': 'system_monitor',
         'name': 'System Monitor',
         'description': 'Display time, date, OS, and locale.',
-        'author': 'Antigravity',
+        'author': 'Script Automator Team',
         'category': 'Utilities',
         'version': '1.5.0',
         'icon': 'gear',

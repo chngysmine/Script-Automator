@@ -12,14 +12,14 @@ import WidgetKit
     
     // Register Background Task
     if #available(iOS 13.0, *) {
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.antigravity.scriptautomator.refresh", using: nil) { task in
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.js.scriptAutomator.refresh", using: nil) { task in
             self.handleAppRefresh(task: task as! BGAppRefreshTask)
         }
     }
 
     // Widget Refresh Channel
     let controller : FlutterViewController = window?.rootViewController as! FlutterViewController
-    let widgetChannel = FlutterMethodChannel(name: "com.antigravity.script_automator/widget",
+    let widgetChannel = FlutterMethodChannel(name: "com.js.scriptAutomator/widget",
                                               binaryMessenger: controller.binaryMessenger)
     widgetChannel.setMethodCallHandler({
       (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
@@ -83,7 +83,7 @@ import WidgetKit
           
           // 4. Setup MethodChannel Bridge
           let channel = FlutterMethodChannel(
-              name: "com.antigravity.script_automator/background",
+              name: "com.js.scriptAutomator/background",
               binaryMessenger: engine.binaryMessenger
           )
           
@@ -118,7 +118,7 @@ import WidgetKit
   
   @available(iOS 13.0, *)
   func scheduleNextRefresh(delay: Double = 15 * 60) {
-      let request = BGAppRefreshTaskRequest(identifier: "com.antigravity.scriptautomator.refresh")
+      let request = BGAppRefreshTaskRequest(identifier: "com.js.scriptAutomator.refresh")
       request.earliestBeginDate = Date(timeIntervalSinceNow: delay)
       
       do {

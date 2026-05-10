@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:script_automator/features/ai_integration/data/services/gemini_service.dart';
 import 'package:script_automator/features/ai_integration/data/services/openai_service.dart';
 import 'package:script_automator/features/dashboard/data/services/user_preferences_service.dart';
@@ -194,48 +195,51 @@ class _SettingsPageState extends State<SettingsPage> {
   void _showClearCacheDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white.withValues(alpha: 0.9),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          "Clear Cache",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: LiquidTheme.textDeep,
-          ),
-        ),
-        content: Text(
-          "Clear $_cacheSizeText of temporary data? Your scripts and settings will not be affected.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              "Cancel",
-              style: TextStyle(color: LiquidTheme.textMedium),
+      builder: (context) {
+        final colors = Theme.of(context).extension<LiquidColors>()!;
+        return AlertDialog(
+          backgroundColor: colors.sheetBackground,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            "Clear Cache",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: colors.textTitle,
             ),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _performCacheClear();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade400,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+          content: Text(
+            "Clear $_cacheSizeText of temporary data? Your scripts and settings will not be affected.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                "Cancel",
+                style: TextStyle(color: colors.textCaption),
               ),
             ),
-            child: const Text(
-              "Clear",
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _performCacheClear();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade400,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                "Clear",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
   }
 
@@ -312,7 +316,7 @@ class _SettingsPageState extends State<SettingsPage> {
       'Script Automator Feedback — v$_appVersion',
     );
     final body = Uri.encodeComponent(
-      'Hi Antigravity Team,\n\n'
+      'Hi Script Automator Team,\n\n'
       'App Version: $_appVersion\n'
       'Platform: ${Platform.operatingSystem}\n\n'
       '--- Describe your feedback below ---\n\n',
@@ -401,20 +405,23 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           "Settings",
           style: TextStyle(
-            color: LiquidTheme.textDeep,
+            color: colors.textTitle,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.5,
           ),
         ),
-        backgroundColor: Colors.white.withValues(alpha: 0.2),
+        backgroundColor: colors.glassOverlay,
         elevation: 0,
-        iconTheme: const IconThemeData(color: LiquidTheme.textDeep),
+        iconTheme: IconThemeData(color: colors.textTitle),
         flexibleSpace: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
@@ -424,7 +431,9 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       body: Container(
         height: double.infinity,
-        decoration: const BoxDecoration(color: Color(0xFFF3F4F6)),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF3F4F6),
+        ),
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           padding: EdgeInsets.fromLTRB(
@@ -555,6 +564,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildSectionTitle(String title) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
     return Padding(
       padding: const EdgeInsets.only(left: 8.0),
       child: Text(
@@ -562,7 +572,7 @@ class _SettingsPageState extends State<SettingsPage> {
         style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w800,
-          color: LiquidTheme.textMedium.withValues(alpha: 0.7),
+          color: colors.textCaption.withValues(alpha: 0.7),
           letterSpacing: 1.5,
         ),
       ),
@@ -896,11 +906,12 @@ class _SettingsPageState extends State<SettingsPage> {
     List<Widget> children, {
     bool isLastGroup = false,
   }) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.8),
+        color: colors.cardBackground,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white, width: 2),
+        border: Border.all(color: colors.cardBorder, width: 2),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -951,9 +962,9 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       title: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: LiquidTheme.textDeep,
+          color: Theme.of(context).extension<LiquidColors>()!.textTitle,
           fontSize: 15,
         ),
       ),
@@ -988,7 +999,7 @@ class _SettingsPageState extends State<SettingsPage> {
         title,
         style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: isDestructive ? Colors.red.shade600 : LiquidTheme.textDeep,
+          color: isDestructive ? Colors.red.shade600 : Theme.of(context).extension<LiquidColors>()!.textTitle,
           fontSize: 15,
         ),
       ),
@@ -999,16 +1010,16 @@ class _SettingsPageState extends State<SettingsPage> {
             Text(
               trailingText,
               style: TextStyle(
-                color: LiquidTheme.textLight,
+                color: Theme.of(context).extension<LiquidColors>()!.textCaption,
                 fontWeight: FontWeight.w500,
                 fontSize: 14,
               ),
             ),
             const SizedBox(width: 8),
           ],
-          const Icon(
+          Icon(
             Icons.chevron_right_rounded,
-            color: LiquidTheme.textMedium,
+            color: Theme.of(context).extension<LiquidColors>()!.textCaption,
             size: 20,
           ),
         ],

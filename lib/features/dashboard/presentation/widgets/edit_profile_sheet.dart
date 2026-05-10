@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
 
 class EditProfileSheet extends StatefulWidget {
   final String currentName;
@@ -35,6 +36,8 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+
     // Basic bottom sheet inside the Liquid Glass theme style
     return Container(
       padding: EdgeInsets.only(
@@ -43,9 +46,9 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
         top: 24,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      decoration: const BoxDecoration(
-        color: LiquidTheme.lightBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      decoration: BoxDecoration(
+        color: colors.sheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -56,18 +59,18 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: LiquidTheme.textLight.withValues(alpha: 0.2),
+                color: colors.divider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             "Edit Profile",
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: LiquidTheme.textDeep,
+              color: colors.textTitle,
             ),
           ),
           const SizedBox(height: 24),
@@ -91,7 +94,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                     decoration: BoxDecoration(
                       color: LiquidTheme.cyan,
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+                      border: Border.all(color: colors.sheetBackground, width: 2),
                     ),
                     child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
                   ),
@@ -102,12 +105,13 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
           const SizedBox(height: 24),
           TextField(
             controller: _nameController,
+            style: TextStyle(color: colors.textTitle),
             decoration: InputDecoration(
               labelText: "Display Name",
-              labelStyle: TextStyle(color: LiquidTheme.textLight),
+              labelStyle: TextStyle(color: colors.textCaption),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: LiquidTheme.textLight.withValues(alpha: 0.2)),
+                borderSide: BorderSide(color: colors.inputBorder),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -119,12 +123,13 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
           TextField(
             controller: _bioController,
             maxLines: 3,
+            style: TextStyle(color: colors.textTitle),
             decoration: InputDecoration(
               labelText: "Bio",
-              labelStyle: TextStyle(color: LiquidTheme.textLight),
+              labelStyle: TextStyle(color: colors.textCaption),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: LiquidTheme.textLight.withValues(alpha: 0.2)),
+                borderSide: BorderSide(color: colors.inputBorder),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -138,11 +143,12 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
             height: 50,
             child: ElevatedButton(
               onPressed: () {
+                final messenger = ScaffoldMessenger.of(context);
                 Navigator.pop(context, {
                   'name': _nameController.text,
                   'bio': _bioController.text,
                 });
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   const SnackBar(
                     content: Text("Profile updated successfully!"),
                     backgroundColor: Colors.green,

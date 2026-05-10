@@ -21,6 +21,9 @@ import 'package:get_it/get_it.dart';
 
 import 'package:script_automator/features/script_engine/domain/system_api_handler.dart';
 import 'package:script_automator/features/script_engine/native_bridge/script_engine_interrupt_ffi.dart';
+import 'package:script_automator/core/services/telemetry_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 /// Service responsible for managing the background Isolate and the JS Engine lifecycle.
 class ScriptRunnerService {
@@ -124,6 +127,23 @@ class ScriptRunnerService {
   /// any isolate [kill]. On iOS (JSC), interrupt is unavailable — see
   /// [signalQuickJsInterruptFromProcess].
   Future<void> runScript(String script, String scriptId) async {
+    // Phase 4: Runtime Moderation Interceptor
+    // Fail-open: if Supabase is unavailable, skip moderation and allow execution.
+    try {
+      final client = Supabase.instance.client;
+      final response = await client
+          .from('script_moderation')
+          .select('is_blocked')
+          .eq('script_id', scriptId)
+          .maybeSingle();
+      if (response != null && response['is_blocked'] == true) {
+        debugPrint("[SECURITY] Execution blocked: $scriptId is suppressed by Admin.");
+        return;
+      }
+    } catch (e) {
+      // Fail open: allow execution if Supabase is unavailable or network down
+    }
+
     if (_engineIsolate == null) await initialize();
 
     await _initCompleter!.future;
@@ -150,6 +170,7 @@ class ScriptRunnerService {
     try {
       await evalCompleter.future.timeout(_evalTimeout);
     } on TimeoutException {
+      TelemetryService().captureEngineCrash("Timeout/Infinite Loop in JS Engine", null);
       _logController.add(
         '[Error] Script evaluation timed out after ${_evalTimeout.inSeconds}s. Restarting engine...',
       );
@@ -612,7 +633,7 @@ class ScriptRunnerService {
       // Trigger Widget Reload via MethodChannel
       try {
         const channel = MethodChannel(
-          'com.antigravity.script_automator/widget',
+          'com.js.scriptAutomator/widget',
         );
         await channel.invokeMethod('reloadTimelines');
         _logController.add("[System] Requested Widget Timeline Reload");
@@ -628,6 +649,7 @@ class ScriptRunnerService {
   /// Disposes the service, gracefully shuts down the engine, and kills the isolate.
   void dispose() {
     _isDisposed = true;
+    _apiHandler?.dispose();
     _engineShutdownCompleter = Completer<void>();
     _toEnginePort?.send({'command': 'shutdown'});
     unawaited(_disposeAfterShutdownAck());

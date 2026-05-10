@@ -130,7 +130,7 @@ class HeadlessWidgetRenderingService {
     if (Platform.isIOS) {
       try {
         const channel = MethodChannel(
-          'com.antigravity.script_automator/widget',
+          'com.js.scriptAutomator/widget',
         );
         await channel.invokeMethod('reloadTimelines');
       } catch (e) {
@@ -184,11 +184,11 @@ class HeadlessWidgetRenderingService {
           "HeadlessService: Requesting AppGroupDirectory via MethodChannel...",
         );
         const channel = MethodChannel(
-          'com.antigravity.script_automator/widget',
+          'com.js.scriptAutomator/widget',
         );
         final String? path = await channel.invokeMethod<String>(
           'getAppGroupPath',
-          'group.com.antigravity.script_automator',
+          'group.com.js.scriptAutomator',
         );
         debugPrint("HeadlessService: AppGroupPath returned: $path");
         if (path != null) return Directory(path);

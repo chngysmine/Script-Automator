@@ -4,11 +4,11 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.antigravity.script_automator</string>
+		<string>group.com.js.scriptAutomator</string>
 	</array>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)group.com.antigravity.script_automator</string>
+		<string>$(AppIdentifierPrefix)group.com.js.scriptAutomator</string>
 	</array>
 </dict>
 </plist>

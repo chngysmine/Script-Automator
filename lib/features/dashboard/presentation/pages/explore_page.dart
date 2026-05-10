@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
+import 'package:script_automator/core/ui/glass_sliver_header.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
@@ -25,7 +27,7 @@ class _ExplorePageState extends State<ExplorePage> {
   String _selectedCategory = "All";
   String _searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
-  List<Map<String, String>> _allScripts = [];
+  List<Map<String, dynamic>> _allScripts = [];
   bool _isLoading = true;
   String? _error;
 
@@ -130,76 +132,93 @@ class _ExplorePageState extends State<ExplorePage> {
           parent: AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
-          SliverToBoxAdapter(
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        const Text(
-                          "Explore",
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w900,
-                            color: LiquidTheme.textDeep,
-                            letterSpacing: -1.2,
-                          ),
-                        ),
-                        StreamBuilder<int>(
-                          stream: GetIt.I<NotificationService>().unreadCount,
-                          builder: (context, snapshot) {
-                            final unread = snapshot.data ?? 0;
-                            return GlassHeaderActions(
-                              hasNotificationBadge: unread > 0,
-                            );
-                          },
-                        ),
-                      ],
-                    ).animate().fadeIn(duration: 300.ms),
-                    const SizedBox(height: 16),
-                    Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (val) {
-                          setState(() {
-                            _searchQuery = val.toLowerCase();
-                          });
+          // ── Pinned Glass Header (fixed, NO collapse) ──
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: GlassSliverHeaderDelegate(
+              height: MediaQuery.of(context).padding.top + 64,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Builder(
+                        builder: (context) {
+                          final colors = Theme.of(context).extension<LiquidColors>()!;
+                          return Text(
+                            "Explore",
+                            style: TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w900,
+                              color: colors.textTitle,
+                              letterSpacing: -1.2,
+                            ),
+                          );
                         },
-                        decoration: InputDecoration(
-                          hintText: "Search scripts, authors, tags...",
-                          hintStyle: TextStyle(
-                            color: LiquidTheme.textLight.withValues(alpha: 0.5),
-                            fontSize: 14,
-                          ),
-                          prefixIcon: Icon(
-                            Icons.search_rounded,
-                            color: LiquidTheme.textLight.withValues(alpha: 0.5),
-                            size: 20,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 14,
-                          ),
+                      ),
+                      StreamBuilder<int>(
+                        stream: GetIt.I<NotificationService>().unreadCount,
+                        builder: (context, snapshot) {
+                          final unread = snapshot.data ?? 0;
+                          return GlassHeaderActions(
+                            hasNotificationBadge: unread > 0,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Search Bar (scrollable) ──
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: Builder(
+                builder: (context) {
+                  final colors = Theme.of(context).extension<LiquidColors>()!;
+                  return Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: colors.searchBarBackground,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: colors.searchBarBorder,
+                      ),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (val) {
+                        setState(() {
+                          _searchQuery = val.toLowerCase();
+                        });
+                      },
+                      style: TextStyle(color: colors.textTitle),
+                      decoration: InputDecoration(
+                        hintText: "Search scripts, authors, tags...",
+                        hintStyle: TextStyle(
+                          color: colors.searchBarHint,
+                          fontSize: 14,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search_rounded,
+                          color: colors.searchBarHint,
+                          size: 20,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 14,
                         ),
                       ),
-                    ).animate(delay: 100.ms).fadeIn().slideY(begin: 0.05),
-                  ],
-                ),
+                    ),
+                  ).animate(delay: 100.ms).fadeIn().slideY(begin: 0.05);
+                },
               ),
             ),
           ),
@@ -331,7 +350,7 @@ class _ExplorePageState extends State<ExplorePage> {
     ).animate(delay: 300.ms).fadeIn().slideY(begin: 0.05);
   }
 
-  List<Map<String, String>> get _filteredScripts {
+  List<Map<String, dynamic>> get _filteredScripts {
     return _allScripts.where((s) {
       if (_searchQuery.isNotEmpty) {
         return (s['name']?.toLowerCase().contains(_searchQuery) ?? false) ||
@@ -510,7 +529,7 @@ class _ExplorePageState extends State<ExplorePage> {
     }).toList();
   }
 
-  Widget _buildInstallButton(Map<String, String> s) {
+  Widget _buildInstallButton(Map<String, dynamic> s) {
     final gid = s['id'] ?? s['name']?.toLowerCase().replaceAll(' ', '_') ?? '';
     final gver = s['version'] ?? '1.0.0';
     final installedVer = _installedVersions[gid];
@@ -598,7 +617,7 @@ class _ExplorePageState extends State<ExplorePage> {
   /// Installs a script from the gallery with lazy content loading.
   /// If `content` is already embedded (offline fallback), uses it directly.
   /// Otherwise, downloads from `scriptUrl` first.
-  Future<void> _installFromGallery(Map<String, String> scriptData) async {
+  Future<void> _installFromGallery(Map<String, dynamic> scriptData) async {
     final name = scriptData['name'] ?? 'Untitled';
     final existingContent = scriptData['content'] ?? '';
     final scriptUrl = scriptData['scriptUrl'] ?? '';

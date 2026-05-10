@@ -26,7 +26,7 @@
 	<true/>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.antigravity.scriptautomator.refresh</string>
+		<string>com.js.scriptAutomator.refresh</string>
 	</array>
     <key>UIBackgroundModes</key>
     <array>
@@ -54,5 +54,16 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.873767716800-qtschojktmh5c4v6gea0761vj9do2eck</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

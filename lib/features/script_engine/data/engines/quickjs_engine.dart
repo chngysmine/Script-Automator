@@ -209,11 +209,29 @@ class QuickJSEngine implements JSEngine {
       }
 
       try {
+        dynamic result;
         if (arg0 != null) {
-          callback(arg0);
+          result = callback(arg0);
         } else {
-          callback();
+          result = callback();
         }
+
+        if (result is String) {
+          final strPtr = result.toNativeUtf8();
+          final len = strPtr.length;
+          final jsStr = _lib.JS_NewStringLen_Wrapper(ctx, strPtr.cast(), len);
+          calloc.free(strPtr);
+          return jsStr;
+        }
+        if (result is int) return _lib.JS_NewInt32(ctx, result);
+        if (result is bool) return _lib.JS_NewBool(ctx, result ? 1 : 0);
+        if (result == null) return _lib.JS_NewInt32(ctx, 0);
+
+        final str = result.toString().toNativeUtf8();
+        final len = str.length;
+        final jsStr = _lib.JS_NewStringLen_Wrapper(ctx, str.cast(), len);
+        calloc.free(str);
+        return jsStr;
       } catch (e) {
         developer.log("Error in host function: $e", name: 'QuickJSEngine');
       }

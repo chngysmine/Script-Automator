@@ -5,8 +5,9 @@ import 'package:script_automator/features/dashboard/presentation/widgets/premium
 
 /// A staggered Bento-style grid layout for displaying user scripts.
 ///
-/// Uses [PremiumBentoCard] with alternating [BentoSize] patterns to create
-/// a visually dynamic grid inspired by Apple's Bento design language.
+/// Uses [PremiumBentoCard] with a standard 2-column grid and fixed aspect
+/// ratios to prevent layout overflow. Cards use [ClipRRect] internally to
+/// handle content that exceeds bounds.
 class StaggeredScriptGrid extends StatelessWidget {
   final List<Script> scripts;
   final void Function(Script) onTap;
@@ -23,96 +24,34 @@ class StaggeredScriptGrid extends StatelessWidget {
       return const _EmptyScriptsView();
     }
 
-    final List<Widget> rows = [];
-    int index = 0;
-
-    while (index < scripts.length) {
-      final rowIndex = rows.length;
-      final isEvenRow = rowIndex % 2 == 0;
-
-      if (isEvenRow && index + 1 < scripts.length) {
-        // Pattern A: One large + one small
-        rows.add(
-          _buildDualRow(
-            left: _buildAnimatedCard(index, scripts[index], BentoSize.large),
-            right: _buildAnimatedCard(
-              index + 1,
-              scripts[index + 1],
-              BentoSize.small,
-            ),
-            leftFlex: 3,
-            rightFlex: 2,
-          ),
-        );
-        index += 2;
-      } else if (!isEvenRow && index + 1 < scripts.length) {
-        // Pattern B: Two equal cards
-        rows.add(
-          _buildDualRow(
-            left: _buildAnimatedCard(index, scripts[index], BentoSize.small),
-            right: _buildAnimatedCard(
-              index + 1,
-              scripts[index + 1],
-              BentoSize.small,
-            ),
-            leftFlex: 1,
-            rightFlex: 1,
-          ),
-        );
-        index += 2;
-      } else {
-        // Single remaining card: full width
-        rows.add(
-          _buildAnimatedCard(index, scripts[index], BentoSize.wide),
-        );
-        index += 1;
-      }
-    }
-
-    return Column(
-      children: rows
-          .map(
-            (row) => Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: row,
-            ),
-          )
-          .toList(),
-    );
-  }
-
-  Widget _buildDualRow({
-    required Widget left,
-    required Widget right,
-    required int leftFlex,
-    required int rightFlex,
-  }) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(flex: leftFlex, child: left),
-          const SizedBox(width: 16),
-          Expanded(flex: rightFlex, child: right),
-        ],
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 14,
+        mainAxisSpacing: 14,
+        childAspectRatio: 0.78,
       ),
-    );
-  }
-
-  Widget _buildAnimatedCard(int index, Script script, BentoSize size) {
-    return AnimationConfiguration.staggeredList(
-      position: index,
-      duration: const Duration(milliseconds: 400),
-      child: SlideAnimation(
-        verticalOffset: 50.0,
-        child: FadeInAnimation(
-          child: PremiumBentoCard(
-            script: script,
-            size: size,
-            onTap: () => onTap(script),
+      itemCount: scripts.length,
+      itemBuilder: (context, index) {
+        return AnimationConfiguration.staggeredGrid(
+          position: index,
+          columnCount: 2,
+          duration: const Duration(milliseconds: 400),
+          child: SlideAnimation(
+            verticalOffset: 50.0,
+            child: FadeInAnimation(
+              child: PremiumBentoCard(
+                script: scripts[index],
+                size: BentoSize.small,
+                onTap: () => onTap(scripts[index]),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

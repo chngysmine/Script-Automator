@@ -125,6 +125,11 @@ typedef JS_JSONStringify_Wrapper_C =
 typedef JS_JSONStringify_Wrapper_Dart =
     JSValue Function(Pointer<JSContext>, JSValue);
 
+typedef JS_NewStringLen_Wrapper_C =
+    JSValue Function(Pointer<JSContext>, Pointer<Char>, IntPtr);
+typedef JS_NewStringLen_Wrapper_Dart =
+    JSValue Function(Pointer<JSContext>, Pointer<Char>, int);
+
 typedef JS_FreeCString_C = Void Function(Pointer<JSContext>, Pointer<Char>);
 typedef JS_FreeCString_Dart = void Function(Pointer<JSContext>, Pointer<Char>);
 
@@ -174,6 +179,7 @@ class QuickJSBindings {
   late final JS_NewFloat64_Wrapper_Dart JS_NewFloat64;
   late final JS_NewBool_Wrapper_Dart JS_NewBool;
   late final JS_JSONStringify_Wrapper_Dart JS_JSONStringify;
+  late final JS_NewStringLen_Wrapper_Dart JS_NewStringLen_Wrapper;
   late final JS_FreeCString_Dart JS_FreeCString;
   late final CreateJSValueRef_Dart CreateJSValueRef;
   late final ScriptEngineAttachInterruptHandler_Dart
@@ -262,6 +268,11 @@ class QuickJSBindings {
           JS_JSONStringify_Wrapper_C,
           JS_JSONStringify_Wrapper_Dart
         >('JS_JSONStringify_Wrapper');
+    JS_NewStringLen_Wrapper = _dylib
+        .lookupFunction<
+          JS_NewStringLen_Wrapper_C,
+          JS_NewStringLen_Wrapper_Dart
+        >('JS_NewStringLen_Wrapper');
     JS_FreeCString = _dylib
         .lookupFunction<JS_FreeCString_C, JS_FreeCString_Dart>(
           'JS_FreeCString',

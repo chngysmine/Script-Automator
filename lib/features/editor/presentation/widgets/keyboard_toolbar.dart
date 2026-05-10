@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
 
 class KeyboardToolbar extends StatelessWidget {
   final Function(String) onInsert;
@@ -22,6 +23,8 @@ class KeyboardToolbar extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).extension<LiquidColors>()!;
     final keys = ['{', '}', '(', ')', '[', ']', '=>', ';', '=', '"', "'"];
 
     return ClipRRect(
@@ -30,12 +33,12 @@ class KeyboardToolbar extends StatelessWidget {
         child: Container(
           height: 48,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(
-              alpha: 0.85,
-            ), // Light Glass High Contrast
+            color: isDark
+                ? const Color(0xFF1E293B).withValues(alpha: 0.9)
+                : Colors.white.withValues(alpha: 0.85),
             border: Border(
               top: BorderSide(
-                color: Colors.grey.withValues(alpha: 0.3),
+                color: colors.divider,
                 width: 0.5,
               ),
             ),
@@ -44,12 +47,12 @@ class KeyboardToolbar extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             children: [
-              _buildActionButton(Icons.keyboard_tab, onTab),
-              const VerticalDivider(width: 8, indent: 8, endIndent: 8),
-              ...keys.map((k) => _buildKeyButton(k)),
-              const VerticalDivider(width: 8, indent: 8, endIndent: 8),
-              _buildActionButton(Icons.undo, onUndo),
-              _buildActionButton(Icons.redo, onRedo),
+              _buildActionButton(Icons.keyboard_tab, onTab, colors),
+              VerticalDivider(width: 8, indent: 8, endIndent: 8, color: colors.divider),
+              ...keys.map((k) => _buildKeyButton(k, colors)),
+              VerticalDivider(width: 8, indent: 8, endIndent: 8, color: colors.divider),
+              _buildActionButton(Icons.undo, onUndo, colors),
+              _buildActionButton(Icons.redo, onRedo, colors),
             ],
           ),
         ),
@@ -57,12 +60,12 @@ class KeyboardToolbar extends StatelessWidget {
     );
   }
 
-  Widget _buildKeyButton(String label) {
+  Widget _buildKeyButton(String label, LiquidColors colors) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: TextButton(
         style: TextButton.styleFrom(
-          foregroundColor: const Color(0xFF0F172A), // Slate 900 Text
+          foregroundColor: colors.textTitle,
           minimumSize: const Size(32, 32),
           padding: const EdgeInsets.symmetric(horizontal: 8),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
@@ -76,13 +79,13 @@ class KeyboardToolbar extends StatelessWidget {
     );
   }
 
-  Widget _buildActionButton(IconData icon, VoidCallback onTap) {
+  Widget _buildActionButton(IconData icon, VoidCallback onTap, LiquidColors colors) {
     return IconButton(
       icon: Icon(
         icon,
         size: 18,
-        color: const Color(0xFF64748B),
-      ), // Slate 500 Icons
+        color: colors.textCaption,
+      ),
       onPressed: onTap,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 32),

@@ -11,7 +11,7 @@ class ScriptDatabase {
     static let shared = ScriptDatabase()
     private var db: OpaquePointer?
     private let dbName = "widget_registry.db"
-    private let appGroupId = "group.com.antigravity.script_automator"
+    private let appGroupId = "group.com.js.scriptAutomator"
 
     private init() {
         openDatabase()

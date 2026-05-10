@@ -12,7 +12,7 @@ import WidgetKit
 struct ScriptAutomatorWidgetControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(
-            kind: "com.antigravity.scriptAutomator.ScriptAutomatorWidget",
+            kind: "com.js.scriptAutomator.ScriptAutomatorWidget",
             provider: Provider()
         ) { value in
             ControlWidgetToggle(

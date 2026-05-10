@@ -62,7 +62,7 @@ class _MeshPainter extends CustomPainter {
     // Base background
     paint.color = isDark 
         ? const Color(0xFF0F172A) // Dark Slate 900
-        : const Color(0xFFE2E8F0); // Deep Slate 200
+        : const Color(0xFFF1F5F9); // Slate 100 (lighter, cleaner)
     canvas.drawRect(rect, paint);
 
     paint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 120);
@@ -80,7 +80,7 @@ class _MeshPainter extends CustomPainter {
       );
     paint.color = isDark
         ? const Color(0xFF4C1D95).withValues(alpha: 0.6) // Dark Violet
-        : const Color(0xFFE9D5FF).withValues(alpha: 0.8); // Light Purple
+        : const Color(0xFFE9D5FF).withValues(alpha: 0.6); // Light Purple (subtler)
     canvas.drawPath(orb1Path, paint);
 
     // Orb 2: Cyan
@@ -96,7 +96,7 @@ class _MeshPainter extends CustomPainter {
       );
     paint.color = isDark
         ? const Color(0xFF0E7490).withValues(alpha: 0.5) // Dark Cyan
-        : const Color(0xFFCFFAFE).withValues(alpha: 0.8); // Light Cyan
+        : const Color(0xFFCFFAFE).withValues(alpha: 0.6); // Light Cyan (subtler)
     canvas.drawPath(orb2Path, paint);
 
     // Orb 3: Light Pink
@@ -112,7 +112,7 @@ class _MeshPainter extends CustomPainter {
       );
     paint.color = isDark
         ? const Color(0xFFBE185D).withValues(alpha: 0.4) // Dark Pink
-        : const Color(0xFFFBCFE8).withValues(alpha: 0.8); // Light Pink
+        : const Color(0xFFFBCFE8).withValues(alpha: 0.6); // Light Pink (subtler)
     canvas.drawPath(orb3Path, paint);
   }
 

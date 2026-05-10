@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/premium_bento_card.dart';
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
@@ -11,6 +12,8 @@ import 'package:script_automator/features/script_management/data/services/git_se
 import 'package:get_it/get_it.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_header_actions.dart';
 import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
+import 'package:script_automator/core/ui/glass_sliver_header.dart';
+import 'package:script_automator/core/ui/styled_dropdown.dart';
 
 class GalleryPage extends StatefulWidget {
   const GalleryPage({super.key});
@@ -20,7 +23,7 @@ class GalleryPage extends StatefulWidget {
 }
 
 class _GalleryPageState extends State<GalleryPage> {
-  late Future<List<Map<String, String>>> _templatesFuture;
+  late Future<List<Map<String, dynamic>>> _templatesFuture;
   final ScrollController _scrollController = ScrollController();
 
   // Filter & Sort State
@@ -54,7 +57,7 @@ class _GalleryPageState extends State<GalleryPage> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Map<String, String>>>(
+    return FutureBuilder<List<Map<String, dynamic>>>(
       future: _templatesFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -108,43 +111,48 @@ class _GalleryPageState extends State<GalleryPage> {
             parent: AlwaysScrollableScrollPhysics(),
           ),
           slivers: [
-            SliverToBoxAdapter(
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const Text(
-                        "Script Store",
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                          color: LiquidTheme.textDeep,
-                          letterSpacing: -1.2,
+            // ── Pinned Glass Header (fixed, NO collapse) ──
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: GlassSliverHeaderDelegate(
+                height: MediaQuery.of(context).padding.top + 64,
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Text(
+                          "Script Store",
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                            color: LiquidTheme.textDeep,
+                            letterSpacing: -1.2,
+                          ),
                         ),
-                      ),
-                      Row(
-                        children: [
-                          _buildHeaderAction(
-                            icon: Icons.cloud_download_rounded,
-                            onPressed: _showImportDialog,
-                            isPrimary: true,
-                          ),
-                          const SizedBox(width: 12),
-                          StreamBuilder<int>(
-                            stream: GetIt.I<NotificationService>().unreadCount,
-                            builder: (context, snapshot) {
-                              return GlassHeaderActions(
-                                hasNotificationBadge: (snapshot.data ?? 0) > 0,
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
+                        Row(
+                          children: [
+                            _buildHeaderAction(
+                              icon: Icons.cloud_download_rounded,
+                              onPressed: _showImportDialog,
+                              isPrimary: true,
+                            ),
+                            const SizedBox(width: 12),
+                            StreamBuilder<int>(
+                              stream: GetIt.I<NotificationService>().unreadCount,
+                              builder: (context, snapshot) {
+                                return GlassHeaderActions(
+                                  hasNotificationBadge: (snapshot.data ?? 0) > 0,
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -157,136 +165,117 @@ class _GalleryPageState extends State<GalleryPage> {
                 child: Column(
                   children: [
                     // Search Input
-                    Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (val) =>
-                            setState(() => _searchQuery = val.toLowerCase()),
-                        decoration: InputDecoration(
-                          hintText: "Search in gallery...",
-                          hintStyle: TextStyle(
-                            color: LiquidTheme.textLight.withValues(alpha: 0.5),
-                            fontSize: 14,
+                    Builder(
+                      builder: (context) {
+                        final colors = Theme.of(context).extension<LiquidColors>()!;
+                        return Container(
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: colors.searchBarBackground,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: colors.searchBarBorder,
+                            ),
                           ),
-                          prefixIcon: Icon(
-                            Icons.search_rounded,
-                            color: LiquidTheme.textLight.withValues(alpha: 0.5),
-                            size: 20,
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (val) =>
+                                setState(() => _searchQuery = val.toLowerCase()),
+                            style: TextStyle(color: colors.textTitle),
+                            decoration: InputDecoration(
+                              hintText: "Search in gallery...",
+                              hintStyle: TextStyle(
+                                color: colors.searchBarHint,
+                                fontSize: 14,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.search_rounded,
+                                color: colors.searchBarHint,
+                                size: 20,
+                              ),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: Icon(Icons.close, size: 16, color: colors.textCaption),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _searchQuery = "");
+                                      },
+                                    )
+                                  : null,
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 14,
+                              ),
+                            ),
                           ),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.close, size: 16),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() => _searchQuery = "");
-                                  },
-                                )
-                              : null,
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 14,
-                          ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
                     // Sort & Categories
-                    Row(
-                      children: [
-                        // Sort Dropdown
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.8),
-                            ),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
+                    Builder(
+                      builder: (context) {
+                        final colors = Theme.of(context).extension<LiquidColors>()!;
+                        return Row(
+                          children: [
+                            // Sort Dropdown
+                            StyledDropdown<String>(
                               value: _sortOption,
-                              icon: const Icon(
-                                Icons.sort_rounded,
-                                size: 16,
-                                color: LiquidTheme.textMedium,
-                              ),
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: LiquidTheme.textDeep,
-                              ),
-                              onChanged: (String? newValue) {
-                                if (newValue != null) {
-                                  setState(() => _sortOption = newValue);
-                                }
-                              },
-                              items: _sortOptions.map<DropdownMenuItem<String>>(
-                                (String value) {
-                                  return DropdownMenuItem<String>(
-                                    value: value,
-                                    child: Text(value),
-                                  );
-                                },
-                              ).toList(),
+                              items: _sortOptions,
+                              labelBuilder: (item) => item,
+                              onChanged: (val) => setState(() => _sortOption = val),
+                              icon: Icons.sort_rounded,
+                              width: 140,
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Category Tabs horizontally scrolling
-                        Expanded(
-                          child: SizedBox(
-                            height: 36,
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: _categories.length,
-                              itemBuilder: (context, index) {
-                                final cat = _categories[index];
-                                final isSelected = _selectedCategory == cat;
-                                return GestureDetector(
-                                  onTap: () =>
-                                      setState(() => _selectedCategory = cat),
-                                  child: Container(
-                                    margin: const EdgeInsets.only(right: 8),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                    ),
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? LiquidTheme.primary
-                                          : Colors.white.withValues(alpha: 0.6),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      cat,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: isSelected
-                                            ? Colors.white
-                                            : LiquidTheme.textMedium,
+                            const SizedBox(width: 10),
+                            // Category Tabs horizontally scrolling
+                            Expanded(
+                              child: SizedBox(
+                                height: 36,
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: _categories.length,
+                                  itemBuilder: (context, index) {
+                                    final cat = _categories[index];
+                                    final isSelected = _selectedCategory == cat;
+                                    return GestureDetector(
+                                      onTap: () =>
+                                          setState(() => _selectedCategory = cat),
+                                      child: Container(
+                                        margin: const EdgeInsets.only(right: 8),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                        ),
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? LiquidTheme.primary
+                                              : colors.chipBackground,
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: isSelected
+                                              ? null
+                                              : Border.all(color: colors.cardBorder),
+                                        ),
+                                        child: Text(
+                                          cat,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: isSelected
+                                                ? Colors.white
+                                                : colors.textBody,
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                );
-                              },
+                                    );
+                                  },
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      ],
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -392,7 +381,7 @@ class _GalleryPageState extends State<GalleryPage> {
 
   // --- Components ---
 
-  Widget _buildBentoCardFromMap(Map<String, String> item, BentoSize size) {
+  Widget _buildBentoCardFromMap(Map<String, dynamic> item, BentoSize size) {
     final embedded = item['content'] ?? '';
     final scriptUrl = item['scriptUrl'] ?? '';
     final previewContent = embedded.isNotEmpty
@@ -451,7 +440,7 @@ class _GalleryPageState extends State<GalleryPage> {
 
   // --- Actions ---
 
-  void _showPreview(BuildContext context, Map<String, String> item) {
+  void _showPreview(BuildContext context, Map<String, dynamic> item) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -460,7 +449,7 @@ class _GalleryPageState extends State<GalleryPage> {
     );
   }
 
-  Widget _buildPreviewSheet(BuildContext context, Map<String, String> item) {
+  Widget _buildPreviewSheet(BuildContext context, Map<String, dynamic> item) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
       decoration: const BoxDecoration(
@@ -748,7 +737,7 @@ class _GalleryPageState extends State<GalleryPage> {
 
   Future<void> _installScript(
     BuildContext context,
-    Map<String, String> item,
+    Map<String, dynamic> item,
   ) async {
     final name = item['name'] ?? 'Untitled';
     final existingContent = item['content'] ?? '';

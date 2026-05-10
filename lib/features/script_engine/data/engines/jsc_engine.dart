@@ -204,11 +204,32 @@ class JSCEngine implements JSEngine, Finalizable {
       }
 
       try {
+        dynamic result;
         if (arg0 != null) {
-          callback(arg0);
+          result = callback(arg0);
         } else {
-          callback();
+          result = callback();
         }
+
+        if (result is String) {
+          return using((Arena arena) {
+            final jsStr = _lib.JSStringCreateWithUTF8CString(result.toNativeUtf8(allocator: arena).cast());
+            final jsVal = _lib.JSValueMakeString(ctx, jsStr);
+            _lib.JSStringRelease(jsStr);
+            return jsVal;
+          });
+        }
+        if (result is num) return _lib.JSValueMakeNumber(ctx, result.toDouble());
+        if (result is bool) return _lib.JSValueMakeBoolean(ctx, result ? 1 : 0);
+        if (result == null) return _lib.JSValueMakeUndefined(ctx);
+
+        final str = result.toString();
+        return using((Arena arena) {
+          final jsStr = _lib.JSStringCreateWithUTF8CString(str.toNativeUtf8(allocator: arena).cast());
+          final jsVal = _lib.JSValueMakeString(ctx, jsStr);
+          _lib.JSStringRelease(jsStr);
+          return jsVal;
+        });
       } catch (e) {
         developer.log("Error in host function: $e", name: "JSCEngine");
       }

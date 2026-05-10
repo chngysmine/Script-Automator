@@ -1,4 +1,4 @@
-package com.antigravity.script_automator
+package com.js.scriptAutomator
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
@@ -217,7 +217,7 @@ object GlanceJsonParser {
             val actionType = modifiers.get("onClick").asString
             if (actionType == "app") {
                 val intent = Intent().apply {
-                    component = ComponentName("com.antigravity.script_automator", "com.antigravity.script_automator.MainActivity")
+                    component = ComponentName("com.js.scriptAutomator", "com.js.scriptAutomator.MainActivity")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 modifier = modifier.clickable(actionStartActivity(intent))

@@ -1,4 +1,4 @@
-package com.antigravity.script_automator
+package com.js.scriptAutomator
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -9,7 +9,7 @@ import androidx.glance.appwidget.updateAll
 import android.util.Log
 
 class MainActivity : FlutterActivity() {
-    private val CHANNEL = "com.antigravity/paths"
+    private val CHANNEL = "com.js/paths"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -22,7 +22,7 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.antigravity.script_automator/widget").setMethodCallHandler { call, result ->
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.js.scriptAutomator/widget").setMethodCallHandler { call, result ->
             if (call.method == "reloadTimelines") {
                 // Trigger Widget Update
                 try {

@@ -12,9 +12,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class AppSecureStorage {
   AppSecureStorage._();
 
-  /// Same identifier as the App Group (`group.com.antigravity.script_automator`).
+  /// Same identifier as the App Group (`group.com.js.scriptAutomator`).
   static const String iosKeychainAccessGroup =
-      'group.com.antigravity.script_automator';
+      'group.com.js.scriptAutomator';
 
   /// Default [FlutterSecureStorage] for this app (shared keychain on iOS).
   static FlutterSecureStorage create() {

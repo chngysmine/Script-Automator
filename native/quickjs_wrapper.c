@@ -64,6 +64,10 @@ const char *JS_ToCString_Wrapper(JSContext *ctx, JSValue val) {
   return JS_ToCString(ctx, val);
 }
 
+JSValue JS_NewStringLen_Wrapper(JSContext *ctx, const char *buf, size_t buf_len) {
+  return JS_NewStringLen(ctx, buf, buf_len);
+}
+
 void JS_FreeValue_Wrapper(JSContext *ctx, JSValue v) { JS_FreeValue(ctx, v); }
 
 // Wrapper for JS_NewCFunction (which is often a macro mapping to

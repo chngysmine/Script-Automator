@@ -205,6 +205,24 @@ typedef JSValueUnprotect_C =
 typedef JSValueUnprotect_Dart =
     void Function(Pointer<JSGlobalContext>, Pointer<JSValue>);
 
+// JSValueRef JSValueMakeString(JSContextRef ctx, JSStringRef string);
+typedef JSValueMakeString_C =
+    Pointer<JSValue> Function(Pointer<JSGlobalContext>, Pointer<JSString>);
+typedef JSValueMakeString_Dart =
+    Pointer<JSValue> Function(Pointer<JSGlobalContext>, Pointer<JSString>);
+
+// JSValueRef JSValueMakeNumber(JSContextRef ctx, double number);
+typedef JSValueMakeNumber_C =
+    Pointer<JSValue> Function(Pointer<JSGlobalContext>, Double);
+typedef JSValueMakeNumber_Dart =
+    Pointer<JSValue> Function(Pointer<JSGlobalContext>, double);
+
+// JSValueRef JSValueMakeBoolean(JSContextRef ctx, bool boolean);
+typedef JSValueMakeBoolean_C =
+    Pointer<JSValue> Function(Pointer<JSGlobalContext>, Int8);
+typedef JSValueMakeBoolean_Dart =
+    Pointer<JSValue> Function(Pointer<JSGlobalContext>, int);
+
 class JSCBindings {
   final DynamicLibrary _dylib;
 
@@ -228,6 +246,9 @@ class JSCBindings {
   late final JSValueCreateJSONString_Dart JSValueCreateJSONString;
   late final JSValueProtect_Dart JSValueProtect;
   late final JSValueUnprotect_Dart JSValueUnprotect;
+  late final JSValueMakeString_Dart JSValueMakeString;
+  late final JSValueMakeNumber_Dart JSValueMakeNumber;
+  late final JSValueMakeBoolean_Dart JSValueMakeBoolean;
 
   late final Pointer<NativeFunction<Void Function(Pointer<Void>)>>
   addresses_JSGlobalContextRelease;
@@ -315,6 +336,18 @@ class JSCBindings {
     JSValueUnprotect = _dylib
         .lookupFunction<JSValueUnprotect_C, JSValueUnprotect_Dart>(
           'JSValueUnprotect',
+        );
+    JSValueMakeString = _dylib
+        .lookupFunction<JSValueMakeString_C, JSValueMakeString_Dart>(
+          'JSValueMakeString',
+        );
+    JSValueMakeNumber = _dylib
+        .lookupFunction<JSValueMakeNumber_C, JSValueMakeNumber_Dart>(
+          'JSValueMakeNumber',
+        );
+    JSValueMakeBoolean = _dylib
+        .lookupFunction<JSValueMakeBoolean_C, JSValueMakeBoolean_Dart>(
+          'JSValueMakeBoolean',
         );
 
     addresses_JSGlobalContextRelease = _dylib.lookup('JSGlobalContextRelease');

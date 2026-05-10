@@ -15,7 +15,7 @@ import 'package:script_automator/features/script_management/data/models/script_m
 class WidgetRegistryService {
   static const String _dbName = 'widget_registry.db';
   static const String _tableName = 'scripts';
-  static const String _appGroupId = 'group.com.antigravity.script_automator';
+  static const String _appGroupId = 'group.com.js.scriptAutomator';
 
   Database? _db;
 
@@ -81,7 +81,7 @@ class WidgetRegistryService {
     if (Platform.isIOS) {
       try {
         const channel = MethodChannel(
-          'com.antigravity.script_automator/widget',
+          'com.js.scriptAutomator/widget',
         );
         final String? path = await channel.invokeMethod<String>(
           'getAppGroupPath',

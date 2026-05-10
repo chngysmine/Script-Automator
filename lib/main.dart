@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'firebase_options.dart';
 
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
@@ -24,15 +27,61 @@ import 'features/dashboard/data/repositories/cloud_gallery_repository.dart';
 import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
 import 'package:script_automator/features/dashboard/data/services/user_preferences_service.dart';
 import 'package:script_automator/features/dashboard/data/services/user_stats_service.dart';
+import 'package:script_automator/core/services/telemetry_service.dart';
 import 'features/ai_integration/data/services/openai_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await _setupDI();
+
+  // Global error handler — catches framework-level errors
+  FlutterError.onError = (details) {
+    debugPrint('[FLUTTER_ERROR] ${details.exception}');
+    debugPrint('[FLUTTER_ERROR] ${details.stack}');
+  };
+
+  // Phase 1A: Initialize Firebase (Auth, Firestore, FCM)
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint('[BOOT] Firebase init failed (degraded mode): $e');
+  }
+
+  // Phase 1B: Initialize Supabase Analytics & Telemetry Layer
+  // Non-critical — app continues in offline mode if this fails.
+  try {
+    await Supabase.initialize(
+      url: 'https://zyobiujdhnamzycadovx.supabase.co',
+      anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp5b2JpdWpkaG5hbXp5Y2Fkb3Z4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzOTAxNTgsImV4cCI6MjA5MDk2NjE1OH0.gbZoFPtCungmRATnAimPsGnlDTiAICKK3UCZoDGQNPo',
+    ).timeout(const Duration(seconds: 5));
+  } catch (e) {
+    debugPrint('[BOOT] Supabase init failed (offline mode): $e');
+  }
+
+  try {
+    await _setupDI();
+  } catch (e, stack) {
+    debugPrint('[BOOT] DI setup failed: $e');
+    debugPrint('[BOOT] $stack');
+  }
+
+  // Telemetry check-in (fire-and-forget, never blocks boot)
+  try {
+    if (GetIt.I.isRegistered<TelemetryService>()) {
+      unawaited(GetIt.I<TelemetryService>().registerProfile());
+    }
+  } catch (_) {}
+
   runApp(const MyApp());
 }
 
 Future<void> _setupDI() async {
+  // Phase 0: Telemetry Engine (Always First)
+  if (!GetIt.I.isRegistered<TelemetryService>()) {
+    GetIt.I.registerSingleton<TelemetryService>(TelemetryService());
+  }
+
   // Phase 2: Data Layer — Hive root matches App Group on iOS when available
   // (see [AppStoragePaths.hiveRootDirectory]); mirrors [Hive.initFlutter] adapters.
   final hiveDir = await AppStoragePaths.hiveRootDirectory();

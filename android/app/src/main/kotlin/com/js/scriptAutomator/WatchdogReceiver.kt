@@ -10,7 +10,7 @@
  * 3. Integration in MainActivity: Start watchdog on app launch.
  */
 
-package com.antigravity.script_automator
+package com.js.scriptAutomator
 
 import android.app.AlarmManager
 import android.app.PendingIntent

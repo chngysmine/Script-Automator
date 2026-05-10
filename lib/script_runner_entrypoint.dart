@@ -66,7 +66,7 @@ void scriptRunnerMain() async {
 
     // 4. Signal Completion to Native
     const channel = MethodChannel(
-      'com.antigravity.script_automator/background',
+      'com.js.scriptAutomator/background',
     );
     await channel.invokeMethod('scriptCompleted');
   } catch (e, stack) {

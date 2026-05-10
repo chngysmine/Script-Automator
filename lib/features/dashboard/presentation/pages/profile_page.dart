@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/edit_profile_sheet.dart';
 import 'package:get_it/get_it.dart';
@@ -12,6 +13,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:script_automator/core/ui/glass_sliver_header.dart';
 
 /// Profile page displaying the user's script statistics, contribution heatmap,
 /// achievements, and collections.
@@ -77,194 +79,218 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    final topPadding = MediaQuery.of(context).padding.top;
+
+    return CustomScrollView(
       physics: const BouncingScrollPhysics(
         parent: AlwaysScrollableScrollPhysics(),
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 120.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildProfileHeader(context),
-              const SizedBox(height: 24),
-              _buildStatsRow()
-                  .animate()
-                  .fadeIn(duration: 400.ms)
-                  .slideY(begin: 0.05),
-              const SizedBox(height: 28),
-              _buildSectionTitle("Contribution Activity"),
-              const SizedBox(height: 12),
-              _buildContributionHeatmap()
-                  .animate(delay: 200.ms)
-                  .fadeIn(duration: 500.ms),
-              const SizedBox(height: 28),
-              _buildSectionTitle("Achievements"),
-              const SizedBox(height: 12),
-              _buildAchievementsScroll(
-                context,
-              ).animate(delay: 300.ms).fadeIn().slideX(begin: 0.05),
-              const SizedBox(height: 28),
-              _buildSectionTitle("Collections"),
-              const SizedBox(height: 12),
-              _buildCollectionsGrid(
-                context,
-              ).animate(delay: 400.ms).fadeIn().slideY(begin: 0.05),
-              const SizedBox(height: 40),
-            ],
+      slivers: [
+        // ── Pinned Glass Header: Avatar + Name + Actions (fixed, NO collapse) ──
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: GlassSliverHeaderDelegate(
+            height: topPadding + 100,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+                child: _buildProfileHeaderRow(context),
+              ),
+            ),
           ),
         ),
-      ),
-    );
-  }
 
-  Widget _buildProfileHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [LiquidTheme.primary, LiquidTheme.cyan],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: LiquidTheme.primary.withValues(alpha: 0.4),
-                      blurRadius: 20,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: GestureDetector(
-                  onTap: _pickAvatar,
-                  child: Padding(
-                    padding: const EdgeInsets.all(3),
-                    child: Container(
-                      width: 72,
-                      height: 72,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: _avatarPath != null && File(_avatarPath!).existsSync()
-                          ? Image.file(
-                              File(_avatarPath!),
-                              fit: BoxFit.cover,
-                            )
-                          : const Icon(
-                              Icons.person_rounded,
-                              size: 36,
-                              color: LiquidTheme.primary,
-                            ),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: -4,
-                right: -4,
-                child: GestureDetector(
-                  onTap: () async {
-                    final result =
-                        await showModalBottomSheet<Map<String, String>>(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (context) => EditProfileSheet(
-                            currentName: _displayName,
-                            currentBio: _bio,
-                          ),
-                        );
-
-                    if (result != null) {
-                      final prefs = GetIt.I<UserPreferencesService>();
-                      final newName = result['name'] ?? _displayName;
-                      final newBio = result['bio'] ?? _bio;
-                      await prefs.setDisplayName(newName);
-                      await prefs.setBio(newBio);
-                      if (mounted) {
-                        setState(() {
-                          _displayName = newName;
-                          _bio = newBio;
-                        });
-                      }
-                    }
-                  },
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: LiquidTheme.textDeep,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.edit_rounded,
-                      size: 14,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 16),
-          Expanded(
+        // ── Scrollable Content ──
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 120.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _displayName,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: LiquidTheme.textDeep,
-                    letterSpacing: -0.8,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _loaded
-                      ? "$_scriptCount scripts · $_widgetCount widgets"
-                      : "Loading...",
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: LiquidTheme.primary.withValues(alpha: 0.8),
-                  ),
-                ),
+                const SizedBox(height: 24),
+                _buildStatsRow()
+                    .animate()
+                    .fadeIn(duration: 400.ms)
+                    .slideY(begin: 0.05),
+                const SizedBox(height: 28),
+                _buildSectionTitle("Contribution Activity"),
+                const SizedBox(height: 12),
+                _buildContributionHeatmap()
+                    .animate(delay: 200.ms)
+                    .fadeIn(duration: 500.ms),
+                const SizedBox(height: 28),
+                _buildSectionTitle("Achievements"),
+                const SizedBox(height: 12),
+                _buildAchievementsScroll(
+                  context,
+                ).animate(delay: 300.ms).fadeIn().slideX(begin: 0.05),
+                const SizedBox(height: 28),
+                _buildSectionTitle("Collections"),
+                const SizedBox(height: 12),
+                _buildCollectionsGrid(
+                  context,
+                ).animate(delay: 400.ms).fadeIn().slideY(begin: 0.05),
+                const SizedBox(height: 40),
               ],
             ),
           ),
-          StreamBuilder<int>(
-            stream: GetIt.I<NotificationService>().unreadCount,
-            builder: (context, snapshot) {
-              return GlassHeaderActions(
-                hasNotificationBadge: (snapshot.data ?? 0) > 0,
-              );
-            },
-          ),
-        ],
-      ),
-    ).animate().fadeIn(duration: 400.ms).slideX(begin: -0.05);
+        ),
+      ],
+    );
   }
+
+  /// The avatar + name + actions row used as pinned header content.
+  Widget _buildProfileHeaderRow(BuildContext context) {
+    return Row(
+      children: [
+        // Avatar
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [LiquidTheme.primary, LiquidTheme.cyan],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: LiquidTheme.primary.withValues(alpha: 0.4),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: GestureDetector(
+                onTap: _pickAvatar,
+                child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Theme.of(context).extension<LiquidColors>()!.sheetBackground,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _avatarPath != null && File(_avatarPath!).existsSync()
+                        ? Image.file(
+                            File(_avatarPath!),
+                            fit: BoxFit.cover,
+                          )
+                        : const Icon(
+                            Icons.person_rounded,
+                            size: 36,
+                            color: LiquidTheme.primary,
+                          ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -4,
+              right: -4,
+              child: GestureDetector(
+                onTap: () => _openEditProfile(context),
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: LiquidTheme.textDeep,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.edit_rounded,
+                    size: 14,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(width: 16),
+        // Name + Stats
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _displayName,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: Theme.of(context).extension<LiquidColors>()!.textTitle,
+                  letterSpacing: -0.8,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _loaded
+                    ? "$_scriptCount scripts · $_widgetCount widgets"
+                    : "Loading...",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: LiquidTheme.primary.withValues(alpha: 0.8),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Actions
+        StreamBuilder<int>(
+          stream: GetIt.I<NotificationService>().unreadCount,
+          builder: (context, snapshot) {
+            return GlassHeaderActions(
+              hasNotificationBadge: (snapshot.data ?? 0) > 0,
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openEditProfile(BuildContext context) async {
+    final result = await showModalBottomSheet<Map<String, String>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => EditProfileSheet(
+        currentName: _displayName,
+        currentBio: _bio,
+      ),
+    );
+
+    if (result != null) {
+      final prefs = GetIt.I<UserPreferencesService>();
+      final newName = result['name'] ?? _displayName;
+      final newBio = result['bio'] ?? _bio;
+      await prefs.setDisplayName(newName);
+      await prefs.setBio(newBio);
+      if (mounted) {
+        setState(() {
+          _displayName = newName;
+          _bio = newBio;
+        });
+      }
+    }
+  }
+
+
+
 
   Widget _buildStatsRow() {
     return Padding(

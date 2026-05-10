@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'liquid_typography.dart';
+import 'liquid_colors.dart';
 
 /// The Liquid Design System Theme (2026 Edition).
 /// Defines the semantic color palette and visual properties for the "Liquid Motion" aesthetic.
@@ -90,6 +91,18 @@ class LiquidTheme {
   static const double spacingL = 24.0;
   static const double spacingXL = 32.0;
 
+  // --- Standardized Page Layout Tokens ---
+  static const double pageHorizontalPadding = 20.0;
+  static const double sectionGap = 24.0;
+  static const double searchBarHeight = 52.0;
+
+  // --- Standardized Typography Sizes ---
+  static const double fontPageTitle = 28.0;
+  static const double fontSectionTitle = 18.0;
+  static const double fontBody = 15.0;
+  static const double fontCaption = 12.0;
+  static const double fontSmall = 11.0;
+
   // Radii
   static const Radius radiusS = Radius.circular(8);
   static const Radius radiusM = Radius.circular(16);
@@ -138,6 +151,7 @@ class LiquidTheme {
         centerTitle: true,
         scrolledUnderElevation: 0,
       ),
+      extensions: [LiquidColors.dark()],
     );
   }
 
@@ -168,6 +182,7 @@ class LiquidTheme {
         ),
         iconTheme: IconThemeData(color: Color(0xFF0F172A)),
       ),
+      extensions: [LiquidColors.light()],
     );
   }
 }

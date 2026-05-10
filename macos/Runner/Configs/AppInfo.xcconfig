@@ -8,7 +8,7 @@
 PRODUCT_NAME = script_automator
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.antigravity.scriptAutomator
+PRODUCT_BUNDLE_IDENTIFIER = com.js.scriptAutomator
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.antigravity. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 com.js. All rights reserved.

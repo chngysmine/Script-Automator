@@ -354,22 +354,31 @@ class _EditorPageState extends State<EditorPage>
   @override
   Widget build(BuildContext context) {
     final double bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final editorBg = isDark
+        ? LiquidTheme.darkBackground
+        : const Color(0xFFF1F5F9); // Slate 100 — matches app gradient
+    final editorTextStyle = _kEditorTextStyle.copyWith(
+      color: isDark
+          ? const Color(0xFFCBD5E1) // Slate 300
+          : const Color(0xFF334155), // Slate 700
+    );
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          // 1. Sleek Dark Background (Dark Aurora + Deep Orbs)
+          // 1. Background
           Container(
-            decoration: const BoxDecoration(gradient: LiquidTheme.brandDarkGradient),
+            color: editorBg,
           ),
           Positioned(
             top: -100,
             right: -50,
             child: _buildOrb(
               300,
-              LiquidTheme.primary.withValues(alpha: 0.15),
+              LiquidTheme.primary.withValues(alpha: isDark ? 0.1 : 0.06),
             ),
           ),
           Positioned(
@@ -377,7 +386,7 @@ class _EditorPageState extends State<EditorPage>
             left: -50,
             child: _buildOrb(
               250,
-              LiquidTheme.cyan.withValues(alpha: 0.1),
+              LiquidTheme.cyan.withValues(alpha: isDark ? 0.08 : 0.05),
             ),
           ),
 
@@ -385,7 +394,7 @@ class _EditorPageState extends State<EditorPage>
           BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
             child: Container(
-              color: const Color(0xFF0F172A).withValues(alpha: 0.5), // Slate 900 tint
+              color: editorBg.withValues(alpha: 0.6),
             ),
           ),
 
@@ -416,23 +425,32 @@ class _EditorPageState extends State<EditorPage>
                     child: Container(
                       margin: EdgeInsets.zero, // Full-width edge-to-edge
                       decoration: BoxDecoration(
-                        // Dark Deep Glass for Professional Code Editor
+                        // Adaptive Glass for Code Editor
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: [
-                            const Color(0xFF1E293B).withValues(alpha: 0.6), // Slate 800
-                            const Color(0xFF0F172A).withValues(alpha: 0.8), // Slate 900
-                          ],
+                          colors: isDark
+                              ? [
+                                  const Color(0xFF1E293B).withValues(alpha: 0.6),
+                                  const Color(0xFF0F172A).withValues(alpha: 0.8),
+                                ]
+                              : [
+                                  const Color(0xFFF1F5F9).withValues(alpha: 0.95),
+                                  const Color(0xFFE2E8F0).withValues(alpha: 0.8),
+                                ],
                         ),
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.1),
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : const Color(0xFFE2E8F0), // Slate 200
                           width: 1.0,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.4),
+                            color: isDark
+                                ? Colors.black.withValues(alpha: 0.4)
+                                : Colors.black.withValues(alpha: 0.06),
                             blurRadius: 30,
                             offset: const Offset(0, 15),
                           ),
@@ -491,12 +509,16 @@ class _EditorPageState extends State<EditorPage>
                                                     viewportHeight:
                                                         constraints.maxHeight,
                                                     textStyle:
-                                                        _kEditorTextStyle,
+                                                        editorTextStyle,
                                                     gutterWidth: 44.0,
+                                                    isDark: isDark,
                                                     highlighter:
-                                                        SyntaxHighlighter(
+                                                        SyntaxHighlighter.adaptive(
                                                           baseStyle:
-                                                              _kEditorTextStyle,
+                                                              editorTextStyle,
+                                                          brightness: isDark
+                                                              ? Brightness.dark
+                                                              : Brightness.light,
                                                         ),
                                                   ),
                                                 ),
@@ -513,7 +535,7 @@ class _EditorPageState extends State<EditorPage>
                                                   keyboardType:
                                                       TextInputType.multiline,
                                                   showCursor: true,
-                                                  style: _kEditorTextStyle
+                                                  style: editorTextStyle
                                                       .copyWith(
                                                         color:
                                                             Colors.transparent,
@@ -1076,7 +1098,7 @@ class _EditorPageState extends State<EditorPage>
 const TextStyle _kEditorTextStyle = TextStyle(
   fontFamily: 'monospace',
   fontSize: 13.5,
-  color: Color(0xFFE2E8F0), // Slate 200 light text for dark mode
+  color: Color(0xFFCBD5E1), // Slate 300 — balanced contrast for dark mode
   height: 1.6, // FIXED LINE HEIGHT matches TextField StrutStyle
   fontFeatures: [FontFeature.tabularFigures()],
   fontWeight: FontWeight.w500,

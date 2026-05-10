@@ -76,7 +76,7 @@ class SyntaxHighlighter {
   /// Style for reserved keyword tokens — muted purple.
   final TextStyle keywordStyle;
 
-  /// Creates a [SyntaxHighlighter] using the **One Light** color palette.
+  /// Creates a [SyntaxHighlighter] using the **One Dark** color palette (dark mode).
   ///
   /// [baseStyle] is the editor's base monospace [TextStyle] and determines
   /// font family, size, height, and weight. Token colors are derived from it.
@@ -95,6 +95,34 @@ class SyntaxHighlighter {
         color: const Color(0xFFC678DD), // One Dark: Purple
         fontWeight: FontWeight.w600,
       );
+
+  /// Creates a [SyntaxHighlighter] using the **One Light** color palette (light mode).
+  SyntaxHighlighter.light({required this.baseStyle})
+    : commentStyle = baseStyle.copyWith(
+        color: const Color(0xFFA0A1A7), // One Light: Gray
+        fontStyle: FontStyle.italic,
+      ),
+      stringStyle = baseStyle.copyWith(
+        color: const Color(0xFF50A14F), // One Light: Green
+      ),
+      numberStyle = baseStyle.copyWith(
+        color: const Color(0xFF986801), // One Light: Amber
+      ),
+      keywordStyle = baseStyle.copyWith(
+        color: const Color(0xFFA626A4), // One Light: Purple
+        fontWeight: FontWeight.w600,
+      );
+
+  /// Creates a brightness-aware [SyntaxHighlighter].
+  factory SyntaxHighlighter.adaptive({
+    required TextStyle baseStyle,
+    required Brightness brightness,
+  }) {
+    if (brightness == Brightness.dark) {
+      return SyntaxHighlighter(baseStyle: baseStyle);
+    }
+    return SyntaxHighlighter.light(baseStyle: baseStyle);
+  }
 
   /// Parses [text] into a list of syntax-colored [TextSpan] nodes.
   ///

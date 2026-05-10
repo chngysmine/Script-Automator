@@ -24,7 +24,7 @@ struct WidgetInteractionIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         // Save action to shared storage for Flutter to pick up on next open
         let fm = FileManager.default
-        guard let dir = fm.containerURL(forSecurityApplicationGroupIdentifier: "group.com.antigravity.script_automator") else {
+        guard let dir = fm.containerURL(forSecurityApplicationGroupIdentifier: "group.com.js.scriptAutomator") else {
             return .result()
         }
         

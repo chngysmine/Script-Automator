@@ -29,7 +29,7 @@ struct Provider: AppIntentTimelineProvider {
     private func loadJSON(scriptId: String?) -> (node: SASUPNode?, error: String?) {
         let fileManager = FileManager.default
         // Corrected App Group ID
-        guard let directory = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.antigravity.script_automator") else {
+        guard let directory = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.js.scriptAutomator") else {
             return (nil, "App Group Not Found")
         }
         

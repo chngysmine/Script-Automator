@@ -1,4 +1,4 @@
-package com.antigravity.script_automator
+package com.js.scriptAutomator
 
 import android.content.Context
 import androidx.work.CoroutineWorker
@@ -40,7 +40,7 @@ class ScriptUpdateWorker(
             // 5. Setup MethodChannel to wait for completion
             val channel = io.flutter.plugin.common.MethodChannel(
                 engine.dartExecutor.binaryMessenger,
-                "com.antigravity.script_automator/background"
+                "com.js.scriptAutomator/background"
             )
 
             val completionDeferred = kotlinx.coroutines.CompletableDeferred<Boolean>()
