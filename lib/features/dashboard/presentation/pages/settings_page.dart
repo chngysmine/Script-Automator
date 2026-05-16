@@ -16,6 +16,8 @@ import 'package:script_automator/features/script_management/domain/repositories/
 import 'package:script_automator/features/script_management/data/datasources/script_local_data_source.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:script_automator/core/auth/auth_service.dart';
+import 'package:script_automator/core/sync/firestore_sync_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -402,6 +404,226 @@ class _SettingsPageState extends State<SettingsPage> {
       }
     }
   }
+  // ────────────────────── Auth / Sync Helpers ──────────────────────
+
+  bool _isAnonymousUser() {
+    if (!GetIt.I.isRegistered<AuthService>()) return true;
+    return GetIt.I<AuthService>().isAnonymous;
+  }
+
+  String? _buildAuthSubtitle() {
+    if (!GetIt.I.isRegistered<AuthService>()) return null;
+    final auth = GetIt.I<AuthService>();
+    if (auth.isAnonymous) return 'Guest mode';
+    return auth.email ?? auth.displayName;
+  }
+
+  Future<void> _syncToCloud() async {
+    if (!GetIt.I.isRegistered<AuthService>()) return;
+    final auth = GetIt.I<AuthService>();
+    final uid = auth.currentUser?.uid;
+    if (uid == null) return;
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Syncing to cloud..."),
+          backgroundColor: LiquidTheme.cyan,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
+
+    try {
+      final syncService = GetIt.I<FirestoreSyncService>();
+      await syncService.fullSync(uid);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Cloud sync complete ✓"),
+            backgroundColor: LiquidTheme.primary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Sync failed: $e"),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _signOut() async {
+    if (!GetIt.I.isRegistered<AuthService>()) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final colors = Theme.of(context).extension<LiquidColors>()!;
+        return AlertDialog(
+          backgroundColor: colors.sheetBackground,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text("Sign Out", style: TextStyle(color: colors.textTitle, fontWeight: FontWeight.w800)),
+          content: Text(
+            "Your local scripts will remain on this device. Cloud data can be synced when you sign back in.",
+            style: TextStyle(color: colors.textCaption),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text("Cancel", style: TextStyle(color: colors.textCaption)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Sign Out", style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true && mounted) {
+      await GetIt.I<AuthService>().signOut();
+      if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
+  void _showLinkAccountSheet() {
+    if (!GetIt.I.isRegistered<AuthService>()) return;
+    final auth = GetIt.I<AuthService>();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final colors = Theme.of(context).extension<LiquidColors>()!;
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
+          decoration: BoxDecoration(
+            color: colors.sheetBackground,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: colors.textCaption.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                "Upgrade Your Account",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: colors.textTitle),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Link a provider to keep your scripts and data across devices.",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: colors.textCaption),
+              ),
+              const SizedBox(height: 24),
+              _buildLinkButton(
+                icon: Icons.g_mobiledata_rounded,
+                label: "Continue with Google",
+                color: const Color(0xFF4285F4),
+                onTap: () async {
+                  Navigator.pop(context);
+                  try {
+                    await auth.linkWithGoogle();
+                    final uid = auth.currentUser?.uid;
+                    if (uid != null) {
+                      await GetIt.I<FirestoreSyncService>().pushLocalToCloud(uid);
+                    }
+                    if (mounted) {
+                      setState(() {});
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: const Text("Account linked with Google ✓"), backgroundColor: LiquidTheme.primary, behavior: SnackBarBehavior.floating),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("Failed: $e"), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating),
+                      );
+                    }
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildLinkButton(
+                icon: Icons.apple_rounded,
+                label: "Continue with Apple",
+                color: colors.textTitle,
+                onTap: () async {
+                  Navigator.pop(context);
+                  try {
+                    await auth.linkWithApple();
+                    final uid = auth.currentUser?.uid;
+                    if (uid != null) {
+                      await GetIt.I<FirestoreSyncService>().pushLocalToCloud(uid);
+                    }
+                    if (mounted) {
+                      setState(() {});
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: const Text("Account linked with Apple ✓"), backgroundColor: LiquidTheme.primary, behavior: SnackBarBehavior.floating),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("Failed: $e"), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLinkButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -515,6 +737,28 @@ class _SettingsPageState extends State<SettingsPage> {
                       null,
                       _exportData,
                       const Color(0xFF10B981),
+                    ),
+                    _buildActionItem(
+                      Icons.sync_rounded,
+                      "Sync to Cloud",
+                      _buildAuthSubtitle(),
+                      _syncToCloud,
+                      LiquidTheme.cyan,
+                    ),
+                    if (_isAnonymousUser())
+                      _buildActionItem(
+                        Icons.link_rounded,
+                        "Link Account",
+                        "Upgrade from Guest",
+                        _showLinkAccountSheet,
+                        const Color(0xFF8B5CF6),
+                      ),
+                    _buildActionItem(
+                      Icons.logout_rounded,
+                      "Sign Out",
+                      null,
+                      _signOut,
+                      const Color(0xFFEF4444),
                     ),
                   ], isLastGroup: true)
                   .animate(delay: 250.ms)

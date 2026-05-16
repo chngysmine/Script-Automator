@@ -9,7 +9,9 @@ import 'package:get_it/get_it.dart';
 import 'package:hive_ce_flutter/adapters.dart';
 import 'core/storage/app_storage_paths.dart';
 import 'core/theme/liquid_theme.dart';
-import 'features/dashboard/presentation/pages/liquid_splash_page.dart';
+import 'core/auth/auth_service.dart';
+import 'core/auth/auth_gate.dart';
+import 'core/sync/firestore_sync_service.dart';
 import 'features/script_management/domain/repositories/script_repository.dart';
 import 'features/script_management/data/repositories/script_repository_impl.dart';
 import 'features/script_management/data/datasources/script_local_data_source.dart';
@@ -88,6 +90,14 @@ Future<void> _setupDI() async {
   // Phase 0: Telemetry Engine (Always First)
   if (!GetIt.I.isRegistered<TelemetryService>()) {
     GetIt.I.registerSingleton<TelemetryService>(TelemetryService());
+  }
+
+  // Phase 1: Auth Service (must be before sync)
+  if (!GetIt.I.isRegistered<AuthService>()) {
+    GetIt.I.registerSingleton<AuthService>(AuthService());
+  }
+  if (!GetIt.I.isRegistered<FirestoreSyncService>()) {
+    GetIt.I.registerSingleton<FirestoreSyncService>(FirestoreSyncService());
   }
 
   // Phase 2: Data Layer — Hive root matches App Group on iOS when available
@@ -236,7 +246,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         theme: LiquidTheme.lightTheme,
         darkTheme: LiquidTheme.darkTheme,
         themeMode: ThemeMode.system,
-        home: const LiquidSplashPage(),
+        home: const AuthGate(),
         debugShowCheckedModeBanner: false,
       );
     }
@@ -249,7 +259,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           theme: LiquidTheme.lightTheme,
           darkTheme: LiquidTheme.darkTheme,
           themeMode: themeMode,
-          home: const LiquidSplashPage(),
+          home: const AuthGate(),
           debugShowCheckedModeBanner: false,
         );
       },

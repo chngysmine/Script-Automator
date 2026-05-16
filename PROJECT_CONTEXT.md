@@ -391,7 +391,7 @@ status: published → Script hiện trên In-App Store
 6. **Sidebar:** Đã bị xóa hoàn toàn. KHÔNG tạo lại. Navigation qua `GlassDock` + header buttons.
 7. **Dual Backend:** Firebase cho user-facing, Supabase cho telemetry/admin. Không coupling.
 8. **Offline First:** App phải hoạt động offline. Mọi network call phải có try/catch + fallback.
-9. **API Keys:** KHÔNG BAO GIỜ hardcode trong source code. Dùng `--dart-define` hoặc SecureStorage.
+9. **API Keys:** OpenAI key auto-loaded via `flutter_dotenv` từ `.env` asset (built-in). User có thể override bằng custom key trong Settings (SecureStorage). `.env` nằm trong `.gitignore`. Resolution order: SecureStorage → .env → dart-define.
 10. **Hive data:** Đang ở App Group container trên iOS (`group.com.js.scriptAutomator`). Widget Extension đọc SQLite sidecar, KHÔNG đọc Hive.
 
 ---
