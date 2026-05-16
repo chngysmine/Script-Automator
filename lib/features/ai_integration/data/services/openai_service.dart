@@ -1,19 +1,23 @@
 import 'package:dart_openai/dart_openai.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:script_automator/core/config/build_secrets.dart';
 import 'package:script_automator/core/security/app_secure_storage.dart';
 
 /// Service responsible for communicating with OpenAI's API.
 /// Uses the [dart_openai] package for native Dart bindings.
 ///
-/// Key resolution order: secure storage (user) → `--dart-define=OPENAI_API_KEY=…`
-/// (see [BuildSecrets]). Do not commit real keys; use defines or in-app settings.
+/// Key resolution order:
+///   1. Secure storage (user's custom key from Settings)
+///   2. `.env` asset via flutter_dotenv (built-in app key)
+///   3. `--dart-define=OPENAI_API_KEY=…` (CI/CD override)
 class OpenAIService {
   static const String _storageKey = 'openai_api_key';
   
   final FlutterSecureStorage _secureStorage;
   bool _isConfigured = false;
+  bool _isUsingCustomKey = false;
   String _currentModel = 'gpt-3.5-turbo';
 
   /// Constructor requiring secure storage injection.
@@ -22,6 +26,9 @@ class OpenAIService {
   /// Checks if the service is fully configured and ready to use.
   /// @return bool True if API key is loaded into OpenAI.instance
   bool get isReady => _isConfigured;
+
+  /// Whether the user has overridden the built-in key with their own.
+  bool get isUsingCustomKey => _isUsingCustomKey;
   
   /// Gets the currently active model.
   /// @return String model ID
@@ -38,6 +45,7 @@ class OpenAIService {
   /// @return `Future<void>`
   Future<void> initialize() async {
     try {
+      // Priority 1: User's custom key from secure storage (Settings page)
       final stored = await AppSecureStorage.readMigratingLegacy(
         _secureStorage,
         _storageKey,
@@ -45,20 +53,33 @@ class OpenAIService {
       if (stored != null && stored.isNotEmpty) {
         OpenAI.apiKey = stored;
         _isConfigured = true;
-        debugPrint("[OpenAIService] Initialized from secure storage.");
+        _isUsingCustomKey = true;
+        debugPrint("[OpenAIService] Initialized from user's custom key.");
         return;
       }
 
+      // Priority 2: Built-in key from .env asset (bundled with app)
+      final fromEnv = dotenv.env['OPENAI_API_KEY']?.trim() ?? '';
+      if (fromEnv.isNotEmpty) {
+        OpenAI.apiKey = fromEnv;
+        _isConfigured = true;
+        _isUsingCustomKey = false;
+        debugPrint("[OpenAIService] Initialized from built-in .env key.");
+        return;
+      }
+
+      // Priority 3: CI/CD dart-define fallback
       final fromBuild = BuildSecrets.openAiApiKey.trim();
       if (fromBuild.isNotEmpty) {
         OpenAI.apiKey = fromBuild;
         _isConfigured = true;
-        debugPrint("[OpenAIService] Initialized from OPENAI_API_KEY dart-define.");
+        _isUsingCustomKey = false;
+        debugPrint("[OpenAIService] Initialized from dart-define.");
         return;
       }
 
       _isConfigured = false;
-      debugPrint("[OpenAIService] No API key (secure storage or dart-define).");
+      debugPrint("[OpenAIService] No API key found in any source.");
     } catch (e) {
       _isConfigured = false;
       debugPrint("[OpenAIService] Error initializing: $e");

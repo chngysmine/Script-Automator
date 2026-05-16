@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 
 import 'package:flutter/material.dart';
@@ -38,6 +39,13 @@ void main() async {
     debugPrint('[FLUTTER_ERROR] ${details.exception}');
     debugPrint('[FLUTTER_ERROR] ${details.stack}');
   };
+
+  // Load environment variables from .env asset
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (e) {
+    debugPrint('[BOOT] .env load failed (using defaults): $e');
+  }
 
   // Phase 1A: Initialize Firebase (Auth, Firestore, FCM)
   try {
@@ -94,7 +102,10 @@ Future<void> _setupDI() async {
   if (!Hive.isAdapterRegistered(todAdapter.typeId)) {
     Hive.registerAdapter(todAdapter);
   }
-  Hive.registerAdapter(ScriptModelAdapter());
+  final scriptAdapter = ScriptModelAdapter();
+  if (!Hive.isAdapterRegistered(scriptAdapter.typeId)) {
+    Hive.registerAdapter(scriptAdapter);
+  }
 
   final encryptionService = EncryptionService();
   final localDataSource = ScriptLocalDataSourceImpl(encryptionService);
