@@ -424,39 +424,75 @@ class _SettingsPageState extends State<SettingsPage> {
     final uid = auth.currentUser?.uid;
     if (uid == null) return;
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Syncing to cloud..."),
-          backgroundColor: LiquidTheme.cyan,
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 1),
+    final messenger = ScaffoldMessenger.of(context);
+
+    // Show "syncing" indicator
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Row(
+          children: [
+            SizedBox(
+              width: 18, height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(width: 12),
+            Text(
+              "Syncing to cloud...",
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
-      );
-    }
+        backgroundColor: LiquidTheme.cyan,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 10),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
 
     try {
       final syncService = GetIt.I<FirestoreSyncService>();
       await syncService.fullSync(uid);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text("Cloud sync complete ✓"),
-            backgroundColor: LiquidTheme.primary,
-            behavior: SnackBarBehavior.floating,
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Text(
+            "☁️ Cloud sync complete",
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        );
-      }
+          backgroundColor: LiquidTheme.primary,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Sync failed: $e"),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            "Sync failed: $e",
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        );
-      }
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
     }
   }
 
@@ -537,7 +573,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 label: "Continue with Google",
                 color: const Color(0xFF4285F4),
                 onTap: () async {
-                  Navigator.pop(context);
+                  final messenger = ScaffoldMessenger.of(context);
+                  final navigator = Navigator.of(context);
+                  navigator.pop();
                   try {
                     await auth.linkWithGoogle();
                     final uid = auth.currentUser?.uid;
@@ -546,14 +584,22 @@ class _SettingsPageState extends State<SettingsPage> {
                     }
                     if (mounted) {
                       setState(() {});
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: const Text("Account linked with Google ✓"), backgroundColor: LiquidTheme.primary, behavior: SnackBarBehavior.floating),
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: const Text("Account linked with Google ✓"),
+                          backgroundColor: LiquidTheme.primary,
+                          behavior: SnackBarBehavior.floating,
+                        ),
                       );
                     }
                   } catch (e) {
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Failed: $e"), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating),
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text("Failed: $e"),
+                          backgroundColor: Colors.red,
+                          behavior: SnackBarBehavior.floating,
+                        ),
                       );
                     }
                   }
@@ -565,7 +611,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 label: "Continue with Apple",
                 color: colors.textTitle,
                 onTap: () async {
-                  Navigator.pop(context);
+                  final messenger = ScaffoldMessenger.of(context);
+                  final navigator = Navigator.of(context);
+                  navigator.pop();
                   try {
                     await auth.linkWithApple();
                     final uid = auth.currentUser?.uid;
@@ -574,14 +622,22 @@ class _SettingsPageState extends State<SettingsPage> {
                     }
                     if (mounted) {
                       setState(() {});
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: const Text("Account linked with Apple ✓"), backgroundColor: LiquidTheme.primary, behavior: SnackBarBehavior.floating),
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: const Text("Account linked with Apple ✓"),
+                          backgroundColor: LiquidTheme.primary,
+                          behavior: SnackBarBehavior.floating,
+                        ),
                       );
                     }
                   } catch (e) {
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Failed: $e"), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating),
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text("Failed: $e"),
+                          backgroundColor: Colors.red,
+                          behavior: SnackBarBehavior.floating,
+                        ),
                       );
                     }
                   }

@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:script_automator/core/auth/auth_service.dart';
+import 'package:script_automator/core/sync/firestore_sync_service.dart';
+import 'package:script_automator/features/auth/presentation/pages/login_page.dart';
 import 'package:script_automator/features/dashboard/presentation/pages/app_shell.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 
@@ -9,13 +11,19 @@ import 'package:script_automator/core/theme/liquid_theme.dart';
 ///
 /// Behavior:
 ///   1. While waiting for auth state → shows loading spinner
-///   2. No user → auto-triggers anonymous sign-in (zero-friction onboarding)
-///   3. User exists → navigates to [AppShell]
+///   2. No user → shows [LoginPage] (user picks sign-in method)
+///   3. User exists → shows [AppShell] + triggers background sync
 ///
-/// This widget replaces [LiquidSplashPage] as the `home` in [MaterialApp].
-/// The splash animation is preserved as a loading state within AuthGate.
-class AuthGate extends StatelessWidget {
+/// This widget is the `home` of [MaterialApp].
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool _hasSyncedThisSession = false;
 
   @override
   Widget build(BuildContext context) {
@@ -24,32 +32,46 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: authService.authStateChanges,
       builder: (context, snapshot) {
-        // Still resolving auth state
+        // Still resolving auth state (Firebase checking persisted session)
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const _AuthLoadingScreen();
         }
 
-        // No user — trigger anonymous sign-in silently
+        // No user → show Login page (user can pick Guest, Google, Apple)
         if (!snapshot.hasData) {
-          _autoSignIn(authService);
-          return const _AuthLoadingScreen();
+          _hasSyncedThisSession = false;
+          return const LoginPage();
         }
 
-        // User exists — go to main app
+        // User exists → go to main app + trigger background sync once
+        _triggerBackgroundSync(snapshot.data!);
         return const AppShell();
       },
     );
   }
 
-  void _autoSignIn(AuthService authService) {
-    authService.signInAnonymously().then((_) {}).catchError((e) {
-      debugPrint('[AuthGate] Auto sign-in failed: $e');
-      return null;
+  /// Triggers a background sync once per session when user becomes authenticated.
+  void _triggerBackgroundSync(User user) {
+    if (_hasSyncedThisSession) return;
+    _hasSyncedThisSession = true;
+
+    // Don't sync for anonymous users — they have no cloud data yet
+    if (user.isAnonymous) return;
+
+    // Fire-and-forget background sync
+    Future.microtask(() async {
+      try {
+        final syncService = GetIt.I<FirestoreSyncService>();
+        await syncService.syncBidirectional(user.uid);
+        debugPrint('[AuthGate] Background sync completed for ${user.uid}');
+      } catch (e) {
+        debugPrint('[AuthGate] Background sync failed: $e');
+      }
     });
   }
 }
 
-/// Minimal loading screen shown while auth state resolves.
+/// Minimal loading screen shown while Firebase resolves persisted auth state.
 class _AuthLoadingScreen extends StatelessWidget {
   const _AuthLoadingScreen();
 
