@@ -12,6 +12,7 @@ import 'package:get_it/get_it.dart';
 import 'package:script_automator/features/widget_renderer/presentation/widgets/sasup_renderer.dart';
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_node.dart';
 import 'package:script_automator/features/widget_renderer/domain/services/headless_widget_rendering_service.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/publish_script_sheet.dart';
 
 /// A bottom sheet that shows a script's preview (rendered widget image) and
 /// source code in two tabs, with action buttons to open the editor or delete.
@@ -303,6 +304,29 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
                   ),
                 ),
                 const SizedBox(width: 12),
+
+                // Publish button
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(context); // Close preview
+                    PublishScriptSheet.show(context, widget.script);
+                  },
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: LiquidTheme.cyan.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.public_rounded,
+                      color: LiquidTheme.cyan,
+                      size: 22,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                
                 // Open Editor button
                 Expanded(
                   child: GestureDetector(

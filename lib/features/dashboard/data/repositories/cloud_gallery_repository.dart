@@ -42,6 +42,21 @@ class CloudGalleryRepository implements GalleryRepository {
     }
   }
 
+  @override
+  Future<void> submitScript(Map<String, dynamic> submission) async {
+    final client = _supabaseClient;
+    if (client == null) throw Exception("Supabase is not initialized. Please log in.");
+    
+    // Add current user ID to submission
+    final user = client.auth.currentUser;
+    if (user == null) throw Exception("User is not logged in.");
+
+    submission['user_id'] = user.id;
+    submission['status'] = 'pending';
+    
+    await client.from('gallery_submissions').insert(submission);
+  }
+
   /// Queries the Supabase `script_moderation` table and strips out blocked items.
   Future<List<Map<String, dynamic>>> _filterBlockedScripts(List<Map<String, dynamic>> rawScripts) async {
     final client = _supabaseClient;
