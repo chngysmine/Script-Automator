@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:fpdart/fpdart.dart';
 import '../../domain/repositories/script_repository.dart';
 import '../../domain/entities/script.dart';
@@ -13,9 +14,14 @@ class ScriptRepositoryImpl implements ScriptRepository {
   final WidgetRegistryService _widgetRegistry;
   HeadlessWidgetRenderingService?
   _rendererService; // Lazy loaded to prevent circular DI
+  
+  final _changeController = StreamController<void>.broadcast();
 
   /// Constructs a [ScriptRepositoryImpl] with the given data source and registry.
   ScriptRepositoryImpl(this._dataSource, this._widgetRegistry);
+
+  @override
+  Stream<void> get onScriptsChanged => _changeController.stream;
 
   @override
   /// Retrieves a list of script metadata.
@@ -90,6 +96,8 @@ class ScriptRepositoryImpl implements ScriptRepository {
       // Sync to SQLite Registry for Widget Extension
       await _widgetRegistry.syncScript(model);
 
+      _changeController.add(null);
+
       return const Right(unit);
     } catch (e) {
       return Left(StorageFailure(e.toString()));
@@ -112,10 +120,17 @@ class ScriptRepositoryImpl implements ScriptRepository {
         // Fallback silently if DI is not fully booted
       }
 
+      _changeController.add(null);
+
       return const Right(unit);
     } catch (e) {
       return Left(StorageFailure(e.toString()));
     }
+  }
+
+  @override
+  void dispose() {
+    _changeController.close();
   }
 }
 

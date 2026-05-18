@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:get_it/get_it.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
+import 'package:script_automator/core/utils/debouncer.dart';
 import 'package:script_automator/core/ui/glass_sliver_header.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
@@ -26,6 +28,9 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
   final ScriptRepository _repository = GetIt.I<ScriptRepository>();
   List<Script> _scripts = [];
   bool _isLoading = true;
+  
+  StreamSubscription<void>? _scriptSub;
+  final _debouncer = Debouncer(milliseconds: 300);
 
   /// Returns a time-appropriate greeting based on the current hour.
   String get _greeting {
@@ -39,6 +44,18 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
   void initState() {
     super.initState();
     _loadScripts();
+    _scriptSub = _repository.onScriptsChanged.listen((_) {
+      _debouncer.run(() {
+        if (mounted) _loadScripts();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _scriptSub?.cancel();
+    _debouncer.dispose();
+    super.dispose();
   }
 
   Future<void> _loadScripts() async {

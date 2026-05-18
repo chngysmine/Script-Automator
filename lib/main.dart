@@ -150,6 +150,7 @@ Future<void> _setupDI() async {
   if (!GetIt.I.isRegistered<ScriptRepository>()) {
     GetIt.I.registerSingleton<ScriptRepository>(
       ScriptRepositoryImpl(localDataSource, widgetRegistry),
+      dispose: (repo) => repo.dispose(),
     );
   }
 

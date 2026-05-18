@@ -12,6 +12,9 @@ class StorageFailure extends Failure {
 }
 
 abstract class ScriptRepository {
+  /// Stream that emits an event whenever scripts are modified, created, or deleted.
+  Stream<void> get onScriptsChanged;
+
   /// Get all scripts (Metadata only).
   Future<Either<Failure, List<Script>>> getScripts();
 
@@ -23,4 +26,7 @@ abstract class ScriptRepository {
 
   /// Delete script.
   Future<Either<Failure, Unit>> deleteScript(String id);
+
+  /// Disposes resources (like streams).
+  void dispose();
 }

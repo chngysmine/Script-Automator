@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/utils/debouncer.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/edit_profile_sheet.dart';
@@ -38,11 +40,25 @@ class _ProfilePageState extends State<ProfilePage> {
   String _displayName = '';
   String _bio = '';
   String? _avatarPath;
+  StreamSubscription<void>? _scriptSub;
+  final _debouncer = Debouncer(milliseconds: 300);
 
   @override
   void initState() {
     super.initState();
     _loadStats();
+    _scriptSub = GetIt.I<ScriptRepository>().onScriptsChanged.listen((_) {
+      _debouncer.run(() {
+        if (mounted) _loadStats();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _scriptSub?.cancel();
+    _debouncer.dispose();
+    super.dispose();
   }
 
   Future<void> _loadStats() async {
