@@ -615,12 +615,12 @@ class _GalleryPageState extends State<GalleryPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                    const Text(
+                    Text(
                       "Import Script",
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w900,
-                        color: LiquidTheme.textDeep,
+                        color: colors.textTitle,
                         letterSpacing: -0.5,
                       ),
                     ),
