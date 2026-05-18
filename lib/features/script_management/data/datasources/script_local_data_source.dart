@@ -2,6 +2,8 @@ import 'package:hive_ce/hive.dart';
 import 'package:meta/meta.dart';
 import 'package:script_automator/features/script_management/data/models/script_model.dart';
 import 'package:script_automator/features/script_management/data/services/encryption_service.dart';
+import 'package:script_automator/core/auth/auth_service.dart';
+import 'package:get_it/get_it.dart';
 import 'package:synchronized/synchronized.dart';
 
 /// Exceptions for Data Layer
@@ -32,6 +34,9 @@ abstract class ScriptLocalDataSource {
 
   /// Flushes pending data to persistent storage safely.
   Future<void> flushData();
+
+  /// Closes active boxes and prepares for a new user session.
+  Future<void> reset();
 }
 
 /// Implementation of [ScriptLocalDataSource] using Hive CE LazyBox.
@@ -54,29 +59,42 @@ class ScriptLocalDataSourceImpl implements ScriptLocalDataSource {
   set testContentBox(LazyBox<String> box) => _contentBox = box;
 
   ScriptLocalDataSourceImpl(this._encryptionService);
+  
+  String? _currentUid;
 
-  /// Initializes secure storage and opens Hive boxes.
+  /// Initializes secure storage and opens Hive boxes namespaced by UID.
   ///
   /// Throws [CacheException] if initialization fails.
   Future<void> init() async {
+    final uid = GetIt.I.isRegistered<AuthService>() 
+        ? (GetIt.I<AuthService>().currentUser?.uid ?? 'guest')
+        : 'guest';
+
     if (_metadataBox != null &&
         _metadataBox!.isOpen &&
         _contentBox != null &&
-        _contentBox!.isOpen) {
+        _contentBox!.isOpen &&
+        _currentUid == uid) {
       return;
     }
+
+    if (_currentUid != null && _currentUid != uid) {
+      await reset();
+    }
+    
+    _currentUid = uid;
 
     try {
       final key = await _encryptionService.getEncryptionKey();
       final cipher = HiveAesCipher(key);
 
       _metadataBox = await Hive.openLazyBox<ScriptModel>(
-        'scripts_metadata_v2',
+        'scripts_metadata_v2_$uid',
         encryptionCipher: cipher,
       );
 
       _contentBox = await Hive.openLazyBox<String>(
-        'scripts_content_v2',
+        'scripts_content_v2_$uid',
         encryptionCipher: cipher,
       );
     } catch (e) {
@@ -210,6 +228,26 @@ class ScriptLocalDataSourceImpl implements ScriptLocalDataSource {
         // Log gracefully during background
         // ignore: avoid_print
         print("flushData error: $e");
+      }
+    });
+  }
+
+  @override
+  Future<void> reset() async {
+    return _saveLock.synchronized(() async {
+      try {
+        if (_metadataBox != null && _metadataBox!.isOpen) {
+          await _metadataBox!.close();
+        }
+        if (_contentBox != null && _contentBox!.isOpen) {
+          await _contentBox!.close();
+        }
+        _metadataBox = null;
+        _contentBox = null;
+        _currentUid = null;
+      } catch (e) {
+        // ignore: avoid_print
+        print("reset error: $e");
       }
     });
   }

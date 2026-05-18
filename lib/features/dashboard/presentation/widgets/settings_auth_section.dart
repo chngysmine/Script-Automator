@@ -4,6 +4,7 @@ import 'package:script_automator/core/auth/auth_service.dart';
 import 'package:script_automator/core/sync/firestore_sync_service.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
+import 'package:script_automator/features/script_management/data/datasources/script_local_data_source.dart';
 
 /// Checks if the current user is anonymous (or auth is not registered).
 bool isAnonymousUser() {
@@ -137,6 +138,9 @@ Future<bool> confirmAndSignOut(BuildContext context) async {
   );
 
   if (confirmed == true) {
+    if (GetIt.I.isRegistered<ScriptLocalDataSource>()) {
+      await GetIt.I<ScriptLocalDataSource>().reset();
+    }
     await GetIt.I<AuthService>().signOut();
     return true;
   }
