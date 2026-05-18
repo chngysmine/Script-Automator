@@ -12,6 +12,7 @@ class EditorAppBar extends StatelessWidget {
   final VoidCallback onPlay;
   final VoidCallback onAiTap;
   final VoidCallback onAiLongPress;
+  final VoidCallback? onAiGenerate;
 
   const EditorAppBar({
     super.key,
@@ -21,6 +22,7 @@ class EditorAppBar extends StatelessWidget {
     required this.onPlay,
     required this.onAiTap,
     required this.onAiLongPress,
+    this.onAiGenerate,
   });
 
   @override
@@ -28,7 +30,6 @@ class EditorAppBar extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colors = Theme.of(context).extension<LiquidColors>()!;
 
-    // Adaptive glass: dark → dark glass, light → frosted white glass
     final glassColor = isDark
         ? LiquidTheme.darkBackground.withValues(alpha: 0.65)
         : Colors.white.withValues(alpha: 0.75);
@@ -38,7 +39,7 @@ class EditorAppBar extends StatelessWidget {
     final titleColor = colors.textTitle;
     final iconDefaultColor = isDark
         ? const Color(0xFFE2E8F0)
-        : const Color(0xFF475569); // Slate 600
+        : const Color(0xFF475569);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -106,12 +107,16 @@ class EditorAppBar extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // AI Code Generate (replaces old gear/settings icon)
                     _buildActionButton(
                       context,
-                      Icons.settings_rounded,
-                      () {}, // Note: Future settings drawer
-                      tooltip: "Settings",
+                      Icons.auto_awesome_rounded,
+                      onAiGenerate ?? onAiTap,
+                      onLongPress: onAiLongPress,
+                      isHighlight: true,
+                      tooltip: "AI Generate",
                       iconColor: iconDefaultColor,
+                      highlightColor: LiquidTheme.secondary,
                     ),
                     const SizedBox(width: 8),
                     _buildActionButton(
@@ -140,7 +145,9 @@ class EditorAppBar extends StatelessWidget {
     bool isHighlight = false,
     String? tooltip,
     required Color iconColor,
+    Color? highlightColor,
   }) {
+    final color = highlightColor ?? LiquidTheme.primary;
     return Tooltip(
       message: tooltip ?? "",
       child: ScaleButton(
@@ -152,13 +159,13 @@ class EditorAppBar extends StatelessWidget {
           height: 40,
           decoration: BoxDecoration(
             color: isHighlight
-                ? LiquidTheme.primary.withValues(alpha: 0.1)
+                ? color.withValues(alpha: 0.1)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(
             icon,
-            color: isHighlight ? LiquidTheme.primary : iconColor,
+            color: isHighlight ? color : iconColor,
             size: 20,
           ),
         ),

@@ -301,7 +301,7 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: LiquidTheme.textDeep.withValues(alpha: 0.2),
+                            color: colors.glassOverlay,
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),

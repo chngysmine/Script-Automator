@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:script_automator/core/ui/liquid_glass.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
@@ -56,15 +57,16 @@ class _LiquidSearchBarState extends State<LiquidSearchBar>
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
     return GestureDetector(
       onTap: () => _openSearchOverlay(context),
       child: Container(
         height: 56,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.85),
+          color: colors.searchBarBackground,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.9),
+            color: colors.searchBarBorder,
             width: 1,
           ),
           boxShadow: [
@@ -108,7 +110,7 @@ class _LiquidSearchBarState extends State<LiquidSearchBar>
                 child: Text(
                   "Ask AI or search scripts...",
                   style: TextStyle(
-                    color: LiquidTheme.textLight.withValues(alpha: 0.6),
+                    color: colors.searchBarHint,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
@@ -117,7 +119,7 @@ class _LiquidSearchBarState extends State<LiquidSearchBar>
               Container(
                 width: 1,
                 height: 24,
-                color: LiquidTheme.textMedium.withValues(alpha: 0.2),
+                color: colors.divider,
               ),
               const SizedBox(width: 16),
               const Icon(
@@ -191,6 +193,7 @@ class _SearchOverlayState extends State<_SearchOverlay> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: BackdropFilter(
@@ -208,7 +211,7 @@ class _SearchOverlayState extends State<_SearchOverlay> {
                       child: Container(
                         height: 56,
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: colors.inputBackground,
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
                             color: LiquidTheme.primary.withValues(alpha: 0.5),
@@ -234,14 +237,14 @@ class _SearchOverlayState extends State<_SearchOverlay> {
                               child: TextField(
                                 controller: _searchController,
                                 autofocus: true,
-                                style: const TextStyle(
-                                  color: LiquidTheme.textDeep,
+                                style: TextStyle(
+                                  color: colors.textTitle,
                                   fontSize: 16,
                                 ),
                                 decoration: InputDecoration(
                                   hintText: "What do you want to automate?",
                                   hintStyle: TextStyle(
-                                    color: LiquidTheme.textLight.withValues(alpha: 0.5),
+                                    color: colors.textCaption,
                                   ),
                                   border: InputBorder.none,
                                 ),
@@ -258,7 +261,7 @@ class _SearchOverlayState extends State<_SearchOverlay> {
                         width: 56,
                         height: 56,
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
+                          color: colors.glassOverlay,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -403,7 +406,7 @@ class _SearchOverlayState extends State<_SearchOverlay> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
+                color: Theme.of(context).extension<LiquidColors>()!.glassOverlay,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: Colors.white70, size: 20),

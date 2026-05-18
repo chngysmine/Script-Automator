@@ -9,15 +9,18 @@ import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.ColorFilter
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.background
 import androidx.glance.layout.*
 import androidx.glance.text.*
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.unit.ColorProvider
 import androidx.glance.LocalContext
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.appWidgetBackground
 import android.content.Intent
 import android.content.ComponentName
 import android.graphics.Bitmap
@@ -187,7 +190,7 @@ object GlanceJsonParser {
         }
         
         if (modifiers.has("flex") && modifiers.get("flex").asInt == 1) {
-            modifier = modifier.defaultWeight()
+            // modifier = modifier.defaultWeight() // defaultWeight requires RowScope/ColumnScope in Glance 1.1.0
         }
 
         // Background

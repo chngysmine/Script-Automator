@@ -189,4 +189,94 @@ class OpenAIService {
       return null;
     }
   }
+  /// Generates, fixes, or modifies JavaScript code based on a user prompt.
+  ///
+  /// Modes:
+  ///   - **Generate:** When [existingCode] is null/empty, creates new code
+  ///   - **Fix/Debug:** When [existingCode] has code and prompt describes a bug
+  ///   - **Modify:** When [existingCode] has code and prompt describes changes
+  ///
+  /// @param prompt The user's instruction or idea
+  /// @param existingCode Optional current editor content for context
+  /// @return `Future<String?>` Generated/fixed JS code, or an error message
+  Future<String?> generateCode(String prompt, {String? existingCode}) async {
+    if (!_isConfigured) {
+      return '// Error: OpenAI API key not configured.\n// Go to AI settings to add your key.';
+    }
+
+    try {
+      final hasExistingCode = existingCode != null &&
+          existingCode.trim().isNotEmpty &&
+          !existingCode.trim().startsWith('// Start coding');
+
+      final systemPrompt = hasExistingCode
+          ? "You are a JavaScript code assistant for Script Automator, a mobile IDE. "
+            "The user has existing code in their editor and needs your help. "
+            "RULES:\n"
+            "1. Output ONLY the COMPLETE fixed/modified JavaScript code. No markdown, no explanations.\n"
+            "2. If the user describes a bug, find and fix it in their code.\n"
+            "3. If the user wants a modification, apply it to their existing code.\n"
+            "4. Preserve the user's code structure and style as much as possible.\n"
+            "5. Add brief inline comments only where you made changes (// FIXED: ... or // ADDED: ...).\n"
+            "6. If the user asks a non-code question, respond ONLY with: // This AI only helps with JavaScript code.\n"
+            "7. Always return the FULL working script, not just the changed parts.\n"
+            "8. Use modern ES6+ syntax.\n"
+            "9. Available APIs: console.log(), setTimeout(), JSON.parse/stringify(), "
+            "Math.*, Date, fetch() for HTTP, renderWidget(json) for UI."
+          : "You are a JavaScript code generator for Script Automator, a mobile IDE. "
+            "Your ONLY job is to generate JavaScript code based on the user's description. "
+            "RULES:\n"
+            "1. Output ONLY valid JavaScript code. No markdown, no explanations.\n"
+            "2. If the user asks a non-code question (e.g. 'what is the weather?', 'tell me a joke'), "
+            "respond ONLY with: // This AI only generates JavaScript code. Please describe what script you want to create.\n"
+            "3. Add brief inline comments to explain logic.\n"
+            "4. Use modern ES6+ syntax.\n"
+            "5. The script runs in a sandboxed JS engine with console.log() for output "
+            "and renderWidget(json) for UI rendering.\n"
+            "6. Available APIs: console.log(), setTimeout(), JSON.parse/stringify(), "
+            "Math.*, Date, fetch() for HTTP requests, renderWidget() for UI.";
+
+      final systemMessage = OpenAIChatCompletionChoiceMessageModel(
+        role: OpenAIChatMessageRole.system,
+        content: [
+          OpenAIChatCompletionChoiceMessageContentItemModel.text(systemPrompt),
+        ],
+      );
+
+      final userContent = hasExistingCode
+          ? "My current code:\n```javascript\n$existingCode\n```\n\nRequest: $prompt"
+          : prompt;
+
+      final userMessage = OpenAIChatCompletionChoiceMessageModel(
+        role: OpenAIChatMessageRole.user,
+        content: [
+          OpenAIChatCompletionChoiceMessageContentItemModel.text(userContent),
+        ],
+      );
+
+      final completion = await OpenAI.instance.chat.create(
+        model: _currentModel,
+        messages: [systemMessage, userMessage],
+        temperature: 0.3,
+        maxTokens: 2048,
+      );
+
+      final text = completion.choices.first.message.content?.first.text;
+
+      if (text != null) {
+        String clean = text;
+        if (clean.startsWith('```')) {
+          clean = clean.replaceFirst(RegExp(r'```[a-zA-Z]*\n?'), '');
+          if (clean.endsWith('```')) {
+            clean = clean.substring(0, clean.length - 3);
+          }
+        }
+        return clean.trim();
+      }
+      return '// No response from AI. Try again.';
+    } catch (e) {
+      debugPrint("[OpenAIService] Code generation failed: $e");
+      return '// Error generating code: $e';
+    }
+  }
 }

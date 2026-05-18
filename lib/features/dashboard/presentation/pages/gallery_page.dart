@@ -57,6 +57,7 @@ class _GalleryPageState extends State<GalleryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _templatesFuture,
       builder: (context, snapshot) {
@@ -124,18 +125,18 @@ class _GalleryPageState extends State<GalleryPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const Text(
+                        Text(
                           "Script Store",
                           style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.w900,
-                            color: LiquidTheme.textDeep,
+                            color: colors.textTitle,
                             letterSpacing: -1.2,
                           ),
                         ),
                         Row(
                           children: [
-                            _buildHeaderAction(
+                            _buildHeaderAction(context,
                               icon: Icons.cloud_download_rounded,
                               onPressed: _showImportDialog,
                               isPrimary: true,
@@ -284,15 +285,15 @@ class _GalleryPageState extends State<GalleryPage> {
 
             // 1. Featured Section (hide if searching)
             if (featured.isNotEmpty && _searchQuery.isEmpty) ...[
-              const SliverToBoxAdapter(
+              SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(24, 24, 24, 16),
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
                   child: Text(
                     "Editor's Choice",
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
-                      color: LiquidTheme.textDeep,
+                      color: colors.textTitle,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -324,15 +325,15 @@ class _GalleryPageState extends State<GalleryPage> {
 
             // 2. Main Feed
             ...[
-              const SliverToBoxAdapter(
+              SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(24, 40, 24, 16),
+                  padding: const EdgeInsets.fromLTRB(24, 40, 24, 16),
                   child: Text(
                     "New Releases",
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
-                      color: LiquidTheme.textDeep,
+                      color: colors.textTitle,
                       letterSpacing: -0.3,
                     ),
                   ),
@@ -346,7 +347,7 @@ class _GalleryPageState extends State<GalleryPage> {
                       child: Text(
                         "No scripts found matching $_searchQuery",
                         style: TextStyle(
-                          color: LiquidTheme.textLight.withValues(alpha: 0.8),
+                          color: colors.textCaption.withValues(alpha: 0.8),
                         ),
                       ),
                     ),
@@ -405,11 +406,12 @@ class _GalleryPageState extends State<GalleryPage> {
     );
   }
 
-  Widget _buildHeaderAction({
+  Widget _buildHeaderAction(BuildContext context, {
     required IconData icon,
     required VoidCallback onPressed,
     bool isPrimary = false,
   }) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: IconButton(
@@ -419,17 +421,17 @@ class _GalleryPageState extends State<GalleryPage> {
           decoration: BoxDecoration(
             color: isPrimary
                 ? LiquidTheme.primary.withValues(alpha: 0.1)
-                : Colors.white.withValues(alpha: 0.5),
+                : colors.cardBackground,
             shape: BoxShape.circle,
             border: Border.all(
               color: isPrimary
                   ? LiquidTheme.primary.withValues(alpha: 0.2)
-                  : Colors.white.withValues(alpha: 0.5),
+                  : colors.cardBorder,
             ),
           ),
           child: Icon(
             icon,
-            color: isPrimary ? LiquidTheme.primary : LiquidTheme.textDeep,
+            color: isPrimary ? LiquidTheme.primary : colors.textTitle,
             size: 20,
           ),
         ),
@@ -445,16 +447,19 @@ class _GalleryPageState extends State<GalleryPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _buildPreviewSheet(context, item),
+      builder: (context) {
+        final colors = Theme.of(context).extension<LiquidColors>()!;
+        return _buildPreviewSheet(context, item, colors);
+      },
     );
   }
 
-  Widget _buildPreviewSheet(BuildContext context, Map<String, dynamic> item) {
+  Widget _buildPreviewSheet(BuildContext context, Map<String, dynamic> item, LiquidColors colors) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      decoration: BoxDecoration(
+        color: colors.sheetBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: Column(
         children: [
@@ -486,10 +491,10 @@ class _GalleryPageState extends State<GalleryPage> {
           const SizedBox(height: 16),
           Text(
             item['name']!,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: LiquidTheme.textDeep,
+              color: colors.textTitle,
             ),
           ),
           Text(
@@ -549,10 +554,10 @@ class _GalleryPageState extends State<GalleryPage> {
                   const SizedBox(height: 8),
                   Text(
                     item['description']!,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       height: 1.5,
-                      color: LiquidTheme.textMedium,
+                      color: colors.textBody,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -588,7 +593,9 @@ class _GalleryPageState extends State<GalleryPage> {
     final controller = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) => Dialog(
+      builder: (context) {
+        final colors = Theme.of(context).extension<LiquidColors>()!;
+        return Dialog(
         backgroundColor: Colors.transparent,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(32),
@@ -597,10 +604,10 @@ class _GalleryPageState extends State<GalleryPage> {
             child: Container(
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.8),
+                color: colors.cardBackground,
                 borderRadius: BorderRadius.circular(32),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.5),
+                  color: colors.cardBorder,
                   width: 1.5,
                 ),
               ),
@@ -608,24 +615,24 @@ class _GalleryPageState extends State<GalleryPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Import Script",
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: LiquidTheme.textDeep,
-                      letterSpacing: -0.5,
+                    const Text(
+                      "Import Script",
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: LiquidTheme.textDeep,
+                        letterSpacing: -0.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "Enter a Raw URL (GitHub, Pastebin) to cloud-import a widget script.",
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: LiquidTheme.textLight,
-                      height: 1.4,
+                    const SizedBox(height: 8),
+                    Text(
+                      "Enter a Raw URL (GitHub, Pastebin) to cloud-import a widget script.",
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: colors.textCaption,
+                        height: 1.4,
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 24),
                   TextField(
                     controller: controller,
@@ -633,7 +640,7 @@ class _GalleryPageState extends State<GalleryPage> {
                     decoration: InputDecoration(
                       hintText: "https://raw.githubusercontent.com/...",
                       filled: true,
-                      fillColor: Colors.white.withValues(alpha: 0.5),
+                      fillColor: colors.inputBackground,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide.none,
@@ -650,7 +657,7 @@ class _GalleryPageState extends State<GalleryPage> {
                           child: Text(
                             "CANCEL",
                             style: TextStyle(
-                              color: LiquidTheme.textLight,
+                              color: colors.textCaption,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1,
                             ),
@@ -693,7 +700,8 @@ class _GalleryPageState extends State<GalleryPage> {
             ),
           ),
         ),
-      ),
+      );
+      },
     );
   }
 

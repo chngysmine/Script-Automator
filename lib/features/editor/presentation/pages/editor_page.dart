@@ -5,16 +5,19 @@ import 'package:get_it/get_it.dart';
 import '../../../../features/script_engine/domain/script_runner_service.dart';
 import '../../domain/code_forge_controller.dart';
 import '../../../../features/ai_integration/data/services/openai_service.dart';
-import '../../../../features/ai_integration/data/services/ollama_service.dart'; // Import OllamaService
 import '../painters/viewport_aware_painter.dart';
 import '../widgets/keyboard_toolbar.dart';
 import '../widgets/console_log_widget.dart'; // Enhanced Console
 import '../widgets/editor_app_bar.dart';
+import '../widgets/ai_generate_sheet.dart';
+import '../widgets/ai_onboarding_dialog.dart';
+import '../widgets/editor_constants.dart';
 import '../syntax_highlighter.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import '../../../../features/script_management/domain/repositories/script_repository.dart';
 
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'dart:ui';
 import 'dart:math';
 import 'dart:convert';
@@ -37,7 +40,6 @@ class _EditorPageState extends State<EditorPage>
   late CodeForgeController _controller;
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _verticalController = ScrollController();
-  final ScrollController _horizontalController = ScrollController();
   final FocusNode _focusNode = FocusNode();
   final List<ConsoleLogEntry> _logs = []; // Enhanced log entries
 
@@ -210,7 +212,6 @@ class _EditorPageState extends State<EditorPage>
     _controller.dispose();
     _inputController.dispose();
     _verticalController.dispose();
-    _horizontalController.dispose();
     _focusNode.dispose();
     _animController.dispose();
     _logSubscription?.cancel();
@@ -358,7 +359,7 @@ class _EditorPageState extends State<EditorPage>
     final editorBg = isDark
         ? LiquidTheme.darkBackground
         : const Color(0xFFF1F5F9); // Slate 100 — matches app gradient
-    final editorTextStyle = _kEditorTextStyle.copyWith(
+    final editorTextStyle = kEditorTextStyle.copyWith(
       color: isDark
           ? const Color(0xFFCBD5E1) // Slate 300
           : const Color(0xFF334155), // Slate 700
@@ -410,14 +411,15 @@ class _EditorPageState extends State<EditorPage>
                   onAiTap: () async {
                     if (CodeForgeController.activeAiProvider == null) {
                       if (context.mounted) {
-                        await _showAIOnboardingDialog(context);
+                        await showAiOnboardingDialog(context);
                       }
                       if (CodeForgeController.activeAiProvider == null) return;
                     }
                     await _controller.triggerGhostText();
                     HapticFeedback.lightImpact();
                   },
-                  onAiLongPress: () => _showAIOnboardingDialog(context),
+                  onAiLongPress: () => showAiOnboardingDialog(context),
+                  onAiGenerate: () => _showAiGenerateSheet(context),
                 ),
                 Expanded(
                   child: FadeTransition(
@@ -466,99 +468,97 @@ class _EditorPageState extends State<EditorPage>
                               borderRadius: BorderRadius.circular(24),
                               child: LayoutBuilder(
                                 builder: (context, constraints) {
-                                  final contentWidth = max(
-                                    constraints.maxWidth,
-                                    _calculateMaxWidth(),
-                                  );
                                   final contentHeight = max(
                                     constraints.maxHeight,
                                     _calculateHeight(),
                                   );
+                                  final availableWidth = constraints.maxWidth;
 
                                   return Scrollbar(
                                     controller: _verticalController,
                                     child: SingleChildScrollView(
                                       controller: _verticalController,
-                                      child: SingleChildScrollView(
-                                        controller: _horizontalController,
-                                        scrollDirection: Axis.horizontal,
-                                        child: SizedBox(
-                                          width: contentWidth,
-                                          height: contentHeight,
-                                          child: Stack(
-                                            children: [
-                                              AnimatedBuilder(
-                                                animation: Listenable.merge([
-                                                  _verticalController,
-                                                  _horizontalController,
-                                                  _controller,
-                                                ]),
-                                                builder: (context, _) => CustomPaint(
-                                                  size: Size(
-                                                    contentWidth,
-                                                    contentHeight,
-                                                  ),
-                                                  painter: ViewportAwarePainter(
-                                                    controller: _controller,
-                                                    scrollOffset:
-                                                        _verticalController
-                                                            .hasClients
-                                                        ? _verticalController
-                                                              .offset
-                                                        : 0,
-                                                    viewportHeight:
-                                                        constraints.maxHeight,
-                                                    textStyle:
-                                                        editorTextStyle,
-                                                    gutterWidth: 44.0,
-                                                    isDark: isDark,
-                                                    highlighter:
-                                                        SyntaxHighlighter.adaptive(
-                                                          baseStyle:
-                                                              editorTextStyle,
-                                                          brightness: isDark
-                                                              ? Brightness.dark
-                                                              : Brightness.light,
-                                                        ),
-                                                  ),
+                                      child: SizedBox(
+                                        width: availableWidth,
+                                        height: contentHeight,
+                                        child: Stack(
+                                          children: [
+                                            AnimatedBuilder(
+                                              animation: Listenable.merge([
+                                                _verticalController,
+                                                _controller,
+                                              ]),
+                                              builder: (context, _) => CustomPaint(
+                                                size: Size(
+                                                  availableWidth,
+                                                  contentHeight,
                                                 ),
-                                              ),
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                  left: 52.0,
-                                                  right: 8.0,
-                                                ),
-                                                child: TextField(
-                                                  controller: _inputController,
-                                                  focusNode: _focusNode,
-                                                  maxLines: null,
-                                                  keyboardType:
-                                                      TextInputType.multiline,
-                                                  showCursor: true,
-                                                  style: editorTextStyle
-                                                      .copyWith(
-                                                        color:
-                                                            Colors.transparent,
+                                                painter: ViewportAwarePainter(
+                                                  controller: _controller,
+                                                  scrollOffset:
+                                                      _verticalController
+                                                          .hasClients
+                                                      ? _verticalController
+                                                            .offset
+                                                      : 0,
+                                                  viewportHeight:
+                                                      constraints.maxHeight,
+                                                  textStyle:
+                                                      editorTextStyle,
+                                                  gutterWidth: 44.0,
+                                                  codePaddingLeft: 8.0,
+                                                  isDark: isDark,
+                                                  maxLineWidth:
+                                                      availableWidth - 60.0,
+                                                  highlighter:
+                                                      SyntaxHighlighter.adaptive(
+                                                        baseStyle:
+                                                            editorTextStyle,
+                                                        brightness: isDark
+                                                            ? Brightness.dark
+                                                            : Brightness.light,
                                                       ),
-                                                  strutStyle: const StrutStyle(
-                                                    fontSize: 13.5,
-                                                    height: 1.6,
-                                                    leading: 0,
-                                                    forceStrutHeight: true,
-                                                  ), // LOCK LINE HEIGHT
-                                                  cursorColor: const Color(
-                                                    0xFF0284C7,
-                                                  ), // Sky 600
-                                                  decoration: const InputDecoration(
-                                                    border: InputBorder.none,
-                                                    // contentPadding: EdgeInsets.only(top: 2), // Removed manual padding, relying on Strut
-                                                    contentPadding:
-                                                        EdgeInsets.zero,
-                                                  ),
                                                 ),
                                               ),
-                                            ],
-                                          ),
+                                            ),
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                left: 52.0,
+                                                right: 8.0,
+                                              ),
+                                              child: TextField(
+                                                controller: _inputController,
+                                                focusNode: _focusNode,
+                                                maxLines: null,
+                                                keyboardType:
+                                                    TextInputType.multiline,
+                                                showCursor: true,
+                                                style: editorTextStyle
+                                                    .copyWith(
+                                                      color:
+                                                          Colors.transparent,
+                                                    ),
+                                                strutStyle: const StrutStyle(
+                                                  fontSize: 13.5,
+                                                  height: 1.6,
+                                                  leading: 0,
+                                                  forceStrutHeight: true,
+                                                ),
+                                                cursorColor: const Color(
+                                                  0xFF0284C7,
+                                                ),
+                                                cursorHeight: 16,
+                                                cursorWidth: 1.5,
+                                                decoration: const InputDecoration(
+                                                  border: InputBorder.none,
+                                                  isCollapsed: true,
+                                                  isDense: true,
+                                                  contentPadding:
+                                                      EdgeInsets.zero,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),
@@ -792,286 +792,110 @@ class _EditorPageState extends State<EditorPage>
     );
   }
 
-  // REPLACES _showAIProviderDialog with a proper Onboarding experience
-  Future<void> _showAIOnboardingDialog(BuildContext context) async {
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              backgroundColor: const Color(0xFFF8FAFC),
-              surfaceTintColor: Colors.white,
-              title: const Row(
-                children: [
-                  Icon(Icons.auto_awesome, color: LiquidTheme.primary),
-                  SizedBox(width: 8),
-                  Text(
-                    "Enable AI Assistant",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Choose your intelligence engine:",
-                      style: TextStyle(fontSize: 13, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 16),
+  // ────────────────────── AI Code Generation Sheet ──────────────────────
 
-                    // OPTION A: OPENAI (Default)
-                    _buildProviderCard(
-                      title: "OpenAI ChatGPT",
-                      subtitle: "Requires API Key • Smartest • Fast",
-                      icon: Icons.chat_bubble_outline_rounded,
-                      isSelected:
-                          CodeForgeController.activeAiProvider == 'openai',
-                      onTap: () {
-                        setState(
-                          () => CodeForgeController.activeAiProvider = 'openai',
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
+  Future<void> _showAiGenerateSheet(BuildContext ctx) async {
+    final isDark = Theme.of(ctx).brightness == Brightness.dark;
+    final colors = Theme.of(ctx).extension<LiquidColors>()!;
 
-                    // OPTION B: GEMINI
-                    _buildProviderCard(
-                      title: "Google Gemini",
-                      subtitle: "Fast • Standard Model",
-                      icon: Icons.flash_on_rounded,
-                      isSelected:
-                          CodeForgeController.activeAiProvider == 'gemini',
-                      onTap: () async {
-                        setState(
-                          () => CodeForgeController.activeAiProvider = 'gemini',
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-
-                    // OPTION C: OLLAMA
-                    _buildProviderCard(
-                      title: "Ollama (Local/Private)",
-                      subtitle: "Runs on PC • Secure • No Internet",
-                      icon: Icons.computer,
-                      isSelected:
-                          CodeForgeController.activeAiProvider == 'ollama',
-                      onTap: () {
-                        setState(
-                          () => CodeForgeController.activeAiProvider = 'ollama',
-                        );
-                      },
-                    ),
-
-                    // OLLAMA SETUP GUIDE (Collapsed unless selected)
-                    if (CodeForgeController.activeAiProvider == 'ollama')
-                      Container(
-                        margin: const EdgeInsets.only(top: 12),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.grey.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              "Setup Instructions:",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              "1. On your PC, run Ollama with:",
-                              style: TextStyle(fontSize: 11),
-                            ),
-                            Container(
-                              margin: const EdgeInsets.symmetric(vertical: 4),
-                              padding: const EdgeInsets.all(6),
-                              color: Colors.grey[100],
-                              child: const SelectableText(
-                                "OLLAMA_HOST=0.0.0.0 ollama serve",
-                                style: TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                            const Text(
-                              "2. Find your PC's IP (e.g., 192.168.1.5)",
-                              style: TextStyle(fontSize: 11),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              "Connect to Host:",
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            TextField(
-                              style: const TextStyle(height: 1.0, fontSize: 13),
-                              decoration: const InputDecoration(
-                                hintText: "http://192.168.1.X:11434",
-                                isDense: true,
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 8,
-                                ),
-                              ),
-                              onChanged: (val) {
-                                GetIt.I<OllamaService>().setConfig(
-                                  val,
-                                  "deepseek-coder:6.7b",
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              actions: [
-                // Option to use custom key (removes Free Tier limits)
-                TextButton(
-                  onPressed: () async {
-                    Navigator.pop(context);
-                    await _showOpenAiApiKeyDialog(context);
-                  },
-                  child: const Text("Add OpenAI API Key"),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Done"),
-                ),
-              ],
+    final generatedCode = await showModalBottomSheet<String>(
+      context: ctx,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return AiGenerateSheetContent(
+          isDark: isDark,
+          colors: colors,
+          onGenerate: (prompt) async {
+            final openai = GetIt.I<OpenAIService>();
+            if (!openai.isReady) {
+              return null; // signal to show onboarding
+            }
+            return openai.generateCode(
+              prompt,
+              existingCode: _inputController.text,
             );
           },
         );
       },
     );
-  }
 
-  Widget _buildProviderCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? LiquidTheme.primary.withValues(alpha: 0.1)
-              : Colors.white,
-          border: Border.all(
-            color: isSelected
-                ? LiquidTheme.primary
-                : Colors.grey.withValues(alpha: 0.2),
-            width: 2,
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: isSelected ? LiquidTheme.primary : Colors.grey),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: isSelected ? LiquidTheme.primary : Colors.black87,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(fontSize: 10, color: Colors.grey),
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              const Icon(
-                Icons.check_circle,
-                color: LiquidTheme.primary,
-                size: 18,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+    // Handle result after sheet is fully dismissed
+    if (generatedCode == null) return;
 
-  Future<void> _showOpenAiApiKeyDialog(BuildContext context) async {
-    final textController = TextEditingController();
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("OpenAI API Key"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              "Ghost completion uses OpenAI via dart_openai (chat completions). "
-              "Paste your key from platform.openai.com. Gemini is optional — set it in Settings.",
-              style: TextStyle(fontSize: 13, color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: textController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: "API Key",
-                hintText: "sk-...",
+    // Check if we need to show onboarding (special sentinel)
+    if (generatedCode == '__NEED_ONBOARDING__' && mounted) {
+      await showAiOnboardingDialog(context);
+      return;
+    }
+
+    if (!mounted) return;
+
+    // Detect error responses from AI and show snackbar instead of polluting editor
+    if (generatedCode.startsWith('// Error')) {
+      final messenger = ScaffoldMessenger.of(context);
+      final errorMsg = generatedCode
+          .replaceFirst('// Error generating code: ', '')
+          .replaceFirst('// Error: ', '');
+      messenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  errorMsg.length > 80
+                      ? '${errorMsg.substring(0, 80)}...'
+                      : errorMsg,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 4),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
+      );
+      return;
+    }
+
+    if (generatedCode.isNotEmpty) {
+      // AI always returns the complete script (whether new, fixed, or modified)
+      _inputController.text = generatedCode;
+      _inputController.selection = TextSelection.collapsed(
+        offset: generatedCode.length,
+      );
+      _controller.setText(generatedCode);
+      _history.record(generatedCode, generatedCode.length);
+      _onTextChanged();
+      setState(() {});
+      HapticFeedback.mediumImpact();
+
+      // Success feedback
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Code generated successfully',
+                style: TextStyle(color: Colors.white, fontSize: 13),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              if (textController.text.isNotEmpty) {
-                await GetIt.I<OpenAIService>().setApiKey(
-                  textController.text.trim(),
-                );
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("OpenAI key saved")),
-                  );
-                }
-              }
-            },
-            child: const Text("Save"),
-          ),
-        ],
-      ),
-    );
+          backgroundColor: const Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   double _calculateHeight() {
@@ -1082,29 +906,5 @@ class _EditorPageState extends State<EditorPage>
       _controller.lineCount * (13.5 * 1.6) + 300,
     );
   }
-
-  double _calculateMaxWidth() {
-    if (_inputController.text.isEmpty) return 1000;
-    int maxLen = 0;
-    final lines = _inputController.text.split('\n');
-    for (final line in lines) {
-      if (line.length > maxLen) maxLen = line.length;
-    }
-    return maxLen * 9.0 + 100;
-  }
 }
 
-// SHARED STYLE CONSTANT TO PREVENT MISMATCH
-const TextStyle _kEditorTextStyle = TextStyle(
-  fontFamily: 'monospace',
-  fontSize: 13.5,
-  color: Color(0xFFCBD5E1), // Slate 300 — balanced contrast for dark mode
-  height: 1.6, // FIXED LINE HEIGHT matches TextField StrutStyle
-  fontFeatures: [FontFeature.tabularFigures()],
-  fontWeight: FontWeight.w500,
-);
-
-class CommonColors {
-  static const Color pastelBlue = Color(0xFFE0F2FE);
-  static const Color pastelPurple = Color(0xFFF3E8FF);
-}

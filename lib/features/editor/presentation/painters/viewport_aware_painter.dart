@@ -8,7 +8,9 @@ import '../syntax_highlighter.dart';
 /// then paints gutter line numbers and syntax-highlighted text for the
 /// region visible within [viewportHeight] starting from [scrollOffset].
 ///
-/// Performance: O(visible_lines) — independent of total file size.
+/// Supports soft word-wrapping: long lines wrap within [maxLineWidth],
+/// but the line number in the gutter stays on the first visual row and
+/// only increments for each logical line (newline character).
 ///
 /// Architecture:
 /// The companion [TextField] provides native cursor, selection handles,
@@ -41,6 +43,10 @@ class ViewportAwarePainter extends CustomPainter {
   /// Horizontal padding between gutter border and first code character.
   final double codePaddingLeft;
 
+  /// Maximum width for code text before wrapping.
+  /// When null, text does not wrap (extends infinitely).
+  final double? maxLineWidth;
+
   /// Optional syntax highlighter for token-based coloring.
   final SyntaxHighlighter? highlighter;
 
@@ -48,9 +54,6 @@ class ViewportAwarePainter extends CustomPainter {
   final bool isDark;
 
   /// Creates a [ViewportAwarePainter] bound to [controller].
-  ///
-  /// [codePaddingLeft] must match the TextField's left content padding
-  /// (measured from the gutter's right edge) to keep paint and input aligned.
   ViewportAwarePainter({
     required this.controller,
     required this.scrollOffset,
@@ -60,6 +63,7 @@ class ViewportAwarePainter extends CustomPainter {
     this.selectionColor = const Color(0x402196F3),
     this.gutterWidth = 48.0,
     this.codePaddingLeft = 4.0,
+    this.maxLineWidth,
     this.highlighter,
     this.isDark = true,
   }) : super(repaint: controller);
@@ -71,20 +75,9 @@ class ViewportAwarePainter extends CustomPainter {
       text: TextSpan(text: 'M', style: textStyle),
       textDirection: TextDirection.ltr,
     )..layout();
-    final lineHeight = metricPainter.height;
+    final singleLineHeight = metricPainter.height;
 
-    // ----- 2. Visible Range -----
-    final firstVisibleLine = (scrollOffset / lineHeight).floor().clamp(
-      0,
-      controller.lineCount,
-    );
-    final visibleLineCount = (viewportHeight / lineHeight).ceil() + 1;
-    final lastVisibleLine = (firstVisibleLine + visibleLineCount).clamp(
-      0,
-      controller.lineCount,
-    );
-
-    // ----- 3. Gutter Background -----
+    // ----- 2. Gutter Background -----
     canvas.drawRect(
       Rect.fromLTWH(0, 0, gutterWidth, size.height),
       Paint()
@@ -104,37 +97,21 @@ class ViewportAwarePainter extends CustomPainter {
         ..strokeWidth = 0.5,
     );
 
-    // ----- 4. Per-Line Rendering -----
+    // ----- 3. Per-Line Rendering with Wrapping -----
     final double codeX = gutterWidth + codePaddingLeft;
+    final double wrapWidth = maxLineWidth ?? (size.width - codeX);
+    double currentY = 0;
 
-    for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
-      final double yOffset = i * lineHeight;
+    for (int i = 0; i < controller.lineCount; i++) {
+      // Skip lines entirely above viewport
+      // We still need to calculate their height for correct Y positioning
 
-      // ---- 4a. Line Number ----
-      final lineNumSpan = TextSpan(
-        text: (i + 1).toString(),
-        style: textStyle.copyWith(
-          color: isDark
-              ? const Color(0xFF6E7681) // GitHub Dark
-              : const Color(0xFF94A3B8), // Slate 400
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      );
-      final lineNumPainter = TextPainter(
-        text: lineNumSpan,
-        textAlign: TextAlign.right,
-        textDirection: TextDirection.ltr,
-      )..layout(minWidth: gutterWidth - 12, maxWidth: gutterWidth - 12);
-      lineNumPainter.paint(canvas, Offset(4, yOffset));
-
-      // ---- 4b. Line Content ----
       final rawLine = controller.getLine(i);
       final contentToDraw = rawLine.endsWith('\n')
           ? rawLine.substring(0, rawLine.length - 1)
           : rawLine;
 
-      // ---- 4c. Syntax Highlighting ----
+      // Build syntax-highlighted span
       InlineSpan textSpan;
       if (highlighter != null) {
         textSpan = TextSpan(
@@ -145,7 +122,7 @@ class ViewportAwarePainter extends CustomPainter {
         textSpan = TextSpan(text: contentToDraw, style: textStyle);
       }
 
-      // ---- 4d. Ghost Text (AI Suggestion) ----
+      // Ghost text overlay
       if (controller.ghostText != null && controller.selection.isCollapsed) {
         final cursorOffset = controller.selection.baseOffset;
         final pos = controller.getLineAndCol(cursorOffset);
@@ -165,16 +142,50 @@ class ViewportAwarePainter extends CustomPainter {
         }
       }
 
-      // ---- 4e. Paint the Syntax-Colored Line ----
+      // Layout with wrapping constraint
       final linePainter = TextPainter(
         text: textSpan,
         textDirection: TextDirection.ltr,
-      )..layout();
-      linePainter.paint(canvas, Offset(codeX, yOffset));
-    }
+        maxLines: null, // allow wrapping
+      )..layout(maxWidth: wrapWidth);
 
-    // Selection highlighting is handled natively by the companion TextField.
-    // Painting it here would cause double-rendering (visible as dark overlay).
+      final lineVisualHeight = linePainter.height;
+
+      // Only paint if this line is within the visible viewport
+      final lineBottom = currentY + lineVisualHeight;
+      final isVisible = lineBottom > scrollOffset &&
+          currentY < scrollOffset + viewportHeight + singleLineHeight;
+
+      if (isVisible) {
+        // Line number — only on the first visual row of the logical line
+        final lineNumSpan = TextSpan(
+          text: (i + 1).toString(),
+          style: textStyle.copyWith(
+            color: isDark
+                ? const Color(0xFF6E7681)
+                : const Color(0xFF94A3B8),
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        );
+        final lineNumPainter = TextPainter(
+          text: lineNumSpan,
+          textAlign: TextAlign.right,
+          textDirection: TextDirection.ltr,
+        )..layout(minWidth: gutterWidth - 12, maxWidth: gutterWidth - 12);
+        lineNumPainter.paint(canvas, Offset(4, currentY));
+
+        // Code content
+        linePainter.paint(canvas, Offset(codeX, currentY));
+      }
+
+      currentY += lineVisualHeight;
+
+      // Early exit if we're past the viewport
+      if (currentY > scrollOffset + viewportHeight + singleLineHeight * 2) {
+        break;
+      }
+    }
   }
 
   @override
@@ -184,6 +195,7 @@ class ViewportAwarePainter extends CustomPainter {
         oldDelegate.controller != controller ||
         oldDelegate.textStyle != textStyle ||
         oldDelegate.highlighter != highlighter ||
-        oldDelegate.isDark != isDark;
+        oldDelegate.isDark != isDark ||
+        oldDelegate.maxLineWidth != maxLineWidth;
   }
 }

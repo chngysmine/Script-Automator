@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 class NewScriptDialog extends StatefulWidget {
@@ -21,6 +22,7 @@ class _NewScriptDialogState extends State<NewScriptDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
     return Dialog(
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -32,12 +34,12 @@ class _NewScriptDialogState extends State<NewScriptDialog> {
               child: Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: LiquidTheme.textPrimary.withValues(
+                  color: colors.dialogBackground.withValues(
                     alpha: 0.8,
-                  ), // Glass White
+                  ),
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.6),
+                    color: colors.glassBorder,
                     width: 1.5,
                   ),
                   boxShadow: [
@@ -73,7 +75,7 @@ class _NewScriptDialogState extends State<NewScriptDialog> {
                           style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
-                            color: LiquidTheme.textDeep,
+                            color: colors.textTitle,
                             letterSpacing: -0.5,
                           ),
                         ),
@@ -84,7 +86,7 @@ class _NewScriptDialogState extends State<NewScriptDialog> {
                     // Input
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: colors.inputBackground,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
@@ -99,13 +101,13 @@ class _NewScriptDialogState extends State<NewScriptDialog> {
                         autofocus: true,
                         style: TextStyle(
                           fontSize: 16,
-                          color: LiquidTheme.textDeep,
+                          color: colors.textBody,
                           fontWeight: FontWeight.w600,
                         ),
                         decoration: InputDecoration(
                           hintText: "Script Name (e.g., auto_login)",
                           hintStyle: TextStyle(
-                            color: LiquidTheme.textLight.withValues(alpha: 0.6),
+                            color: colors.textCaption,
                           ),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(
@@ -114,7 +116,7 @@ class _NewScriptDialogState extends State<NewScriptDialog> {
                           ),
                           suffixIcon: Icon(
                             Icons.edit_rounded,
-                            color: LiquidTheme.textLight,
+                            color: colors.textCaption,
                             size: 20,
                           ),
                         ),
@@ -137,7 +139,7 @@ class _NewScriptDialogState extends State<NewScriptDialog> {
                             child: Text(
                               "Cancel",
                               style: TextStyle(
-                                color: LiquidTheme.textMedium,
+                                color: colors.textCaption,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 16,
                               ),

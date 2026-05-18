@@ -61,10 +61,16 @@ void main() async {
   // Phase 1B: Initialize Supabase Analytics & Telemetry Layer
   // Non-critical — app continues in offline mode if this fails.
   try {
-    await Supabase.initialize(
-      url: 'https://zyobiujdhnamzycadovx.supabase.co',
-      anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp5b2JpdWpkaG5hbXp5Y2Fkb3Z4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzOTAxNTgsImV4cCI6MjA5MDk2NjE1OH0.gbZoFPtCungmRATnAimPsGnlDTiAICKK3UCZoDGQNPo',
-    ).timeout(const Duration(seconds: 5));
+    final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+    final supabaseKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+    if (supabaseUrl.isNotEmpty && supabaseKey.isNotEmpty) {
+      await Supabase.initialize(
+        url: supabaseUrl,
+        anonKey: supabaseKey,
+      ).timeout(const Duration(seconds: 5));
+    } else {
+      debugPrint('[BOOT] Supabase credentials not found in .env (offline mode)');
+    }
   } catch (e) {
     debugPrint('[BOOT] Supabase init failed (offline mode): $e');
   }

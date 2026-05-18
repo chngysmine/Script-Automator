@@ -14,6 +14,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:script_automator/core/ui/glass_sliver_header.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/profile_cards.dart';
 
 /// Profile page displaying the user's script statistics, contribution heatmap,
 /// achievements, and collections.
@@ -34,8 +35,8 @@ class _ProfilePageState extends State<ProfilePage> {
   int _totalRuns = 0;
   bool _loaded = false;
 
-  String _displayName = 'My Workspace';
-  String _bio = 'Widget automation workspace';
+  String _displayName = '';
+  String _bio = '';
   String? _avatarPath;
 
   @override
@@ -199,9 +200,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   width: 28,
                   height: 28,
                   decoration: BoxDecoration(
-                    color: LiquidTheme.textDeep,
+                    color: Theme.of(context).extension<LiquidColors>()!.textTitle,
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
+                    border: Border.all(color: Theme.of(context).extension<LiquidColors>()!.cardBackground, width: 2),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.1),
@@ -210,10 +211,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.edit_rounded,
                     size: 14,
-                    color: Colors.white,
+                    color: Theme.of(context).extension<LiquidColors>()!.cardBackground,
                   ),
                 ),
               ),
@@ -298,26 +299,26 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Row(
         children: [
           Expanded(
-            child: _buildStatCard(
-              _loaded ? "$_scriptCount" : "-",
-              "Scripts\nCreated",
-              LiquidTheme.primary,
+            child: ProfileStatCard(
+              value: _loaded ? "$_scriptCount" : "-",
+              label: "Scripts\nCreated",
+              color: LiquidTheme.primary,
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _buildStatCard(
-              _loaded ? "$_widgetCount" : "-",
-              "Widgets\nDeployed",
-              LiquidTheme.cyan,
+            child: ProfileStatCard(
+              value: _loaded ? "$_widgetCount" : "-",
+              label: "Widgets\nDeployed",
+              color: LiquidTheme.cyan,
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _buildStatCard(
-              _loaded ? "$_totalRuns" : "-",
-              "Total\nRuns",
-              const Color(0xFFEC4899),
+            child: ProfileStatCard(
+              value: _loaded ? "$_totalRuns" : "-",
+              label: "Total\nRuns",
+              color: const Color(0xFFEC4899),
             ),
           ),
         ],
@@ -325,47 +326,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildStatCard(String value, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            color.withValues(alpha: 0.15),
-            color.withValues(alpha: 0.05),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-              color: color,
-              letterSpacing: -1,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: LiquidTheme.textMedium,
-              height: 1.3,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // _buildStatCard is now ProfileStatCard in profile_cards.dart
 
   Widget _buildSectionTitle(String title, {VoidCallback? onSeeAllTap}) {
     return Padding(
@@ -375,10 +336,10 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w800,
-              color: LiquidTheme.textDeep,
+              color: Theme.of(context).extension<LiquidColors>()!.textTitle,
               letterSpacing: -0.5,
             ),
           ),
@@ -449,7 +410,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               d,
                               style: TextStyle(
                                 fontSize: 9,
-                                color: LiquidTheme.textLight.withValues(
+                                color: Theme.of(context).extension<LiquidColors>()!.textCaption.withValues(
                                   alpha: 0.6,
                                 ),
                               ),
@@ -533,7 +494,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             fontWeight: FontWeight.w700,
                             color: streak > 0
                                 ? LiquidTheme.primary
-                                : LiquidTheme.textLight.withValues(alpha: 0.6),
+                                : Theme.of(context).extension<LiquidColors>()!.textCaption.withValues(alpha: 0.6),
                           ),
                         );
                       },
@@ -544,7 +505,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           "Less",
                           style: TextStyle(
                             fontSize: 10,
-                            color: LiquidTheme.textLight.withValues(alpha: 0.6),
+                            color: Theme.of(context).extension<LiquidColors>()!.textCaption.withValues(alpha: 0.6),
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -566,7 +527,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           "More",
                           style: TextStyle(
                             fontSize: 10,
-                            color: LiquidTheme.textLight.withValues(alpha: 0.6),
+                            color: Theme.of(context).extension<LiquidColors>()!.textCaption.withValues(alpha: 0.6),
                           ),
                         ),
                       ],
@@ -671,7 +632,7 @@ class _ProfilePageState extends State<ProfilePage> {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            backgroundColor: LiquidTheme.textDeep,
+            backgroundColor: Theme.of(context).extension<LiquidColors>()!.dialogBackground,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
             ),
@@ -681,13 +642,13 @@ class _ProfilePageState extends State<ProfilePage> {
                 const SizedBox(width: 8),
                 Text(
                   title,
-                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                  style: TextStyle(color: Theme.of(context).extension<LiquidColors>()!.textTitle, fontSize: 18),
                 ),
               ],
             ),
             content: Text(
               unlocked ? "Unlocked: $subtitle." : "Locked. Goal: $subtitle.",
-              style: const TextStyle(color: Colors.white70),
+              style: TextStyle(color: Theme.of(context).extension<LiquidColors>()!.textBody),
             ),
             actions: [
               TextButton(
@@ -755,7 +716,7 @@ class _ProfilePageState extends State<ProfilePage> {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
-                color: unlocked ? LiquidTheme.textDeep : LiquidTheme.textLight,
+                color: unlocked ? Theme.of(context).extension<LiquidColors>()!.textTitle : Theme.of(context).extension<LiquidColors>()!.textCaption,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -829,10 +790,10 @@ class _ProfilePageState extends State<ProfilePage> {
                     children: [
                       Text(
                         c.$1,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: LiquidTheme.textDeep,
+                          color: Theme.of(context).extension<LiquidColors>()!.textTitle,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -841,7 +802,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         "${c.$3} scripts",
                         style: TextStyle(
                           fontSize: 11,
-                          color: LiquidTheme.textLight.withValues(alpha: 0.7),
+                          color: Theme.of(context).extension<LiquidColors>()!.textCaption.withValues(alpha: 0.7),
                         ),
                       ),
                     ],

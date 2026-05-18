@@ -123,10 +123,11 @@ class _ExplorePageState extends State<ExplorePage> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
     return RefreshIndicator(
       onRefresh: _handleRefresh,
       color: LiquidTheme.primary,
-      backgroundColor: Colors.white,
+      backgroundColor: colors.sheetBackground,
       child: CustomScrollView(
         physics: const BouncingScrollPhysics(
           parent: AlwaysScrollableScrollPhysics(),
@@ -228,14 +229,14 @@ class _ExplorePageState extends State<ExplorePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Text(
                       "Categories",
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: LiquidTheme.textDeep,
+                        color: colors.textTitle,
                       ),
                     ),
                   ),
@@ -251,6 +252,7 @@ class _ExplorePageState extends State<ExplorePage> {
                         return _buildCategoryChip(
                           cat,
                           _selectedCategory == cat,
+                          colors,
                         );
                       },
                     ),
@@ -259,14 +261,14 @@ class _ExplorePageState extends State<ExplorePage> {
               ),
             ).animate(delay: 200.ms).fadeIn(),
           ),
-          SliverToBoxAdapter(child: _buildContent()),
+          SliverToBoxAdapter(child: _buildContent(colors)),
           const SliverToBoxAdapter(child: SizedBox(height: 120)),
         ],
       ),
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(LiquidColors colors) {
     if (_isLoading) {
       return const Padding(
         padding: EdgeInsets.all(60),
@@ -285,13 +287,13 @@ class _ExplorePageState extends State<ExplorePage> {
               Icon(
                 Icons.cloud_off_rounded,
                 size: 48,
-                color: LiquidTheme.textLight.withValues(alpha: 0.5),
+                color: colors.textCaption.withValues(alpha: 0.5),
               ),
               const SizedBox(height: 12),
               Text(
                 "Failed to load scripts",
                 style: TextStyle(
-                  color: LiquidTheme.textLight.withValues(alpha: 0.8),
+                  color: colors.textCaption.withValues(alpha: 0.8),
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
@@ -327,10 +329,10 @@ class _ExplorePageState extends State<ExplorePage> {
                     : _selectedCategory == "All"
                     ? "All Scripts"
                     : _selectedCategory,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: LiquidTheme.textDeep,
+                  color: colors.textTitle,
                 ),
               ),
               Text(
@@ -344,7 +346,7 @@ class _ExplorePageState extends State<ExplorePage> {
             ],
           ),
           const SizedBox(height: 12),
-          ..._buildFilteredList(),
+          ..._buildFilteredList(colors),
         ],
       ),
     ).animate(delay: 300.ms).fadeIn().slideY(begin: 0.05);
@@ -426,7 +428,7 @@ class _ExplorePageState extends State<ExplorePage> {
     );
   }
 
-  Widget _buildCategoryChip(String label, bool isSelected) {
+  Widget _buildCategoryChip(String label, bool isSelected, LiquidColors colors) {
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -441,12 +443,12 @@ class _ExplorePageState extends State<ExplorePage> {
         decoration: BoxDecoration(
           color: isSelected
               ? LiquidTheme.primary
-              : Colors.white.withValues(alpha: 0.6),
+              : colors.chipBackground,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
                 ? LiquidTheme.primary
-                : Colors.white.withValues(alpha: 0.8),
+                : colors.cardBorder,
           ),
         ),
         child: Text(
@@ -454,14 +456,14 @@ class _ExplorePageState extends State<ExplorePage> {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : LiquidTheme.textMedium,
+            color: isSelected ? Colors.white : colors.textBody,
           ),
         ),
       ),
     );
   }
 
-  List<Widget> _buildFilteredList() {
+  List<Widget> _buildFilteredList(LiquidColors colors) {
     final filtered = _filteredScripts;
 
     if (filtered.isEmpty) {
@@ -472,7 +474,7 @@ class _ExplorePageState extends State<ExplorePage> {
             child: Text(
               "No scripts found matching your criteria.",
               style: TextStyle(
-                color: LiquidTheme.textLight.withValues(alpha: 0.8),
+                color: colors.textCaption.withValues(alpha: 0.8),
               ),
             ),
           ),
@@ -490,9 +492,9 @@ class _ExplorePageState extends State<ExplorePage> {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.5),
+          color: colors.cardBackground,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
+          border: Border.all(color: colors.cardBorder),
         ),
         child: Row(
           children: [
@@ -504,10 +506,10 @@ class _ExplorePageState extends State<ExplorePage> {
                 children: [
                   Text(
                     s['name'] ?? 'Untitled',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: LiquidTheme.textDeep,
+                      color: colors.textTitle,
                     ),
                   ),
                   if ((s['author'] ?? '').isNotEmpty)
@@ -515,7 +517,7 @@ class _ExplorePageState extends State<ExplorePage> {
                       "by ${s['author']}",
                       style: TextStyle(
                         fontSize: 12,
-                        color: LiquidTheme.textLight.withValues(alpha: 0.7),
+                        color: colors.textCaption.withValues(alpha: 0.7),
                       ),
                     ),
                 ],

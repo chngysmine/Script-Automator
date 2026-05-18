@@ -159,7 +159,7 @@ class _NotificationPageState extends State<NotificationPage>
                             indicatorSize: TabBarIndicatorSize.tab,
                             dividerColor: Colors.transparent,
                             labelColor: Colors.white,
-                            unselectedLabelColor: LiquidTheme.textMedium,
+                            unselectedLabelColor: colors.textBody,
                             labelStyle: const TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 13,
@@ -485,7 +485,7 @@ class _NotificationPageState extends State<NotificationPage>
                     shadowColor: Colors.black.withValues(alpha: 0.15),
                     icon: Icon(
                       Icons.more_horiz_rounded,
-                      color: LiquidTheme.textLight.withValues(alpha: 0.5),
+                      color: colors.textCaption.withValues(alpha: 0.5),
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(24),
