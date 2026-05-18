@@ -708,9 +708,6 @@ class _GalleryPageState extends State<GalleryPage> {
   Future<void> _processUrlImport(String url) async {
     // Show Loading
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Downloading script...")));
 
     try {
       final gitService = GitService();
@@ -733,12 +730,7 @@ class _GalleryPageState extends State<GalleryPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Failed to import: $e"),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // Removed Snackbar
       }
     }
   }
@@ -750,17 +742,6 @@ class _GalleryPageState extends State<GalleryPage> {
     final name = item['name'] ?? 'Untitled';
     final existingContent = item['content'] ?? '';
     final scriptUrl = item['scriptUrl'] ?? '';
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Installing $name..."),
-          backgroundColor: LiquidTheme.primary,
-          duration: const Duration(seconds: 10),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
 
     String finalContent = existingContent;
 
@@ -776,14 +757,6 @@ class _GalleryPageState extends State<GalleryPage> {
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Failed to download $name: $e"),
-              backgroundColor: Colors.red,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
         }
         return;
       }
@@ -815,14 +788,7 @@ class _GalleryPageState extends State<GalleryPage> {
     await repo.saveScript(script);
 
     if (context.mounted) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Installed $name"),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: LiquidTheme.primary,
-        ),
-      );
+      // Removed Snackbar
     }
   }
 }

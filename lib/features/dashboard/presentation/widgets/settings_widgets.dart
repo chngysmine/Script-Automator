@@ -164,12 +164,17 @@ class SettingsActionItem extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (trailingText != null) ...[
-            Text(
-              trailingText!,
-              style: TextStyle(
-                color: colors.textCaption,
-                fontWeight: FontWeight.w500,
-                fontSize: 14,
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 150),
+              child: Text(
+                trailingText!,
+                style: TextStyle(
+                  color: colors.textCaption,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(width: 8),

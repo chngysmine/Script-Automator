@@ -851,33 +851,10 @@ class _EditorPageState extends State<EditorPage>
 
     // Detect error responses from AI and show snackbar instead of polluting editor
     if (generatedCode.startsWith('// Error')) {
-      final messenger = ScaffoldMessenger.of(context);
       final errorMsg = generatedCode
           .replaceFirst('// Error generating code: ', '')
           .replaceFirst('// Error: ', '');
-      messenger.showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  errorMsg.length > 80
-                      ? '${errorMsg.substring(0, 80)}...'
-                      : errorMsg,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: const Color(0xFFDC2626),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.all(16),
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      debugPrint('AI Error: $errorMsg');
       return;
     }
 
@@ -893,26 +870,6 @@ class _EditorPageState extends State<EditorPage>
       setState(() {});
       HapticFeedback.mediumImpact();
 
-      // Success feedback
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'Code generated successfully',
-                style: TextStyle(color: Colors.white, fontSize: 13),
-              ),
-            ],
-          ),
-          backgroundColor: const Color(0xFF059669),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.all(16),
-          duration: const Duration(seconds: 2),
-        ),
-      );
     }
   }
 

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:script_automator/core/auth/auth_service.dart';
 import 'package:script_automator/core/sync/firestore_sync_service.dart';
-import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
+import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/features/script_management/data/datasources/script_local_data_source.dart';
 
 /// Checks if the current user is anonymous (or auth is not registered).
@@ -20,6 +20,112 @@ String? buildAuthSubtitle() {
   return auth.email ?? auth.displayName;
 }
 
+/// Shows a beautiful popup dialog with account information.
+void showAccountInfoDialog(BuildContext context) {
+  if (!GetIt.I.isRegistered<AuthService>()) return;
+  final auth = GetIt.I<AuthService>();
+  
+  showDialog(
+    context: context,
+    builder: (context) {
+      final colors = Theme.of(context).extension<LiquidColors>()!;
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: colors.sheetBackground,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: colors.cardBorder, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Avatar
+              CircleAvatar(
+                radius: 44,
+                backgroundColor: LiquidTheme.primary.withValues(alpha: 0.15),
+                backgroundImage: auth.photoURL != null ? NetworkImage(auth.photoURL!) : null,
+                child: auth.photoURL == null
+                    ? Icon(Icons.person_rounded, size: 44, color: LiquidTheme.primary)
+                    : null,
+              ),
+              const SizedBox(height: 20),
+              
+              // Name
+              Text(
+                auth.displayName.isEmpty ? 'Guest User' : auth.displayName,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: colors.textTitle,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              
+              // Email Pill
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: colors.cardBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: colors.cardBorder),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.email_rounded, size: 18, color: colors.textCaption),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        auth.email ?? 'No email linked',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: colors.textBody,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 32),
+              
+              // Close button
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: LiquidTheme.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    "Close",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
 /// Performs a full cloud sync and shows progress/result snackbars.
 Future<void> syncToCloud(BuildContext context) async {
   if (!GetIt.I.isRegistered<AuthService>()) return;
@@ -27,76 +133,13 @@ Future<void> syncToCloud(BuildContext context) async {
   final uid = auth.currentUser?.uid;
   if (uid == null) return;
 
-  final messenger = ScaffoldMessenger.of(context);
-
-  // Show "syncing" indicator
-  messenger.clearSnackBars();
-  messenger.showSnackBar(
-    SnackBar(
-      content: const Row(
-        children: [
-          SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Colors.white,
-            ),
-          ),
-          SizedBox(width: 12),
-          Text(
-            "Syncing to cloud...",
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-      backgroundColor: LiquidTheme.cyan,
-      behavior: SnackBarBehavior.floating,
-      duration: const Duration(seconds: 10),
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    ),
-  );
+  // Removed SnackBars
 
   try {
     final syncService = GetIt.I<FirestoreSyncService>();
     await syncService.fullSync(uid);
-    messenger.clearSnackBars();
-    messenger.showSnackBar(
-      SnackBar(
-        content: const Text(
-          "☁️ Cloud sync complete",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        backgroundColor: LiquidTheme.primary,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
   } catch (e) {
-    messenger.clearSnackBars();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          "Sync failed: $e",
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        backgroundColor: const Color(0xFFEF4444),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    debugPrint("Sync failed: $e");
   }
 }
 
@@ -228,7 +271,7 @@ Future<void> _linkProvider(
   required String providerName,
   VoidCallback? onLinked,
 }) async {
-  final messenger = ScaffoldMessenger.of(context);
+
   final navigator = Navigator.of(context);
   navigator.pop();
   try {
@@ -238,21 +281,9 @@ Future<void> _linkProvider(
       await GetIt.I<FirestoreSyncService>().pushLocalToCloud(uid);
     }
     onLinked?.call();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text("Account linked with $providerName ✓"),
-        backgroundColor: LiquidTheme.primary,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    // Removed Snackbar
   } catch (e) {
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text("Failed: $e"),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    debugPrint("Failed: $e");
   }
 }
 

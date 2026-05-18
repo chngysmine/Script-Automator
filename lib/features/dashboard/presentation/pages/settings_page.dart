@@ -199,23 +199,11 @@ class _SettingsPageState extends State<SettingsPage> {
       await _calculateCacheSize();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text("Cache cleared successfully!"),
-            backgroundColor: LiquidTheme.primary,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        // Cache cleared
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Failed to clear cache: $e"),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        // Failed
       }
     }
   }
@@ -267,19 +255,13 @@ class _SettingsPageState extends State<SettingsPage> {
       if (await canLaunchUrl(githubUri)) {
         await launchUrl(githubUri, mode: LaunchMode.externalApplication);
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Could not open email or browser."),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        debugPrint("Could not open email or browser.");
       }
     }
   }
 
   Future<void> _exportData() async {
-    final messenger = ScaffoldMessenger.of(context);
+
     try {
       final repo = GetIt.I<ScriptRepository>();
       final scriptsResult = await repo.getScripts();
@@ -324,13 +306,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       );
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text("Export failed: $e"),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      debugPrint("Export failed: $e");
     }
   }
 
@@ -428,7 +404,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       icon: Icons.person_rounded,
                       title: "Edit Profile",
                       onTap: _openEditProfile,
-                      iconColor: LiquidTheme.primary,
+                      iconColor: const Color(0xFF8B5CF6),
                     ),
                     SettingsActionItem(
                       icon: Icons.cloud_download_rounded,
@@ -439,7 +415,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     SettingsActionItem(
                       icon: Icons.sync_rounded,
                       title: "Sync to Cloud",
-                      trailingText: buildAuthSubtitle(),
                       onTap: () => syncToCloud(context),
                       iconColor: LiquidTheme.cyan,
                     ),

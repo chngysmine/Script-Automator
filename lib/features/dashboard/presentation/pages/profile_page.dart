@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/utils/debouncer.dart';
@@ -10,13 +11,12 @@ import 'package:script_automator/features/script_management/domain/repositories/
 import 'package:script_automator/features/dashboard/data/services/user_preferences_service.dart';
 import 'package:script_automator/features/dashboard/data/services/user_stats_service.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_header_actions.dart';
-import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
+import 'package:script_automator/core/auth/auth_service.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/profile_cards.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:script_automator/core/ui/glass_sliver_header.dart';
-import 'package:script_automator/features/dashboard/presentation/widgets/profile_cards.dart';
 
 /// Profile page displaying the user's script statistics, contribution heatmap,
 /// achievements, and collections.
@@ -35,11 +35,11 @@ class _ProfilePageState extends State<ProfilePage> {
   int _scriptCount = 0;
   int _widgetCount = 0;
   int _totalRuns = 0;
-  bool _loaded = false;
 
   String _displayName = '';
   String _bio = '';
   String? _avatarPath;
+  String? _email;
   StreamSubscription<void>? _scriptSub;
   final _debouncer = Debouncer(milliseconds: 300);
 
@@ -64,13 +64,12 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _loadStats() async {
     final result = await GetIt.I<ScriptRepository>().getScripts();
     result.fold(
-      (failure) => setState(() => _loaded = true),
+      (failure) {},
       (scripts) => setState(() {
         _scriptCount = scripts.length;
         _widgetCount = scripts
             .where((s) => s.content.contains('renderWidget'))
             .length;
-        _loaded = true;
       }),
     );
 
@@ -84,12 +83,18 @@ class _ProfilePageState extends State<ProfilePage> {
       totalRuns = await GetIt.I<UserStatsService>().get('total_runs');
     }
 
+    String? userEmail;
+    if (GetIt.I.isRegistered<AuthService>()) {
+      userEmail = GetIt.I<AuthService>().email;
+    }
+
     if (mounted) {
       setState(() {
         _displayName = name;
         _bio = b;
         _totalRuns = totalRuns;
         _avatarPath = ap;
+        _email = userEmail;
       });
     }
   }
@@ -103,18 +108,17 @@ class _ProfilePageState extends State<ProfilePage> {
         parent: AlwaysScrollableScrollPhysics(),
       ),
       slivers: [
-        // ── Pinned Glass Header: Avatar + Name + Actions (fixed, NO collapse) ──
+        // ── Collapsible Instagram-Style Header ──
         SliverPersistentHeader(
           pinned: true,
-          delegate: GlassSliverHeaderDelegate(
-            height: topPadding + 100,
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
-                child: _buildProfileHeaderRow(context),
-              ),
-            ),
+          delegate: _ProfileCollapsingHeaderDelegate(
+            topPadding: topPadding,
+            displayName: _displayName,
+            bio: _bio,
+            avatarPath: _avatarPath,
+            email: _email,
+            onEditProfile: () => _openEditProfile(context),
+            onPickAvatar: _pickAvatar,
           ),
         ),
 
@@ -157,138 +161,13 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  /// The avatar + name + actions row used as pinned header content.
-  Widget _buildProfileHeaderRow(BuildContext context) {
-    return Row(
-      children: [
-        // Avatar
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [LiquidTheme.primary, LiquidTheme.cyan],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: LiquidTheme.primary.withValues(alpha: 0.4),
-                    blurRadius: 20,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: GestureDetector(
-                onTap: _pickAvatar,
-                child: Padding(
-                  padding: const EdgeInsets.all(3),
-                  child: Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Theme.of(context).extension<LiquidColors>()!.sheetBackground,
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: _avatarPath != null && File(_avatarPath!).existsSync()
-                        ? Image.file(
-                            File(_avatarPath!),
-                            fit: BoxFit.cover,
-                          )
-                        : const Icon(
-                            Icons.person_rounded,
-                            size: 36,
-                            color: LiquidTheme.primary,
-                          ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: -4,
-              right: -4,
-              child: GestureDetector(
-                onTap: () => _openEditProfile(context),
-                child: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).extension<LiquidColors>()!.textTitle,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Theme.of(context).extension<LiquidColors>()!.cardBackground, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.edit_rounded,
-                    size: 14,
-                    color: Theme.of(context).extension<LiquidColors>()!.cardBackground,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(width: 16),
-        // Name + Stats
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _displayName,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: Theme.of(context).extension<LiquidColors>()!.textTitle,
-                  letterSpacing: -0.8,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                _loaded
-                    ? "$_scriptCount scripts · $_widgetCount widgets"
-                    : "Loading...",
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: LiquidTheme.primary.withValues(alpha: 0.8),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Actions
-        StreamBuilder<int>(
-          stream: GetIt.I<NotificationService>().unreadCount,
-          builder: (context, snapshot) {
-            return GlassHeaderActions(
-              hasNotificationBadge: (snapshot.data ?? 0) > 0,
-            );
-          },
-        ),
-      ],
-    );
-  }
-
   Future<void> _openEditProfile(BuildContext context) async {
     final result = await showModalBottomSheet<Map<String, String>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => EditProfileSheet(
-        currentName: _displayName,
-        currentBio: _bio,
-      ),
+      builder: (context) =>
+          EditProfileSheet(currentName: _displayName, currentBio: _bio),
     );
 
     if (result != null) {
@@ -306,9 +185,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-
-
-
   Widget _buildStatsRow() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -316,7 +192,7 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           Expanded(
             child: ProfileStatCard(
-              value: _loaded ? "$_scriptCount" : "-",
+              value: _scriptCount.toString(),
               label: "Scripts\nCreated",
               color: LiquidTheme.primary,
             ),
@@ -324,7 +200,7 @@ class _ProfilePageState extends State<ProfilePage> {
           const SizedBox(width: 12),
           Expanded(
             child: ProfileStatCard(
-              value: _loaded ? "$_widgetCount" : "-",
+              value: _widgetCount.toString(),
               label: "Widgets\nDeployed",
               color: LiquidTheme.cyan,
             ),
@@ -332,7 +208,9 @@ class _ProfilePageState extends State<ProfilePage> {
           const SizedBox(width: 12),
           Expanded(
             child: ProfileStatCard(
-              value: _loaded ? "$_totalRuns" : "-",
+              value: _totalRuns > 1000
+                  ? "${(_totalRuns / 1000).toStringAsFixed(1)}k"
+                  : _totalRuns.toString(),
               label: "Total\nRuns",
               color: const Color(0xFFEC4899),
             ),
@@ -341,8 +219,6 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
-
-  // _buildStatCard is now ProfileStatCard in profile_cards.dart
 
   Widget _buildSectionTitle(String title, {VoidCallback? onSeeAllTap}) {
     return Padding(
@@ -426,9 +302,10 @@ class _ProfilePageState extends State<ProfilePage> {
                               d,
                               style: TextStyle(
                                 fontSize: 9,
-                                color: Theme.of(context).extension<LiquidColors>()!.textCaption.withValues(
-                                  alpha: 0.6,
-                                ),
+                                color: Theme.of(context)
+                                    .extension<LiquidColors>()!
+                                    .textCaption
+                                    .withValues(alpha: 0.6),
                               ),
                             ),
                           ),
@@ -510,7 +387,10 @@ class _ProfilePageState extends State<ProfilePage> {
                             fontWeight: FontWeight.w700,
                             color: streak > 0
                                 ? LiquidTheme.primary
-                                : Theme.of(context).extension<LiquidColors>()!.textCaption.withValues(alpha: 0.6),
+                                : Theme.of(context)
+                                      .extension<LiquidColors>()!
+                                      .textCaption
+                                      .withValues(alpha: 0.6),
                           ),
                         );
                       },
@@ -521,7 +401,10 @@ class _ProfilePageState extends State<ProfilePage> {
                           "Less",
                           style: TextStyle(
                             fontSize: 10,
-                            color: Theme.of(context).extension<LiquidColors>()!.textCaption.withValues(alpha: 0.6),
+                            color: Theme.of(context)
+                                .extension<LiquidColors>()!
+                                .textCaption
+                                .withValues(alpha: 0.6),
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -543,7 +426,10 @@ class _ProfilePageState extends State<ProfilePage> {
                           "More",
                           style: TextStyle(
                             fontSize: 10,
-                            color: Theme.of(context).extension<LiquidColors>()!.textCaption.withValues(alpha: 0.6),
+                            color: Theme.of(context)
+                                .extension<LiquidColors>()!
+                                .textCaption
+                                .withValues(alpha: 0.6),
                           ),
                         ),
                       ],
@@ -648,7 +534,9 @@ class _ProfilePageState extends State<ProfilePage> {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            backgroundColor: Theme.of(context).extension<LiquidColors>()!.dialogBackground,
+            backgroundColor: Theme.of(
+              context,
+            ).extension<LiquidColors>()!.dialogBackground,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
             ),
@@ -658,13 +546,20 @@ class _ProfilePageState extends State<ProfilePage> {
                 const SizedBox(width: 8),
                 Text(
                   title,
-                  style: TextStyle(color: Theme.of(context).extension<LiquidColors>()!.textTitle, fontSize: 18),
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).extension<LiquidColors>()!.textTitle,
+                    fontSize: 18,
+                  ),
                 ),
               ],
             ),
             content: Text(
               unlocked ? "Unlocked: $subtitle." : "Locked. Goal: $subtitle.",
-              style: TextStyle(color: Theme.of(context).extension<LiquidColors>()!.textBody),
+              style: TextStyle(
+                color: Theme.of(context).extension<LiquidColors>()!.textBody,
+              ),
             ),
             actions: [
               TextButton(
@@ -732,7 +627,9 @@ class _ProfilePageState extends State<ProfilePage> {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
-                color: unlocked ? Theme.of(context).extension<LiquidColors>()!.textTitle : Theme.of(context).extension<LiquidColors>()!.textCaption,
+                color: unlocked
+                    ? Theme.of(context).extension<LiquidColors>()!.textTitle
+                    : Theme.of(context).extension<LiquidColors>()!.textCaption,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -809,7 +706,9 @@ class _ProfilePageState extends State<ProfilePage> {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: Theme.of(context).extension<LiquidColors>()!.textTitle,
+                          color: Theme.of(
+                            context,
+                          ).extension<LiquidColors>()!.textTitle,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -818,7 +717,10 @@ class _ProfilePageState extends State<ProfilePage> {
                         "${c.$3} scripts",
                         style: TextStyle(
                           fontSize: 11,
-                          color: Theme.of(context).extension<LiquidColors>()!.textCaption.withValues(alpha: 0.7),
+                          color: Theme.of(context)
+                              .extension<LiquidColors>()!
+                              .textCaption
+                              .withValues(alpha: 0.7),
                         ),
                       ),
                     ],
@@ -834,13 +736,19 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _pickAvatar() async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
     if (pickedFile != null) {
       final appDir = await getApplicationDocumentsDirectory();
       final extension = p.extension(pickedFile.path);
-      final filename = 'avatar_${DateTime.now().millisecondsSinceEpoch}$extension';
-      final savedImage = await File(pickedFile.path).copy('${appDir.path}/$filename');
-      
+      final filename =
+          'avatar_${DateTime.now().millisecondsSinceEpoch}$extension';
+      final savedImage = await File(
+        pickedFile.path,
+      ).copy('${appDir.path}/$filename');
+
       await GetIt.I<UserPreferencesService>().setAvatarPath(savedImage.path);
       if (mounted) {
         setState(() => _avatarPath = savedImage.path);
@@ -862,4 +770,322 @@ class _BadgeData {
     this.color, {
     this.unlocked = false,
   });
+}
+
+class _ProfileCollapsingHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final double topPadding;
+  final String displayName;
+  final String bio;
+  final String? avatarPath;
+  final String? email;
+  final VoidCallback onEditProfile;
+  final VoidCallback onPickAvatar;
+
+  _ProfileCollapsingHeaderDelegate({
+    required this.topPadding,
+    required this.displayName,
+    required this.bio,
+    required this.avatarPath,
+    required this.email,
+    required this.onEditProfile,
+    required this.onPickAvatar,
+  });
+
+  @override
+  double get minExtent => topPadding + 70;
+
+  @override
+  double get maxExtent => topPadding + 280;
+
+  @override
+  bool shouldRebuild(covariant _ProfileCollapsingHeaderDelegate old) {
+    return old.displayName != displayName ||
+        old.bio != bio ||
+        old.avatarPath != avatarPath ||
+        old.email != email;
+  }
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+    final double percent = (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0);
+    final bool isScrolled = shrinkOffset > 0;
+
+    // Fast fade out for expanded-only elements (Email, Bio, Edit Button)
+    final double fadeOutOpacity = (1.0 - (percent * 2)).clamp(0.0, 1.0);
+    
+    // Fade in for the small edit button on the pinned header? 
+    // Wait, Edit button was always visible in the expanded, but we have GlassHeaderActions always pinned.
+
+    // Calculate Interpolated Positions
+    final double avatarSize = lerpDouble(88, 40, percent)!;
+    final double avatarTop = lerpDouble(topPadding + 96, topPadding + 15, percent)!;
+    
+    final double nameTop = lerpDouble(topPadding + 196, topPadding + 24, percent)!;
+    final double nameLeft = lerpDouble(24, 76, percent)!;
+    final double nameFontSize = lerpDouble(24, 18, percent)!;
+
+    // Elements that scroll up naturally
+    final double coverTop = -shrinkOffset;
+    final double editButtonTop = topPadding + 120 - shrinkOffset;
+    final double emailTop = topPadding + 230 - shrinkOffset;
+    final double bioTop = topPadding + 252 - shrinkOffset;
+
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: isScrolled ? 20.0 : 0.0,
+          sigmaY: isScrolled ? 20.0 : 0.0,
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isScrolled ? colors.glassOverlay : Colors.transparent,
+            border: Border(
+              bottom: BorderSide(
+                color: isScrolled ? colors.glassBorder : Colors.transparent,
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // 1. Cover Photo (Scrolls up and fades out slightly)
+              Positioned(
+                top: coverTop,
+                left: 0,
+                right: 0,
+                height: topPadding + 140,
+                child: Opacity(
+                  opacity: fadeOutOpacity,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      image: DecorationImage(
+                        image: NetworkImage(
+                          'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=2000&auto=format&fit=crop',
+                        ),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.5),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // 2. Morphing Avatar
+              Positioned(
+                top: avatarTop,
+                left: 24,
+                child: _buildAvatar(
+                  context,
+                  size: avatarSize,
+                  onPickAvatar: onPickAvatar,
+                  avatarPath: avatarPath,
+                  hideEditBadge: percent > 0.5, // Hide badge when it becomes small
+                ),
+              ),
+
+              // 3. Edit Profile Button (Fades out and scrolls up)
+              if (fadeOutOpacity > 0)
+                Positioned(
+                  top: editButtonTop,
+                  right: 24,
+                  child: Opacity(
+                    opacity: fadeOutOpacity,
+                    child: GestureDetector(
+                      onTap: onEditProfile,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colors.cardBackground,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: colors.cardBorder),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          "Edit profile",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: colors.textTitle,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // 4. Morphing Name
+              Positioned(
+                top: nameTop,
+                left: nameLeft,
+                right: 90, // Prevent overlapping with right actions
+                child: Text(
+                  displayName.isEmpty ? 'Guest User' : displayName,
+                  style: TextStyle(
+                    fontSize: nameFontSize,
+                    fontWeight: FontWeight.w900,
+                    color: colors.textTitle,
+                    letterSpacing: -0.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+
+              // 5. Email (Fades out and scrolls up)
+              if (fadeOutOpacity > 0 && email != null && email!.isNotEmpty)
+                Positioned(
+                  top: emailTop,
+                  left: 24,
+                  right: 24,
+                  child: Opacity(
+                    opacity: fadeOutOpacity,
+                    child: Text(
+                      email!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: LiquidTheme.primary.withValues(alpha: 0.9),
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+
+              // 6. Bio (Fades out and scrolls up)
+              if (fadeOutOpacity > 0 && bio.isNotEmpty)
+                Positioned(
+                  top: bioTop,
+                  left: 24,
+                  right: 24,
+                  child: Opacity(
+                    opacity: fadeOutOpacity,
+                    child: Text(
+                      bio,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: colors.textBody,
+                        height: 1.4,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+
+              // 7. Pinned Actions (Top Right)
+              Positioned(
+                top: topPadding + 8,
+                right: 24,
+                child: const GlassHeaderActions(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatar(
+    BuildContext context, {
+    required double size,
+    required VoidCallback? onPickAvatar,
+    required String? avatarPath,
+    bool hideEditBadge = false,
+  }) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              colors: [LiquidTheme.primary, LiquidTheme.cyan],
+            ),
+            boxShadow: [
+              if (!hideEditBadge)
+                BoxShadow(
+                  color: LiquidTheme.primary.withValues(alpha: 0.4),
+                  blurRadius: 16,
+                  spreadRadius: 2,
+                ),
+            ],
+          ),
+          child: GestureDetector(
+            onTap: onPickAvatar,
+            child: Padding(
+              padding: EdgeInsets.all(size > 50 ? 3.0 : 2.0),
+              child: Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: colors.sheetBackground,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: avatarPath != null && File(avatarPath).existsSync()
+                    ? Image.file(File(avatarPath), fit: BoxFit.cover)
+                    : Icon(
+                        Icons.person_rounded,
+                        size: size * 0.5,
+                        color: LiquidTheme.primary,
+                      ),
+              ),
+            ),
+          ),
+        ),
+        if (!hideEditBadge && onPickAvatar != null)
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: GestureDetector(
+              onTap: onPickAvatar,
+              child: Container(
+                width: size * 0.35,
+                height: size * 0.35,
+                decoration: BoxDecoration(
+                  color: colors.textTitle,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: colors.sheetBackground, width: 2),
+                ),
+                child: Icon(
+                  Icons.add_a_photo_rounded,
+                  size: size * 0.18,
+                  color: colors.sheetBackground,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }

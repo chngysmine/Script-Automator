@@ -4,6 +4,7 @@ import 'package:get_it/get_it.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:script_automator/core/ui/styled_dropdown.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/pixel_cheer_animation.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/dashboard/domain/repositories/gallery_repository.dart';
 
@@ -29,6 +30,7 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
   final TextEditingController _descController = TextEditingController();
   String _selectedCategory = 'System';
   bool _isSubmitting = false;
+  String? _errorMessage;
 
   final List<String> _categories = [
     'System',
@@ -45,24 +47,22 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
   }
 
   Future<void> _submit() async {
-    // 1. Anti-Spam Check: Prevent publishing unmodified gallery scripts.
+    setState(() => _errorMessage = null);
+
     final bool isImported = widget.script.settings['gallery_id'] != null;
     final bool isModified = widget.script.settings['is_modified_from_gallery'] == true;
     
     if (isImported && !isModified) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Bạn chưa thực hiện cải tiến nào cho Script này. Hãy nâng cấp nó trước khi chia sẻ!'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      setState(() {
+        _errorMessage = 'No improvements detected. Please modify the script before publishing.';
+      });
       return;
     }
 
     if (_descController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập mô tả cho script')),
-      );
+      setState(() {
+        _errorMessage = 'Please enter a description for your script';
+      });
       return;
     }
 
@@ -84,21 +84,12 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
 
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Script submitted for review!'),
-            backgroundColor: LiquidTheme.cyan,
-          ),
-        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to submit: ${e.toString()}'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+        setState(() {
+          _errorMessage = 'Failed to submit: ${e.toString()}';
+        });
       }
     } finally {
       if (mounted) {
@@ -158,7 +149,7 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
             "Share '${widget.script.name}' with the community. It will be reviewed by moderators before becoming public.",
             style: TextStyle(color: colors.textCaption, fontSize: 14),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
           // Category Dropdown
           Text(
@@ -170,19 +161,29 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: StyledDropdown<String>(
-              value: _selectedCategory,
-              items: _categories,
-              labelBuilder: (item) => item,
-              icon: Icons.category_rounded,
-              onChanged: (String newValue) {
-                setState(() => _selectedCategory = newValue);
-              },
-            ),
+          Row(
+            children: [
+              StyledDropdown<String>(
+                value: _selectedCategory,
+                items: _categories,
+                labelBuilder: (item) => item,
+                icon: Icons.category_rounded,
+                onChanged: (String newValue) {
+                  setState(() => _selectedCategory = newValue);
+                },
+              ),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: PixelCheerAnimation(),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           // Description Input
           Text(
@@ -196,7 +197,7 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
           const SizedBox(height: 8),
           TextField(
             controller: _descController,
-            maxLines: 4,
+            maxLines: 3,
             style: TextStyle(color: colors.textTitle, fontSize: 15),
             decoration: InputDecoration(
               hintText: "Describe what your script does...",
@@ -218,7 +219,35 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 16),
+
+          if (_errorMessage != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(
+                        color: Colors.redAccent, 
+                        fontSize: 14, 
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // Submit Button
           GestureDetector(

@@ -143,18 +143,10 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
             height: 50,
             child: ElevatedButton(
               onPressed: () {
-                final messenger = ScaffoldMessenger.of(context);
                 Navigator.pop(context, {
                   'name': _nameController.text,
                   'bio': _bioController.text,
                 });
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text("Profile updated successfully!"),
-                    backgroundColor: Colors.green,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: LiquidTheme.primary,

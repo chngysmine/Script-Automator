@@ -46,61 +46,71 @@ class StyledDropdown<T> extends StatelessWidget {
           surfaceTintColor: Colors.transparent,
           elevation: 8,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(16),
             side: BorderSide(color: colors.cardBorder, width: 1),
           ),
         ),
       ),
       child: PopupMenuButton<T>(
-        initialValue: value,
         onSelected: onChanged,
         offset: const Offset(0, 52),
-        constraints: BoxConstraints(minWidth: width ?? 180),
-      itemBuilder: (context) {
-        return items.map((item) {
-          final isSelected = item == value;
-          return PopupMenuItem<T>(
-            value: item,
-            padding: EdgeInsets.zero,
-            height: 48,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? LiquidTheme.primary.withValues(alpha: 0.1)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      labelBuilder(item),
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: isSelected
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: isSelected
-                            ? LiquidTheme.primary
-                            : colors.textTitle,
-                      ),
-                    ),
-                  ),
-                  if (isSelected)
-                    const Icon(
-                      Icons.check_rounded,
-                      size: 18,
-                      color: LiquidTheme.primary,
-                    ),
-                ],
-              ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        constraints: BoxConstraints(minWidth: width ?? 200, maxWidth: width ?? 280),
+        itemBuilder: (context) {
+          return [
+            PopupMenuItem<T>(
+              height: 8, // Top padding
+              enabled: false,
+              child: const SizedBox.shrink(),
             ),
-          );
-        }).toList();
-      },
-      child: Container(
+            ...items.map((item) {
+              final isSelected = item == value;
+              return PopupMenuItem<T>(
+                value: item,
+                padding: EdgeInsets.zero,
+                height: 48,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? LiquidTheme.primary.withValues(alpha: 0.1)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          labelBuilder(item),
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                            color: isSelected ? LiquidTheme.primary : colors.textTitle,
+                          ),
+                        ),
+                      ),
+                      if (isSelected)
+                        const Icon(
+                          Icons.check_rounded,
+                          size: 18,
+                          color: LiquidTheme.primary,
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+            PopupMenuItem<T>(
+              height: 8, // Bottom padding
+              enabled: false,
+              child: const SizedBox.shrink(),
+            ),
+          ];
+        },
+          child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: colors.searchBarBackground,

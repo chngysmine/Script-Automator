@@ -221,9 +221,6 @@ Future<void> showOpenAiApiKeyDialog(BuildContext context) async {
               );
               if (context.mounted) {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("OpenAI key saved")),
-                );
               }
             }
           },

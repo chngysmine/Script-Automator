@@ -626,14 +626,6 @@ class _ExplorePageState extends State<ExplorePage> {
 
     // Show loading indicator
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Installing $name..."),
-        backgroundColor: LiquidTheme.primary,
-        duration: const Duration(seconds: 10),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
 
     String finalContent = existingContent;
 
@@ -649,14 +641,6 @@ class _ExplorePageState extends State<ExplorePage> {
         }
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Failed to download $name: $e"),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
         return;
       }
     }
@@ -686,14 +670,5 @@ class _ExplorePageState extends State<ExplorePage> {
     await _loadInstalledVersions();
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("$name installed successfully!"),
-        backgroundColor: LiquidTheme.primary,
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 }
