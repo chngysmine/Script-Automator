@@ -161,7 +161,7 @@ class _NewScriptDialogState extends State<NewScriptDialog> {
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: LiquidTheme.textDeep.withValues(
+                                    color: colors.textTitle.withValues(
                                       alpha: 0.3,
                                     ),
                                     blurRadius: 12,

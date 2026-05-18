@@ -456,8 +456,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       icon: Icons.logout_rounded,
                       title: "Sign Out",
                       onTap: () async {
-                        if (mounted) {
-                          await confirmAndSignOut(context);
+                        final nav = Navigator.of(context, rootNavigator: true);
+                        final signedOut = await confirmAndSignOut(context);
+                        if (signedOut && mounted) {
+                          nav.popUntil((route) => route.isFirst);
                         }
                       },
                       iconColor: const Color(0xFFEF4444),

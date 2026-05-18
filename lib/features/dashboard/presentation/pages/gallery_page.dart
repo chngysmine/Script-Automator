@@ -809,6 +809,7 @@ class _GalleryPageState extends State<GalleryPage> {
         'gallery_id': galleryId,
         'gallery_version': galleryVersion,
         'gallery_script_url': scriptUrl,
+        'is_modified_from_gallery': false,
       },
     );
     await repo.saveScript(script);

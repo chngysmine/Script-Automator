@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:script_automator/core/ui/styled_dropdown.dart';
 
 /// Renders a dynamic form based on a script's config schema.
@@ -65,6 +66,7 @@ class _ScriptConfigFormState extends State<ScriptConfigForm> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -76,10 +78,10 @@ class _ScriptConfigFormState extends State<ScriptConfigForm> {
             constraints: const BoxConstraints(maxHeight: 600),
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.85),
+              color: colors.dialogBackground.withValues(alpha: 0.85),
               borderRadius: BorderRadius.circular(32),
               border: Border.all(
-                color: Colors.white.withValues(alpha: 0.5),
+                color: colors.glassBorder,
                 width: 1.5,
               ),
             ),
@@ -94,7 +96,7 @@ class _ScriptConfigFormState extends State<ScriptConfigForm> {
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
-                      color: LiquidTheme.textDeep,
+                      color: colors.textTitle,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -103,7 +105,7 @@ class _ScriptConfigFormState extends State<ScriptConfigForm> {
                     "Set up required variables for ${widget.scriptName} before installation.",
                     style: TextStyle(
                       fontSize: 14,
-                      color: LiquidTheme.textLight,
+                      color: colors.textCaption,
                       height: 1.4,
                     ),
                   ),
@@ -114,7 +116,7 @@ class _ScriptConfigFormState extends State<ScriptConfigForm> {
                         children: widget.configSchema.entries.map((e) {
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 16.0),
-                            child: _buildField(e.key, e.value as Map<String, dynamic>),
+                            child: _buildField(context, e.key, e.value as Map<String, dynamic>, colors),
                           );
                         }).toList(),
                       ),
@@ -129,7 +131,7 @@ class _ScriptConfigFormState extends State<ScriptConfigForm> {
                           child: Text(
                             "CANCEL",
                             style: TextStyle(
-                              color: LiquidTheme.textLight,
+                              color: colors.textCaption,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1,
                             ),
@@ -174,7 +176,7 @@ class _ScriptConfigFormState extends State<ScriptConfigForm> {
     );
   }
 
-  Widget _buildField(String key, Map<String, dynamic> schema) {
+  Widget _buildField(BuildContext context, String key, Map<String, dynamic> schema, LiquidColors colors) {
     final type = schema['type'] ?? 'string';
     final label = (schema['label'] as String?) ?? key;
     final isRequired = schema['required'] == true;
@@ -184,7 +186,7 @@ class _ScriptConfigFormState extends State<ScriptConfigForm> {
 
     if (type == 'boolean') {
       fieldWidget = SwitchListTile(
-        title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        title: Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: colors.textTitle)),
         value: _formData[key] == true,
         onChanged: (val) {
           setState(() {
@@ -199,7 +201,7 @@ class _ScriptConfigFormState extends State<ScriptConfigForm> {
       fieldWidget = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: colors.textTitle)),
           const SizedBox(height: 8),
           StyledDropdown<String>(
             value: _formData[key]?.toString() ?? options.first.toString(),
@@ -220,7 +222,8 @@ class _ScriptConfigFormState extends State<ScriptConfigForm> {
         decoration: InputDecoration(
           labelText: label + (isRequired ? ' *' : ''),
           filled: true,
-          fillColor: Colors.white.withValues(alpha: 0.5),
+          fillColor: colors.inputBackground,
+          labelStyle: TextStyle(color: colors.textCaption),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,

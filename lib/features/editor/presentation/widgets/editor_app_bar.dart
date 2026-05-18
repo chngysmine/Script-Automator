@@ -10,6 +10,7 @@ class EditorAppBar extends StatelessWidget {
   final bool isSaving;
   final VoidCallback onBack;
   final VoidCallback onPlay;
+  final VoidCallback? onPublish;
   final VoidCallback onAiTap;
   final VoidCallback onAiLongPress;
   final VoidCallback? onAiGenerate;
@@ -20,6 +21,7 @@ class EditorAppBar extends StatelessWidget {
     required this.isSaving,
     required this.onBack,
     required this.onPlay,
+    this.onPublish,
     required this.onAiTap,
     required this.onAiLongPress,
     this.onAiGenerate,
@@ -119,6 +121,16 @@ class EditorAppBar extends StatelessWidget {
                       highlightColor: LiquidTheme.secondary,
                     ),
                     const SizedBox(width: 8),
+                    if (onPublish != null) ...[
+                      _buildActionButton(
+                        context,
+                        Icons.public_rounded,
+                        onPublish!,
+                        tooltip: "Publish to Gallery",
+                        iconColor: iconDefaultColor,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     _buildActionButton(
                       context,
                       Icons.play_arrow_rounded,

@@ -1,7 +1,9 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
+import 'package:script_automator/core/ui/styled_dropdown.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/dashboard/domain/repositories/gallery_repository.dart';
 
@@ -25,15 +27,15 @@ class PublishScriptSheet extends StatefulWidget {
 
 class _PublishScriptSheetState extends State<PublishScriptSheet> {
   final TextEditingController _descController = TextEditingController();
-  String _selectedCategory = 'Utilities';
+  String _selectedCategory = 'System';
   bool _isSubmitting = false;
 
   final List<String> _categories = [
-    'Utilities',
-    'Weather',
-    'Finance',
-    'AI',
-    'Games'
+    'System',
+    'Productivity',
+    'Lifestyle',
+    'Entertainment',
+    'Other'
   ];
 
   @override
@@ -43,9 +45,23 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
   }
 
   Future<void> _submit() async {
+    // 1. Anti-Spam Check: Prevent publishing unmodified gallery scripts.
+    final bool isImported = widget.script.settings['gallery_id'] != null;
+    final bool isModified = widget.script.settings['is_modified_from_gallery'] == true;
+    
+    if (isImported && !isModified) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bạn chưa thực hiện cải tiến nào cho Script này. Hãy nâng cấp nó trước khi chia sẻ!'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     if (_descController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a description')),
+        const SnackBar(content: Text('Vui lòng nhập mô tả cho script')),
       );
       return;
     }
@@ -63,6 +79,7 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
         'version': '1.0.0',
         'is_featured': false,
         'created_at': DateTime.now().toIso8601String(),
+        if (isImported) 'original_gallery_id': widget.script.settings['gallery_id'],
       });
 
       if (mounted) {
@@ -95,20 +112,27 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
     final colors = Theme.of(context).extension<LiquidColors>()!;
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
 
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        24,
-        24,
-        24,
-        24 + keyboardHeight,
-      ),
-      decoration: BoxDecoration(
-        color: colors.sheetBackground,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        border: Border(top: BorderSide(color: colors.glassBorder)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(
+            24,
+            24,
+            24,
+            24 + keyboardHeight,
+          ),
+          decoration: BoxDecoration(
+            color: isDark 
+                ? LiquidTheme.darkBackground.withValues(alpha: 0.8)
+                : Colors.white.withValues(alpha: 0.8),
+            border: Border(top: BorderSide(color: colors.glassBorder)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -146,36 +170,16 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
             ),
           ),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: colors.inputBackground,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: colors.glassBorder),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedCategory,
-                isExpanded: true,
-                dropdownColor: colors.sheetBackground,
-                icon: Icon(Icons.keyboard_arrow_down, color: colors.textCaption),
-                style: TextStyle(
-                  color: colors.textTitle,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-                onChanged: (String? newValue) {
-                  if (newValue != null) {
-                    setState(() => _selectedCategory = newValue);
-                  }
-                },
-                items: _categories.map<DropdownMenuItem<String>>((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-              ),
+          SizedBox(
+            width: double.infinity,
+            child: StyledDropdown<String>(
+              value: _selectedCategory,
+              items: _categories,
+              labelBuilder: (item) => item,
+              icon: Icons.category_rounded,
+              onChanged: (String newValue) {
+                setState(() => _selectedCategory = newValue);
+              },
             ),
           ),
           const SizedBox(height: 20),
@@ -256,6 +260,8 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
           ),
           const SizedBox(height: 16),
         ],
+      ),
+        ),
       ),
     );
   }

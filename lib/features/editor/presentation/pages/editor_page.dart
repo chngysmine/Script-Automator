@@ -11,6 +11,7 @@ import '../widgets/console_log_widget.dart'; // Enhanced Console
 import '../widgets/editor_app_bar.dart';
 import '../widgets/ai_generate_sheet.dart';
 import '../widgets/ai_onboarding_dialog.dart';
+import '../../../../features/dashboard/presentation/widgets/publish_script_sheet.dart';
 import '../widgets/editor_constants.dart';
 import '../syntax_highlighter.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
@@ -163,13 +164,16 @@ class _EditorPageState extends State<EditorPage>
       setState(() => _isSaving = true);
     }
 
+    final newSettings = Map<String, dynamic>.from(widget.script!.settings);
+    newSettings['is_modified_from_gallery'] = true;
+
     final updatedScript = Script(
       id: widget.script!.id,
       name: widget.script!.name,
       content: _controller.text,
       createdAt: widget.script!.createdAt,
       updatedAt: DateTime.now(),
-      settings: widget.script!.settings,
+      settings: newSettings,
     );
 
     // Save to Hive + Sync to SQLite (Widget)
@@ -197,13 +201,16 @@ class _EditorPageState extends State<EditorPage>
     _debounceTimer?.cancel();
     if (widget.script != null && _controller.text != widget.script!.content) {
       // Create a fire-and-forget save that doesn't rely on State
+      final newSettings = Map<String, dynamic>.from(widget.script!.settings);
+      newSettings['is_modified_from_gallery'] = true;
+
       final finalScript = Script(
         id: widget.script!.id,
         name: widget.script!.name,
         content: _controller.text,
         createdAt: widget.script!.createdAt,
         updatedAt: DateTime.now(),
-        settings: widget.script!.settings,
+        settings: newSettings,
       );
       _repository.saveScript(finalScript);
     }
@@ -408,6 +415,17 @@ class _EditorPageState extends State<EditorPage>
                   isSaving: _isSaving,
                   onBack: () => Navigator.pop(context),
                   onPlay: _runScript,
+                  onPublish: () {
+                    if (widget.script != null) {
+                      PublishScriptSheet.show(
+                        context, 
+                        widget.script!.copyWith(
+                          content: _controller.text, 
+                          settings: widget.script!.settings,
+                        ),
+                      );
+                    }
+                  },
                   onAiTap: () async {
                     if (CodeForgeController.activeAiProvider == null) {
                       if (context.mounted) {
