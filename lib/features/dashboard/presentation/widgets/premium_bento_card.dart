@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
-import 'package:path_provider/path_provider.dart';
+
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:script_automator/core/ui/liquid_glass.dart';
+import 'dart:convert';
+import 'package:get_it/get_it.dart';
+import 'package:script_automator/features/widget_renderer/presentation/widgets/sasup_renderer.dart';
+import 'package:script_automator/features/widget_renderer/domain/entities/widget_node.dart';
+import 'package:script_automator/features/widget_renderer/domain/services/headless_widget_rendering_service.dart';
 
 enum BentoSize { small, wide, large }
 
@@ -33,6 +38,7 @@ class _PremiumBentoCardState extends State<PremiumBentoCard>
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
   String? _previewPath;
+  WidgetNode? _previewNode;
 
   @override
   void initState() {
@@ -47,12 +53,28 @@ class _PremiumBentoCardState extends State<PremiumBentoCard>
         reverseCurve: Curves.easeOutBack,
       ),
     );
-    _loadPreview();
+    _loadPreviewData();
   }
 
-  Future<void> _loadPreview() async {
+  Future<void> _loadPreviewData() async {
     try {
-      final appDir = await getApplicationDocumentsDirectory();
+      final appDir = await GetIt.I<HeadlessWidgetRenderingService>().getSharedDirectory();
+      
+      final jsonPath = '${appDir.path}/sasup_ui_${widget.script.id}.json';
+      final jsonFile = File(jsonPath);
+      if (await jsonFile.exists()) {
+        final content = await jsonFile.readAsString();
+        final nodeMap = jsonDecode(content);
+        final nodeJson = nodeMap['root'] ?? nodeMap;
+        final node = WidgetNode.fromJson(nodeJson as Map<String, dynamic>);
+        if (mounted) {
+          setState(() {
+            _previewNode = node;
+          });
+        }
+        return;
+      }
+
       final path = '${appDir.path}/sasup_ui_${widget.script.id}.png';
       if (await File(path).exists()) {
         if (mounted) setState(() => _previewPath = path);
@@ -128,7 +150,23 @@ class _PremiumBentoCardState extends State<PremiumBentoCard>
                       child: Stack(
                         children: [
                           // Image preview or code snippet
-                          if (_previewPath != null)
+                          if (_previewNode != null)
+                            Positioned.fill(
+                              child: ClipRRect(
+                                child: IgnorePointer(
+                                  child: FittedBox(
+                                    fit: BoxFit.cover,
+                                    alignment: Alignment.center,
+                                    child: SizedBox(
+                                      width: 180,
+                                      height: isLarge ? 200 : 150,
+                                      child: SasupRenderer(node: _previewNode!),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                          else if (_previewPath != null)
                             Positioned.fill(
                               child: Image.file(
                                 File(_previewPath!),

@@ -20,7 +20,7 @@ class HeadlessWidgetRenderingService {
   Future<String> renderNativeJson(String jsonString, String scriptId, String family) async {
     try {
       debugPrint("HeadlessService: Native JSON Passthrough for $scriptId");
-      final directory = await _getSharedDirectory();
+      final directory = await getSharedDirectory();
       await _cleanupOldCache(directory);
 
       // Parse and re-serialize to validate JSON structure
@@ -66,7 +66,7 @@ class HeadlessWidgetRenderingService {
       if (byteData == null) throw Exception("Failed to encode image");
       final buffer = byteData.buffer.asUint8List();
 
-      final directory = await _getSharedDirectory();
+      final directory = await getSharedDirectory();
       await _cleanupOldCache(directory);
 
       final pngFile = File('${directory.path}/sasup_ui_$scriptId.png');
@@ -102,7 +102,7 @@ class HeadlessWidgetRenderingService {
   /// Called when a script is deleted or emptied, preventing stale UI from showing on native widgets.
   Future<void> deleteWidgetUI(String scriptId) async {
     try {
-      final directory = await _getSharedDirectory();
+      final directory = await getSharedDirectory();
 
       final jsonFile = File('${directory.path}/sasup_ui_$scriptId.json');
       if (await jsonFile.exists()) await jsonFile.delete();
@@ -174,7 +174,7 @@ class HeadlessWidgetRenderingService {
 
   // ... (existing _getSharedDirectory)
 
-  Future<Directory> _getSharedDirectory() async {
+  Future<Directory> getSharedDirectory() async {
     debugPrint(
       "HeadlessService: _getSharedDirectory called. Platform:IOS=${Platform.isIOS}",
     );

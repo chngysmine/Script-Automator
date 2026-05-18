@@ -7,8 +7,11 @@ import 'package:script_automator/features/script_management/domain/entities/scri
 import 'package:script_automator/features/editor/presentation/pages/editor_page.dart';
 import 'package:script_automator/features/editor/presentation/syntax_highlighter.dart';
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
+import 'dart:convert';
 import 'package:get_it/get_it.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:script_automator/features/widget_renderer/presentation/widgets/sasup_renderer.dart';
+import 'package:script_automator/features/widget_renderer/domain/entities/widget_node.dart';
+import 'package:script_automator/features/widget_renderer/domain/services/headless_widget_rendering_service.dart';
 
 /// A bottom sheet that shows a script's preview (rendered widget image) and
 /// source code in two tabs, with action buttons to open the editor or delete.
@@ -50,6 +53,7 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String? _previewImagePath;
+  WidgetNode? _previewNode;
   String _fullContent = '';
   bool _isLoadingContent = false;
 
@@ -57,7 +61,7 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _checkPreviewImage();
+    _checkPreviewData();
     _loadFullContent();
   }
 
@@ -67,17 +71,34 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
     super.dispose();
   }
 
-  /// Checks if a rendered widget PNG exists for this script.
-  Future<void> _checkPreviewImage() async {
+  /// Checks if a rendered widget JSON or PNG exists for this script.
+  Future<void> _checkPreviewData() async {
     try {
-      final appDir = await getApplicationDocumentsDirectory();
-      // Check in app group container for widget preview PNG
+      final appDir = await GetIt.I<HeadlessWidgetRenderingService>().getSharedDirectory();
+      
+      // Try to load JSON first (Modern native mode)
+      final jsonPath = '${appDir.path}/sasup_ui_${widget.script.id}.json';
+      final jsonFile = File(jsonPath);
+      if (await jsonFile.exists()) {
+        final content = await jsonFile.readAsString();
+        final nodeMap = jsonDecode(content);
+        final nodeJson = nodeMap['root'] ?? nodeMap;
+        final node = WidgetNode.fromJson(nodeJson as Map<String, dynamic>);
+        if (mounted) {
+          setState(() {
+            _previewNode = node;
+          });
+        }
+        return;
+      }
+
+      // Check in app group container for widget preview PNG (Legacy)
       final previewPath = '${appDir.path}/sasup_ui_${widget.script.id}.png';
       if (await File(previewPath).exists()) {
         if (mounted) setState(() => _previewImagePath = previewPath);
       }
-    } catch (_) {
-      // No preview available — will show code fallback
+    } catch (e) {
+      debugPrint("Preview error: $e");
     }
   }
 
@@ -336,6 +357,38 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
 
   Widget _buildPreviewTab() {
     final colors = Theme.of(context).extension<LiquidColors>()!;
+
+    if (_previewNode != null) {
+      return Center(
+        child: Container(
+          margin: EdgeInsets.symmetric(
+            horizontal: LiquidTheme.pageHorizontalPadding,
+            vertical: 8,
+          ),
+          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
+          decoration: BoxDecoration(
+            color: colors.cardBackground,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: colors.cardBorder,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: SingleChildScrollView(
+              child: SasupRenderer(node: _previewNode!),
+            ),
+          ),
+        ),
+      );
+    }
 
     if (_previewImagePath != null) {
       return Center(
