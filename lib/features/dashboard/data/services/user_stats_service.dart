@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_ce/hive.dart';
 
 /// Tracks user activity metrics for achievements and profile stats.
@@ -9,14 +10,30 @@ class UserStatsService {
   Box<int>? _activityBox;
 
   Future<void> init() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    final currentBoxName = '${_boxName}_$uid';
+    final currentActivityBoxName = '${_activityBoxName}_$uid';
+
+    // If already initialized for the current user, do nothing.
     if (_box != null &&
+        _box!.name == currentBoxName &&
         _box!.isOpen &&
         _activityBox != null &&
+        _activityBox!.name == currentActivityBoxName &&
         _activityBox!.isOpen) {
       return;
     }
-    _box = await Hive.openBox<int>(_boxName);
-    _activityBox = await Hive.openBox<int>(_activityBoxName);
+
+    // Close old boxes if user switched
+    if (_box != null && _box!.isOpen && _box!.name != currentBoxName) {
+      await _box!.close();
+    }
+    if (_activityBox != null && _activityBox!.isOpen && _activityBox!.name != currentActivityBoxName) {
+      await _activityBox!.close();
+    }
+
+    _box = await Hive.openBox<int>(currentBoxName);
+    _activityBox = await Hive.openBox<int>(currentActivityBoxName);
   }
 
   Future<int> get(String key) async {

@@ -1,35 +1,26 @@
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 
 /// Intercepts system events and tracks memory/performance.
 ///
-/// Gracefully degrades when Supabase is unavailable (offline, DNS failure,
-/// or init timeout). Every public method is a no-op when [_client] is null.
+/// Records telemetry to Firebase Firestore.
 class TelemetryService {
-  final SupabaseClient? _client;
-
-  TelemetryService() : _client = _resolveClient();
-
-  static SupabaseClient? _resolveClient() {
-    try {
-      return Supabase.instance.client;
-    } catch (_) {
-      debugPrint('[Telemetry] Supabase not available — telemetry disabled.');
-      return null;
-    }
-  }
+  TelemetryService();
 
   /// Registers or updates the user profile for the Admin Dashboard.
   Future<void> registerProfile() async {
-    if (_client == null) return;
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      
       final os = kIsWeb ? 'web' : Platform.operatingSystem;
-      await _client.from('user_profiles').upsert({
+      await FirebaseFirestore.instance.collection('user_profiles').doc(user.uid).set({
         'os': os,
         'app_version': '1.0.0+prod',
-        'last_active': DateTime.now().toIso8601String(),
-      });
+        'last_active': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       debugPrint("Telemetry: Profile registered/updated for $os");
     } catch (e) {
       debugPrint("Telemetry: Profile Register Error: $e");
@@ -38,11 +29,11 @@ class TelemetryService {
 
   /// Tracks a successful widget deployment (Gallery → Device).
   Future<void> trackWidgetDeploy(String scriptId, {String family = 'medium'}) async {
-    if (_client == null) return;
     try {
-      await _client.from('widget_stats').insert({
+      await FirebaseFirestore.instance.collection('widget_stats').add({
         'script_id': scriptId,
         'family': family,
+        'timestamp': FieldValue.serverTimestamp(),
       });
       debugPrint("Telemetry: Widget deployment tracked for $scriptId");
     } catch (e) {
@@ -87,14 +78,16 @@ class TelemetryService {
     int? durationMs,
     String? errorTrace,
   }) async {
-    if (_client == null) return;
     try {
-      await _client.from('telemetry_logs').insert({
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      await FirebaseFirestore.instance.collection('telemetry_logs').add({
+        'user_id': uid, // Optional, can be null
         'script_id': scriptId,
         'event': event,
         'status': status,
         'duration_ms': durationMs,
         'error_trace': errorTrace,
+        'created_at': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       debugPrint("Telemetry Insert Error: $e");

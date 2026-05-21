@@ -1,73 +1,116 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:script_automator/features/dashboard/domain/repositories/gallery_repository.dart';
+import 'package:script_automator/core/security/script_integrity_checker.dart';
 
-/// Fetches community gallery scripts from the GitHub-hosted index.
+/// Fetches community gallery scripts from the Firestore `gallery_published` collection.
 ///
-/// Primary source: `index.json` from the `script-automator-community-gallery`
-/// repository on GitHub. Falls back to a minimal built-in set if the network
-/// request fails (offline mode).
+/// Primary source: Firestore `gallery_published` (real-time, admin-managed).
+/// Falls back to a minimal built-in set if offline.
 ///
-/// The HTTP client is injected for testability and is properly closed on
-/// [dispose].
+/// Submissions are uploaded to Firebase Storage with metadata stored in
+/// Firestore `gallery_submissions`.
 class CloudGalleryRepository implements GalleryRepository {
-  /// Raw GitHub URL for the community gallery index.
-  static const String _kGalleryIndexUrl =
-      'https://raw.githubusercontent.com/chngysmine/script-automator-community-gallery/main/index.json';
-
-  final http.Client _client;
-
-  CloudGalleryRepository({http.Client? client})
-      : _client = client ?? http.Client();
-
   @override
   Future<List<Map<String, dynamic>>> getTemplates() async {
     try {
-      final response = await _client
-          .get(Uri.parse(_kGalleryIndexUrl))
-          .timeout(const Duration(seconds: 10));
+      final snapshot = await FirebaseFirestore.instance
+          .collection('gallery_published')
+          .orderBy('published_at', descending: true)
+          .limit(100)
+          .get();
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        final scripts = _parseIndex(data);
+      if (snapshot.docs.isNotEmpty) {
+        final scripts = snapshot.docs.map<Map<String, dynamic>>((doc) {
+          final data = doc.data();
+          return {
+            'id': doc.id,
+            'name': data['name'] ?? '',
+            'description': data['description'] ?? '',
+            'author': data['author'] ?? '',
+            'category': data['category'] ?? 'Utilities',
+            'version': data['version'] ?? '1.0.0',
+            'icon': data['icon'] ?? 'gear',
+            'isFeatured': (data['isFeatured'] == true).toString(),
+            'scriptUrl': data['file_url'] ?? '',
+            'sha256': data['sha256'] ?? '',
+            'coverUrl': '',
+            'config': data['config'],
+          };
+        }).toList();
         return await _filterBlockedScripts(scripts);
       }
-      debugPrint('Gallery fetch failed with status: ${response.statusCode}');
+
+      debugPrint('[Gallery] No published scripts found, using offline fallback.');
       return _getOfflineFallback();
     } catch (e) {
-      debugPrint('Gallery fetch error: $e');
+      debugPrint('[Gallery] Fetch error: $e');
       return _getOfflineFallback();
     }
   }
 
   @override
   Future<void> submitScript(Map<String, dynamic> submission) async {
-    final client = _supabaseClient;
-    if (client == null) throw Exception("Supabase is not initialized. Please log in.");
-    
-    // Add current user ID to submission
-    final user = client.auth.currentUser;
+    final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("User is not logged in.");
 
-    submission['user_id'] = user.id;
-    submission['status'] = 'pending';
-    
-    await client.from('gallery_submissions').insert(submission);
+    final content = submission['content'] as String? ?? '';
+    final scriptId = submission['script_id'] as String? ?? 'untitled';
+
+    // 1. Upload JS content to Firebase Storage
+    String fileUrl = '';
+    int fileSize = 0;
+    String sha256Hash = '';
+
+    if (content.isNotEmpty) {
+      final storageRef = FirebaseStorage.instance
+          .ref('submissions/${user.uid}/$scriptId.js');
+      await storageRef.putString(
+        content,
+        format: PutStringFormat.raw,
+        metadata: SettableMetadata(contentType: 'text/javascript'),
+      );
+      fileUrl = await storageRef.getDownloadURL();
+      fileSize = content.length;
+      sha256Hash = ScriptIntegrityChecker.computeHash(content);
+    }
+
+    // 2. Write metadata to Firestore (content NOT stored in document)
+    final metadata = <String, dynamic>{
+      'user_id': user.uid,
+      'script_id': scriptId,
+      'name': submission['name'] ?? 'Untitled',
+      'description': submission['description'] ?? '',
+      'category': submission['category'] ?? 'Utilities',
+      'author': user.displayName ?? user.email ?? 'Anonymous',
+      'version': submission['version'] ?? '1.0.0',
+      'status': 'pending',
+      'file_url': fileUrl,
+      'file_size': fileSize,
+      'sha256': sha256Hash,
+      'created_at': FieldValue.serverTimestamp(),
+    };
+
+    if (submission.containsKey('original_gallery_id')) {
+      metadata['original_gallery_id'] = submission['original_gallery_id'];
+    }
+
+    await FirebaseFirestore.instance
+        .collection('gallery_submissions')
+        .add(metadata);
   }
 
-  /// Queries the Supabase `script_moderation` table and strips out blocked items.
+  /// Queries the Firestore `script_moderation` collection and strips out blocked items.
   Future<List<Map<String, dynamic>>> _filterBlockedScripts(List<Map<String, dynamic>> rawScripts) async {
-    final client = _supabaseClient;
-    if (client == null) return rawScripts;
     try {
-      final response = await client
-          .from('script_moderation')
-          .select('script_id')
-          .eq('is_blocked', true);
+      final snapshot = await FirebaseFirestore.instance
+          .collection('script_moderation')
+          .where('is_blocked', isEqualTo: true)
+          .get();
           
-      final blockedIds = (response as List).map((row) => row['script_id'] as String).toSet();
+      final blockedIds = snapshot.docs.map((doc) => doc.id).toSet();
       if (blockedIds.isEmpty) return rawScripts;
 
       final filtered = rawScripts.where((script) => !blockedIds.contains(script['id'])).toList();
@@ -77,44 +120,6 @@ class CloudGalleryRepository implements GalleryRepository {
       debugPrint('Moderation check failed (bypassing): $e');
       return rawScripts;
     }
-  }
-
-  /// Returns the Supabase client if initialized, null otherwise.
-  SupabaseClient? get _supabaseClient {
-    try {
-      return Supabase.instance.client;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Parses the raw JSON index into the flat map format expected by the UI.
-  List<Map<String, dynamic>> _parseIndex(List<dynamic> data) {
-    return data.map<Map<String, dynamic>>((item) {
-      var coverUrl = '';
-      final shots = item['screenshots'];
-      if (shots is List) {
-        for (final s in shots) {
-          if (s is String && s.trim().isNotEmpty) {
-            coverUrl = s.trim();
-            break;
-          }
-        }
-      }
-      return {
-        'id': (item['id'] ?? '') as String,
-        'name': (item['name'] ?? '') as String,
-        'description': (item['description'] ?? '') as String,
-        'author': (item['author'] ?? '') as String,
-        'category': (item['category'] ?? 'Utilities') as String,
-        'version': (item['version'] ?? '1.0.0') as String,
-        'icon': (item['icon'] ?? 'gear') as String,
-        'isFeatured': (item['isFeatured'] == true).toString(),
-        'scriptUrl': (item['scriptUrl'] ?? '') as String,
-        'coverUrl': coverUrl,
-        'config': item['config'],
-      };
-    }).toList();
   }
 
   /// Minimal offline fallback with a single example per category.
@@ -132,7 +137,7 @@ class CloudGalleryRepository implements GalleryRepository {
         'version': '2.0.1',
         'icon': 'cloud.sun.fill',
         'isFeatured': 'true',
-        'content': _kWeatherScript, // Embedded fallback
+        'content': _kWeatherScript,
         'scriptUrl': '',
         'coverUrl': '',
       },
@@ -145,7 +150,7 @@ class CloudGalleryRepository implements GalleryRepository {
         'version': '1.0.0',
         'icon': 'bitcoinsign.circle.fill',
         'isFeatured': 'false',
-        'content': _kCryptoScript, // Embedded fallback
+        'content': _kCryptoScript,
         'scriptUrl': '',
         'coverUrl': '',
       },
@@ -158,16 +163,11 @@ class CloudGalleryRepository implements GalleryRepository {
         'version': '1.5.0',
         'icon': 'gear',
         'isFeatured': 'false',
-        'content': _kSystemScript, // Embedded fallback
+        'content': _kSystemScript,
         'scriptUrl': '',
         'coverUrl': '',
       },
     ];
-  }
-
-  /// Releases the underlying HTTP client.
-  void dispose() {
-    _client.close();
   }
 
   // ---------------------------------------------------------------------------

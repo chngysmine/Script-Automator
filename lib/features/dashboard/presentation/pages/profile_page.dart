@@ -812,26 +812,37 @@ class _ProfileCollapsingHeaderDelegate extends SliverPersistentHeaderDelegate {
     bool overlapsContent,
   ) {
     final colors = Theme.of(context).extension<LiquidColors>()!;
-    final double percent = (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0);
+    final double percent = (shrinkOffset / (maxExtent - minExtent)).clamp(
+      0.0,
+      1.0,
+    );
     final bool isScrolled = shrinkOffset > 0;
 
     // Fast fade out for expanded-only elements (Email, Bio, Edit Button)
     final double fadeOutOpacity = (1.0 - (percent * 2)).clamp(0.0, 1.0);
-    
-    // Fade in for the small edit button on the pinned header? 
+
+    // Fade in for the small edit button on the pinned header?
     // Wait, Edit button was always visible in the expanded, but we have GlassHeaderActions always pinned.
 
     // Calculate Interpolated Positions
     final double avatarSize = lerpDouble(88, 40, percent)!;
-    final double avatarTop = lerpDouble(topPadding + 96, topPadding + 15, percent)!;
-    
-    final double nameTop = lerpDouble(topPadding + 196, topPadding + 24, percent)!;
+    final double avatarTop = lerpDouble(
+      topPadding + 96,
+      topPadding + 15,
+      percent,
+    )!;
+
+    final double nameTop = lerpDouble(
+      topPadding + 196,
+      topPadding + 24,
+      percent,
+    )!;
     final double nameLeft = lerpDouble(24, 76, percent)!;
     final double nameFontSize = lerpDouble(24, 18, percent)!;
 
     // Elements that scroll up naturally
     final double coverTop = -shrinkOffset;
-    final double editButtonTop = topPadding + 120 - shrinkOffset;
+    final double editButtonTop = topPadding + 150 - shrinkOffset;
     final double emailTop = topPadding + 230 - shrinkOffset;
     final double bioTop = topPadding + 252 - shrinkOffset;
 
@@ -896,7 +907,8 @@ class _ProfileCollapsingHeaderDelegate extends SliverPersistentHeaderDelegate {
                   size: avatarSize,
                   onPickAvatar: onPickAvatar,
                   avatarPath: avatarPath,
-                  hideEditBadge: percent > 0.5, // Hide badge when it becomes small
+                  hideEditBadge:
+                      percent > 0.5, // Hide badge when it becomes small
                 ),
               ),
 

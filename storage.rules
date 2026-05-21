@@ -1,0 +1,30 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Script submissions: only authenticated users can upload to their own folder
+    // Max 500KB, must be JS content type
+    match /submissions/{uid}/{fileName} {
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && request.resource.size < 500 * 1024
+                   && request.resource.contentType == 'text/javascript';
+      allow read: if request.auth != null;
+    }
+
+    // Published gallery scripts: admin write, public read
+    match /gallery/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.token.admin == true;
+    }
+
+    // User profile avatars
+    match /avatars/{uid}/{fileName} {
+      allow write: if request.auth != null && request.auth.uid == uid
+                   && request.resource.size < 2 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow read: if true;
+    }
+  }
+}

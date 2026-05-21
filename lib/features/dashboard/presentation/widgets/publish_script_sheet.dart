@@ -7,6 +7,7 @@ import 'package:script_automator/core/ui/styled_dropdown.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/pixel_cheer_animation.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/dashboard/domain/repositories/gallery_repository.dart';
+import 'package:script_automator/core/services/app_config_service.dart';
 
 class PublishScriptSheet extends StatefulWidget {
   final Script script;
@@ -48,6 +49,15 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
 
   Future<void> _submit() async {
     setState(() => _errorMessage = null);
+
+    // Check if gallery submissions are enabled by admin
+    if (GetIt.I.isRegistered<AppConfigService>() &&
+        !GetIt.I<AppConfigService>().gallerySubmissionsEnabled) {
+      setState(() {
+        _errorMessage = 'Gallery submissions are temporarily disabled by admin.';
+      });
+      return;
+    }
 
     final bool isImported = widget.script.settings['gallery_id'] != null;
     final bool isModified = widget.script.settings['is_modified_from_gallery'] == true;

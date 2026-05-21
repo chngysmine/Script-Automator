@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_ce/hive.dart';
 
 /// Represents the type of in-app notification.
@@ -81,7 +82,18 @@ class NotificationService {
 
   /// Initializes the Hive box and loads persisted notifications.
   Future<void> init() async {
-    _box = await Hive.openBox<String>(_boxName);
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    final currentBoxName = '${_boxName}_$uid';
+
+    if (_box != null && _box!.name == currentBoxName && _box!.isOpen) {
+      return;
+    }
+
+    if (_box != null && _box!.isOpen && _box!.name != currentBoxName) {
+      await _box!.close();
+    }
+
+    _box = await Hive.openBox<String>(currentBoxName);
     _loadFromDisk();
     _broadcast();
   }

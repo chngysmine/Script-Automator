@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 
@@ -12,6 +11,7 @@ import 'core/theme/liquid_theme.dart';
 import 'core/auth/auth_service.dart';
 import 'core/auth/auth_gate.dart';
 import 'core/sync/firestore_sync_service.dart';
+import 'core/sync/sync_retry_queue.dart';
 import 'features/script_management/domain/repositories/script_repository.dart';
 import 'features/script_management/data/repositories/script_repository_impl.dart';
 import 'features/script_management/data/datasources/script_local_data_source.dart';
@@ -32,6 +32,7 @@ import 'package:script_automator/features/dashboard/data/services/user_preferenc
 import 'package:script_automator/features/dashboard/data/services/user_stats_service.dart';
 import 'package:script_automator/core/services/telemetry_service.dart';
 import 'features/ai_integration/data/services/openai_service.dart';
+import 'core/services/app_config_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -58,22 +59,6 @@ void main() async {
     debugPrint('[BOOT] Firebase init failed (degraded mode): $e');
   }
 
-  // Phase 1B: Initialize Supabase Analytics & Telemetry Layer
-  // Non-critical — app continues in offline mode if this fails.
-  try {
-    final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
-    final supabaseKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
-    if (supabaseUrl.isNotEmpty && supabaseKey.isNotEmpty) {
-      await Supabase.initialize(
-        url: supabaseUrl,
-        anonKey: supabaseKey,
-      ).timeout(const Duration(seconds: 5));
-    } else {
-      debugPrint('[BOOT] Supabase credentials not found in .env (offline mode)');
-    }
-  } catch (e) {
-    debugPrint('[BOOT] Supabase init failed (offline mode): $e');
-  }
 
   try {
     await _setupDI();
@@ -105,6 +90,7 @@ Future<void> _setupDI() async {
   if (!GetIt.I.isRegistered<FirestoreSyncService>()) {
     GetIt.I.registerSingleton<FirestoreSyncService>(FirestoreSyncService());
   }
+  await SyncRetryQueue.instance.initialize();
 
   // Phase 2: Data Layer — Hive root matches App Group on iOS when available
   // (see [AppStoragePaths.hiveRootDirectory]); mirrors [Hive.initFlutter] adapters.
@@ -210,6 +196,11 @@ Future<void> _setupDI() async {
     GetIt.I.registerSingleton<HeadlessWidgetRenderingService>(
       HeadlessWidgetRenderingService(),
     );
+  }
+
+  // Phase 5: Remote Config (feature flags from Firestore)
+  if (!GetIt.I.isRegistered<AppConfigService>()) {
+    GetIt.I.registerSingleton<AppConfigService>(AppConfigService());
   }
 }
 

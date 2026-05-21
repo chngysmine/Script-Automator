@@ -1,17 +1,14 @@
 import 'package:dart_openai/dart_openai.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:script_automator/core/config/build_secrets.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:script_automator/core/security/app_secure_storage.dart';
 
 /// Service responsible for communicating with OpenAI's API.
-/// Uses the [dart_openai] package for native Dart bindings.
 ///
 /// Key resolution order:
-///   1. Secure storage (user's custom key from Settings)
-///   2. `.env` asset via flutter_dotenv (built-in app key)
-///   3. `--dart-define=OPENAI_API_KEY=…` (CI/CD override)
+///   1. Secure storage (user's custom key from Settings) -> uses `dart_openai` directly.
+///   2. Fallback -> uses Firebase Cloud Functions proxy (`openAiProxy`).
 class OpenAIService {
   static const String _storageKey = 'openai_api_key';
   
@@ -40,46 +37,24 @@ class OpenAIService {
     _currentModel = modelId;
   }
 
-  /// Initializes the service by attempting to load the API key from secure storage.
-  /// If successful, configures the global OpenAI instance.
+  /// Initializes the service by attempting to load the custom API key from secure storage.
+  /// If no custom key is found, it defaults to using the Cloud Functions proxy.
   /// @return `Future<void>`
   Future<void> initialize() async {
     try {
-      // Priority 1: User's custom key from secure storage (Settings page)
       final stored = await AppSecureStorage.readMigratingLegacy(
         _secureStorage,
         _storageKey,
       );
       if (stored != null && stored.isNotEmpty) {
         OpenAI.apiKey = stored;
-        _isConfigured = true;
         _isUsingCustomKey = true;
-        debugPrint("[OpenAIService] Initialized from user's custom key.");
-        return;
-      }
-
-      // Priority 2: Built-in key from .env asset (bundled with app)
-      final fromEnv = dotenv.env['OPENAI_API_KEY']?.trim() ?? '';
-      if (fromEnv.isNotEmpty) {
-        OpenAI.apiKey = fromEnv;
-        _isConfigured = true;
+        debugPrint("[OpenAIService] Initialized using user's custom key.");
+      } else {
         _isUsingCustomKey = false;
-        debugPrint("[OpenAIService] Initialized from built-in .env key.");
-        return;
+        debugPrint("[OpenAIService] No custom key found. Defaulting to Cloud Functions proxy.");
       }
-
-      // Priority 3: CI/CD dart-define fallback
-      final fromBuild = BuildSecrets.openAiApiKey.trim();
-      if (fromBuild.isNotEmpty) {
-        OpenAI.apiKey = fromBuild;
-        _isConfigured = true;
-        _isUsingCustomKey = false;
-        debugPrint("[OpenAIService] Initialized from dart-define.");
-        return;
-      }
-
-      _isConfigured = false;
-      debugPrint("[OpenAIService] No API key found in any source.");
+      _isConfigured = true; // Always ready, either via custom key or proxy
     } catch (e) {
       _isConfigured = false;
       debugPrint("[OpenAIService] Error initializing: $e");
@@ -134,46 +109,49 @@ class OpenAIService {
   /// @param codeContext The string containing code up to the current cursor position
   /// @return `Future<String?>` The suggested code completion, or null if failed
   Future<String?> completeCode(String codeContext) async {
-    if (!_isConfigured) {
-      debugPrint("[OpenAIService] Cannot complete code: API Key missing.");
-      return null;
-    }
+    if (!_isConfigured) return null;
 
     try {
-      // Extremely restrictive system prompt to force pure code responses without markdown
-      final systemMessage = OpenAIChatCompletionChoiceMessageModel(
-        role: OpenAIChatMessageRole.system,
-        content: [
-          OpenAIChatCompletionChoiceMessageContentItemModel.text(
-           "You are an expert JavaScript coding assistant inside a mobile App editor. "
-           "Your task is to COMPLETE the code given by the user context. "
-           "Output ONLY the raw code required to complete the snippet. "
-           "DO NOT wrap your response in markdown code blocks (e.g. ```javascript). "
-           "DO NOT provide explanations. Just output the exact characters to append."
-          )
-        ],
-      );
+      final systemContent = "You are an expert JavaScript coding assistant inside a mobile App editor. "
+          "Your task is to COMPLETE the code given by the user context. "
+          "Output ONLY the raw code required to complete the snippet. "
+          "DO NOT wrap your response in markdown code blocks (e.g. ```javascript). "
+          "DO NOT provide explanations. Just output the exact characters to append.";
+      final userContent = "Context up to cursor:\n\n$codeContext";
 
-      final userMessage = OpenAIChatCompletionChoiceMessageModel(
-        role: OpenAIChatMessageRole.user,
-        content: [
-          OpenAIChatCompletionChoiceMessageContentItemModel.text(
-            "Context up to cursor:\n\n$codeContext"
-          )
-        ],
-      );
+      String? text;
 
-      final completion = await OpenAI.instance.chat.create(
-        model: _currentModel,
-        messages: [systemMessage, userMessage],
-        temperature: 0.1, // Near 0 for deterministic code completion
-        maxTokens: 128,   // Keep ghost text concise
-      );
-
-      final text = completion.choices.first.message.content?.first.text;
+      if (_isUsingCustomKey) {
+        final systemMessage = OpenAIChatCompletionChoiceMessageModel(
+          role: OpenAIChatMessageRole.system,
+          content: [OpenAIChatCompletionChoiceMessageContentItemModel.text(systemContent)],
+        );
+        final userMessage = OpenAIChatCompletionChoiceMessageModel(
+          role: OpenAIChatMessageRole.user,
+          content: [OpenAIChatCompletionChoiceMessageContentItemModel.text(userContent)],
+        );
+        final completion = await OpenAI.instance.chat.create(
+          model: _currentModel,
+          messages: [systemMessage, userMessage],
+          temperature: 0.1,
+          maxTokens: 128,
+        );
+        text = completion.choices.first.message.content?.first.text;
+      } else {
+        final callable = FirebaseFunctions.instance.httpsCallable('openAiProxy');
+        final response = await callable.call({
+          'model': _currentModel,
+          'messages': [
+            {'role': 'system', 'content': systemContent},
+            {'role': 'user', 'content': userContent}
+          ],
+          'temperature': 0.1,
+          'max_tokens': 128
+        });
+        text = response.data['result'] as String?;
+      }
       
       if (text != null) {
-        // Strip out any markdown blocks if the model disobeyed
         String cleanText = text;
         if (cleanText.startsWith('```')) {
            cleanText = cleanText.replaceFirst(RegExp(r'```[a-zA-Z]*\n?'), '');
@@ -200,16 +178,14 @@ class OpenAIService {
   /// @param existingCode Optional current editor content for context
   /// @return `Future<String?>` Generated/fixed JS code, or an error message
   Future<String?> generateCode(String prompt, {String? existingCode}) async {
-    if (!_isConfigured) {
-      return '// Error: OpenAI API key not configured.\n// Go to AI settings to add your key.';
-    }
+    if (!_isConfigured) return '// Error: AI Service not ready.';
 
     try {
       final hasExistingCode = existingCode != null &&
           existingCode.trim().isNotEmpty &&
           !existingCode.trim().startsWith('// Start coding');
 
-      final systemPrompt = hasExistingCode
+      final systemContent = hasExistingCode
           ? "You are a JavaScript code assistant for Script Automator, a mobile IDE. "
             "The user has existing code in their editor and needs your help. "
             "RULES:\n"
@@ -236,32 +212,41 @@ class OpenAIService {
             "6. Available APIs: console.log(), setTimeout(), JSON.parse/stringify(), "
             "Math.*, Date, fetch() for HTTP requests, renderWidget() for UI.";
 
-      final systemMessage = OpenAIChatCompletionChoiceMessageModel(
-        role: OpenAIChatMessageRole.system,
-        content: [
-          OpenAIChatCompletionChoiceMessageContentItemModel.text(systemPrompt),
-        ],
-      );
-
-      final userContent = hasExistingCode
+      final userContentStr = hasExistingCode
           ? "My current code:\n```javascript\n$existingCode\n```\n\nRequest: $prompt"
           : prompt;
 
-      final userMessage = OpenAIChatCompletionChoiceMessageModel(
-        role: OpenAIChatMessageRole.user,
-        content: [
-          OpenAIChatCompletionChoiceMessageContentItemModel.text(userContent),
-        ],
-      );
+      String? text;
 
-      final completion = await OpenAI.instance.chat.create(
-        model: _currentModel,
-        messages: [systemMessage, userMessage],
-        temperature: 0.3,
-        maxTokens: 2048,
-      );
-
-      final text = completion.choices.first.message.content?.first.text;
+      if (_isUsingCustomKey) {
+        final systemMessage = OpenAIChatCompletionChoiceMessageModel(
+          role: OpenAIChatMessageRole.system,
+          content: [OpenAIChatCompletionChoiceMessageContentItemModel.text(systemContent)],
+        );
+        final userMessage = OpenAIChatCompletionChoiceMessageModel(
+          role: OpenAIChatMessageRole.user,
+          content: [OpenAIChatCompletionChoiceMessageContentItemModel.text(userContentStr)],
+        );
+        final completion = await OpenAI.instance.chat.create(
+          model: _currentModel,
+          messages: [systemMessage, userMessage],
+          temperature: 0.3,
+          maxTokens: 2048,
+        );
+        text = completion.choices.first.message.content?.first.text;
+      } else {
+        final callable = FirebaseFunctions.instance.httpsCallable('openAiProxy');
+        final response = await callable.call({
+          'model': _currentModel,
+          'messages': [
+            {'role': 'system', 'content': systemContent},
+            {'role': 'user', 'content': userContentStr}
+          ],
+          'temperature': 0.3,
+          'max_tokens': 2048
+        });
+        text = response.data['result'] as String?;
+      }
 
       if (text != null) {
         String clean = text;

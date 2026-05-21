@@ -125,13 +125,14 @@ class QuickJSEngine implements JSEngine {
     if (_ctx == null) return null;
     final tag = val.tag;
 
-    // Check for Arrays/Objects: Tag > 0 (Objects) but safer to check IsArray/IsObject logic or just use JSON for potential objects.
-    // QuickJS Tags: JS_TAG_OBJECT = -1 (Wait, no).
-    // Let's rely on checking if it is an object/array via C API or simply attempt JSON stringify for everything except primitives?
-    // Primitives: Int, Bool, Null, Undefined are fast.
+    // ── QuickJS Tag Constants (from quickjs.h) ──────────────────────────
+    // WARNING: These magic numbers are internal QuickJS implementation details.
+    // If the QuickJS version is upgraded, verify against quickjs.h:
+    //   JS_TAG_STRING = -7, JS_TAG_INT = -1, JS_TAG_BOOL = 6
+    //   JS_TAG_OBJECT = -1 (same as INT — differentiated by JS_IsObject)
+    // ──────────────────────────────────────────────────────────────────────
     if (tag == -7) {
-      // String
-      // ... existing string logic ...
+      // JS_TAG_STRING
       final strPtr = _lib.JS_ToCString(_ctx!, val);
       if (strPtr != nullptr) {
         final dartStr = strPtr.cast<Utf8>().toDartString();
@@ -140,20 +141,13 @@ class QuickJSEngine implements JSEngine {
       }
       return "";
     }
-    if (tag == -1) return val.u; // Int (JS_TAG_INT is -1)
-    if (tag == 6) return val.u == 1; // Bool (JS_TAG_BOOL=6)
-    // Actually, tags are defined in quickjs.h.
-    // Better strategy: Use JSON.stringify for everything that is "Complex".
-    // Or just simple:
+    if (tag == -1) return val.u; // JS_TAG_INT (see below for Object disambiguation)
+    if (tag == 6) return val.u == 1; // JS_TAG_BOOL
 
-    // Check if it's an Array or Function or Object
+    // For complex types (Object/Array), JS_TAG_OBJECT == -1 same as INT.
+    // We disambiguate using the C API's JS_IsArray/JS_IsObject checks.
     final isArray = _lib.JS_IsArray(_ctx!, val);
-    // Note: JS_IsArray returns 1 if array.
-    // JS_TAG_OBJECT is typically -1, but JS_TAG_INT is also -1.
-    // We need to use JS_IsObject to differentiate.
-    // Simplification: logic to detect object/array.
-    // If not primitive types above, try JSON stringify.
-    if (isArray == 1 || tag == -1 /* JS_TAG_OBJECT */ ) {
+    if (isArray == 1 || tag == -1) {
       // Fallback to JSON Marshalling for robustness
       // JS_JSONStringify_Wrapper takes 2 args: ctx, val
       final jsonVal = _lib.JS_JSONStringify(_ctx!, val);

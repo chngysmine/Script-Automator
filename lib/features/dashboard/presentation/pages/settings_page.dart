@@ -250,7 +250,7 @@ class _SettingsPageState extends State<SettingsPage> {
     } else {
       // Fallback: open GitHub issues in browser
       final githubUri = Uri.parse(
-        'https://github.com/chngysmine/script-automator-community-gallery/issues/new',
+        'https://github.com/chngysmine/Script-Automator/issues/new',
       );
       if (await canLaunchUrl(githubUri)) {
         await launchUrl(githubUri, mode: LaunchMode.externalApplication);

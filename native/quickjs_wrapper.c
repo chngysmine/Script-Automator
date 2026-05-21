@@ -11,29 +11,40 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <stdatomic.h>
+
 /* -------------------------------------------------------------------------- */
 /* Cooperative interrupt: polled inside QuickJS bytecode loop (not Dart port). */
 /* Main isolate sets the flag via FFI while the engine isolate is inside       */
 /* JS_Eval — the handler runs on-thread and throws "interrupted".              */
+/*                                                                            */
+/* Uses C11 atomics for correct memory ordering on ARM (volatile alone is      */
+/* insufficient for cross-thread visibility on weakly-ordered architectures).  */
 /* -------------------------------------------------------------------------- */
 
-static volatile int g_script_engine_interrupt_requested;
+static atomic_int g_script_engine_interrupt_requested;
 
 static int script_engine_interrupt_cb(JSRuntime *rt, void *opaque) {
   (void)rt;
   (void)opaque;
-  return g_script_engine_interrupt_requested ? 1 : 0;
+  return atomic_load_explicit(&g_script_engine_interrupt_requested,
+                              memory_order_acquire) ? 1 : 0;
 }
 
 void ScriptEngine_AttachInterruptHandler(JSRuntime *rt) {
-  g_script_engine_interrupt_requested = 0;
+  atomic_store_explicit(&g_script_engine_interrupt_requested, 0,
+                        memory_order_release);
   JS_SetInterruptHandler(rt, script_engine_interrupt_cb, NULL);
 }
 
-void ScriptEngine_RequestInterrupt(void) { g_script_engine_interrupt_requested = 1; }
+void ScriptEngine_RequestInterrupt(void) {
+  atomic_store_explicit(&g_script_engine_interrupt_requested, 1,
+                        memory_order_release);
+}
 
 void ScriptEngine_ClearInterruptRequest(void) {
-  g_script_engine_interrupt_requested = 0;
+  atomic_store_explicit(&g_script_engine_interrupt_requested, 0,
+                        memory_order_release);
 }
 
 int JS_IsException_Wrapper(JSValueConst v) { return JS_IsException(v); }

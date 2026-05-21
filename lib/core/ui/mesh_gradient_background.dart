@@ -11,12 +11,13 @@ class MeshGradientBackground extends StatefulWidget {
 }
 
 class _MeshGradientBackgroundState extends State<MeshGradientBackground>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Infinite loop for living mesh
     _controller = AnimationController(
       vsync: this,
@@ -25,7 +26,18 @@ class _MeshGradientBackgroundState extends State<MeshGradientBackground>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Stop GPU-intensive animation when app is not visible to save battery.
+    if (state == AppLifecycleState.resumed) {
+      if (!_controller.isAnimating) _controller.repeat(reverse: true);
+    } else {
+      _controller.stop();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }

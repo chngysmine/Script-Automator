@@ -1,0 +1,106 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper Functions ──────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function validString(field) {
+      return field is string && field.size() > 0;
+    }
+
+    // ── User Documents ────────────────────────────────────────────────
+    // Users can only read/write their own profile and sub-collections.
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid);
+      allow delete: if isAdmin();
+
+      // Scripts sub-collection — owner full access, admin read-only
+      match /scripts/{scriptId} {
+        allow read, write: if isOwner(uid);
+        allow read: if isAdmin();
+      }
+
+      // Profile sub-documents
+      match /{subcollection=**} {
+        allow read, write: if isOwner(uid);
+        allow read: if isAdmin();
+      }
+    }
+
+    // ── Telemetry Logs ────────────────────────────────────────────────
+    // Authenticated users can insert logs. Only admins can read/query.
+    match /telemetry_logs/{logId} {
+      allow create: if isSignedIn()
+        && validString(request.resource.data.script_id)
+        && validString(request.resource.data.event)
+        && validString(request.resource.data.status);
+      allow read: if isAdmin();
+      allow update: if false; // Logs are immutable
+      allow delete: if isAdmin(); // Allow admin purge
+    }
+
+    // ── Script Moderation ─────────────────────────────────────────────
+    // All authenticated users can read moderation state (for pre-run check).
+    // Only admins can block/unblock scripts.
+    match /script_moderation/{scriptId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ── Gallery Submissions ───────────────────────────────────────────
+    // Authenticated users can submit scripts for review.
+    // Admins can approve/reject. Authors can read their own submissions.
+    match /gallery_submissions/{subId} {
+      allow create: if isSignedIn()
+        && validString(request.resource.data.name)
+        && validString(request.resource.data.content);
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.author_uid == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Admin Registry ────────────────────────────────────────────────
+    // Only readable by the system (for rule-level admin checks via Custom Claims).
+    match /admins/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if false; // Managed via Cloud Functions only
+    }
+
+    // ── Gallery Published ─────────────────────────────────────────────
+    // Public read for community gallery. Admin-only write.
+    match /gallery_published/{scriptId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── App Config ───────────────────────────────────────────────────
+    // Feature flags and system configuration. Auth users can read.
+    match /app_config/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ── Rate Limits ──────────────────────────────────────────────────
+    // Server-only via Admin SDK. No client access.
+    match /rate_limits/{uid} {
+      allow read, write: if false;
+    }
+
+    // ── Default Deny ──────────────────────────────────────────────────
+    // Any collection not explicitly listed above is denied.
+  }
+}

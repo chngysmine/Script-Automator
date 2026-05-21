@@ -138,7 +138,7 @@ class _EditorPageState extends State<EditorPage>
       _controller.selection = _inputController.selection;
       _history.record(_inputController.text, _inputController.selection.baseOffset);
       _onTextChanged(); // Trigger Debounce Save
-      setState(() {});
+      setState(() {}); // Trigger rebuild for syntax highlighting update
     }
   }
 
@@ -645,8 +645,7 @@ class _EditorPageState extends State<EditorPage>
     _controller.setText(snapshot.text);
     _isUndoRedoAction = false;
     
-    _onTextChanged();
-    setState(() {});
+    // _controller.setText already triggers CustomPaint rebuild via Listenable
   }
 
   void _handleRedo() {
@@ -661,8 +660,7 @@ class _EditorPageState extends State<EditorPage>
     _controller.setText(snapshot.text);
     _isUndoRedoAction = false;
     
-    _onTextChanged();
-    setState(() {});
+    // _controller.setText already triggers CustomPaint rebuild via Listenable
   }
 
   // Minimal Pill (Generic System Status)
@@ -867,7 +865,7 @@ class _EditorPageState extends State<EditorPage>
       _controller.setText(generatedCode);
       _history.record(generatedCode, generatedCode.length);
       _onTextChanged();
-      setState(() {});
+      // _controller.setText already triggers CustomPaint rebuild via Listenable
       HapticFeedback.mediumImpact();
 
     }

@@ -5,6 +5,8 @@ import 'package:script_automator/features/script_management/domain/entities/scri
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
 import 'package:script_automator/features/dashboard/data/services/user_preferences_service.dart';
 import 'package:script_automator/features/dashboard/data/services/user_stats_service.dart';
+import 'package:script_automator/core/sync/sync_retry_queue.dart';
+import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
 
 /// Bidirectional sync engine between local Hive storage and Cloud Firestore.
 ///
@@ -80,6 +82,7 @@ class FirestoreSyncService {
   }
 
   /// Bidirectional merge: compares timestamps, newer version wins.
+  /// Uses Pull-first → Push-after pattern to prevent race conditions.
   Future<void> syncBidirectional(String uid) async {
     try {
       final repo = GetIt.I<ScriptRepository>();
@@ -103,38 +106,60 @@ class FirestoreSyncService {
       };
 
       final allIds = {...localMap.keys, ...cloudMap.keys};
-      final batch = _firestore.batch();
-      final collection = _firestore.collection('users').doc(uid).collection('scripts');
-      int pushed = 0, pulled = 0;
+
+      // Phase 1: Classify all changes without executing
+      final List<Script> toPull = [];
+      final Map<String, Script> toPush = {};
 
       for (final id in allIds) {
         final local = localMap[id];
         final cloud = cloudMap[id];
 
         if (local != null && cloud == null) {
-          // Local only → push to cloud
-          batch.set(collection.doc(id), _scriptToMap(local));
-          pushed++;
+          toPush[id] = local;
         } else if (local == null && cloud != null) {
-          // Cloud only → pull to local
-          await repo.saveScript(cloud);
-          pulled++;
+          toPull.add(cloud);
         } else if (local != null && cloud != null) {
-          // Both exist → newer wins
           if (local.updatedAt.isAfter(cloud.updatedAt)) {
-            batch.set(collection.doc(id), _scriptToMap(local), SetOptions(merge: true));
-            pushed++;
+            toPush[id] = local;
           } else if (cloud.updatedAt.isAfter(local.updatedAt)) {
-            await repo.saveScript(cloud);
-            pulled++;
+            toPull.add(cloud);
+            // Notify user if local had unsaved changes being overwritten
+            if (local.content != cloud.content &&
+                GetIt.I.isRegistered<NotificationService>()) {
+              GetIt.I<NotificationService>().addNotification(
+                type: NotificationType.system,
+                title: 'Sync Update',
+                body: '\'${cloud.name}\' was updated from another device.',
+              );
+            }
           }
         }
       }
 
-      await batch.commit();
-      debugPrint('[Sync] Bidirectional complete: pushed=$pushed, pulled=$pulled');
+      // Phase 2: Execute ALL pulls first (local writes)
+      for (final script in toPull) {
+        await repo.saveScript(script);
+      }
+
+      // Phase 3: Execute ALL pushes atomically (cloud writes)
+      if (toPush.isNotEmpty) {
+        final batch = _firestore.batch();
+        final collection = _firestore.collection('users').doc(uid).collection('scripts');
+        for (final entry in toPush.entries) {
+          batch.set(collection.doc(entry.key), _scriptToMap(entry.value), SetOptions(merge: true));
+        }
+        await batch.commit();
+      }
+
+      debugPrint('[Sync] Bidirectional complete: pushed=${toPush.length}, pulled=${toPull.length}');
     } catch (e) {
       debugPrint('[Sync] Bidirectional sync failed: $e');
+      // Queue for retry with exponential backoff
+      SyncRetryQueue.instance.enqueue(
+        'Bidirectional sync for $uid',
+        () => syncBidirectional(uid),
+      );
     }
   }
 
@@ -170,6 +195,10 @@ class FirestoreSyncService {
       debugPrint('[Sync] Profile pushed for $uid');
     } catch (e) {
       debugPrint('[Sync] Profile push failed: $e');
+      SyncRetryQueue.instance.enqueue(
+        'Profile push for $uid',
+        () => pushProfile(uid),
+      );
     }
   }
 

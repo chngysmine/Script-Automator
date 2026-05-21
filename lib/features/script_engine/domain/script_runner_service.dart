@@ -22,7 +22,7 @@ import 'package:get_it/get_it.dart';
 import 'package:script_automator/features/script_engine/domain/system_api_handler.dart';
 import 'package:script_automator/features/script_engine/native_bridge/script_engine_interrupt_ffi.dart';
 import 'package:script_automator/core/services/telemetry_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 /// Service responsible for managing the background Isolate and the JS Engine lifecycle.
@@ -128,20 +128,19 @@ class ScriptRunnerService {
   /// [signalQuickJsInterruptFromProcess].
   Future<void> runScript(String script, String scriptId) async {
     // Phase 4: Runtime Moderation Interceptor
-    // Fail-open: if Supabase is unavailable, skip moderation and allow execution.
+    // Fail-open: if Firestore is unavailable, skip moderation and allow execution.
     try {
-      final client = Supabase.instance.client;
-      final response = await client
-          .from('script_moderation')
-          .select('is_blocked')
-          .eq('script_id', scriptId)
-          .maybeSingle();
-      if (response != null && response['is_blocked'] == true) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('script_moderation')
+          .where('script_id', isEqualTo: scriptId)
+          .limit(1)
+          .get();
+      if (snapshot.docs.isNotEmpty && snapshot.docs.first.data()['is_blocked'] == true) {
         debugPrint("[SECURITY] Execution blocked: $scriptId is suppressed by Admin.");
         return;
       }
     } catch (e) {
-      // Fail open: allow execution if Supabase is unavailable or network down
+      // Fail open: allow execution if Firestore is unavailable or network down
     }
 
     if (_engineIsolate == null) await initialize();
@@ -170,7 +169,11 @@ class ScriptRunnerService {
     try {
       await evalCompleter.future.timeout(_evalTimeout);
     } on TimeoutException {
-      TelemetryService().captureEngineCrash("Timeout/Infinite Loop in JS Engine", null);
+      if (GetIt.I.isRegistered<TelemetryService>()) {
+        GetIt.I<TelemetryService>().captureEngineCrash(
+          "Timeout/Infinite Loop in JS Engine", null,
+        );
+      }
       _logController.add(
         '[Error] Script evaluation timed out after ${_evalTimeout.inSeconds}s. Restarting engine...',
       );
@@ -304,30 +307,66 @@ class ScriptRunnerService {
           return "queued_for_render";
         });
 
-        // Binding 3: setTimeout Polyfill
-        // Note: This is an isolate-local sync delay simulator if used with 0 or small values,
-        // but for full async we use a Timer in Dart.
-        engine.registerGlobalFunction('setTimeout', (args) {
-          try {
-            // Args come in as JSON string or array from bridge
-            // QuickJSEngine bridge simplifies this to a single arg often
-            // Simplified: we'll check if the JS can pass [callbackRef, ms]
-            // For now, let's provide a basic 'wait' binding and polyfill setTimeout in JS
-            return "setTimeout_registered";
-          } catch (e) {
-            return "error";
-          }
+        // Binding 3: setTimeout / setInterval Polyfill (Improved)
+        // Provides timer queue with IDs and deferred callback execution.
+        // True async timers would require an FFI bridge round-trip which is
+        // not feasible inside the single-threaded QuickJS sandbox. Instead:
+        //   - ms <= 0: fire immediately (sync fast-path, zero overhead)
+        //   - ms > 0: defer to end of script via a post-eval callback queue
+        //   - setInterval: implemented as repeated setTimeout
+        //   - clearTimeout/clearInterval: removes from pending queue
+        engine.registerGlobalFunction('__flushTimers', (args) {
+          // No-op on Dart side — timers are flushed in JS after eval
+          return 'flushed';
         });
 
         // --- JS POLYFILLS ---
-        // Injecting basic compatibility layer
+        // Injecting improved compatibility layer with timer queue
         engine.evaluate('''
+          var __timerQueue = [];
+          var __timerId = 0;
+
           var setTimeout = function(cb, ms) {
-            // Native bridge doesn't support async callbacks yet, 
-            // but we can simulate sync wait for small delays
-            // OR we skip the delay and run immediately to prevent crashes.
-            cb(); 
-            return 0;
+            var id = ++__timerId;
+            if (!ms || ms <= 0) {
+              // Fast path: execute immediately
+              try { cb(); } catch(e) { console.log("[Timer Error] " + e); }
+              return id;
+            }
+            // Queue for deferred execution after main script completes
+            __timerQueue.push({ id: id, cb: cb, ms: ms, type: "timeout" });
+            return id;
+          };
+
+          var setInterval = function(cb, ms) {
+            var id = ++__timerId;
+            var iterations = 0;
+            var maxIterations = 100;
+            var wrapped = function() {
+              if (iterations++ < maxIterations) {
+                try { cb(); } catch(e) { console.log("[Interval Error] " + e); }
+                __timerQueue.push({ id: id, cb: wrapped, ms: ms, type: "interval" });
+              }
+            };
+            __timerQueue.push({ id: id, cb: wrapped, ms: ms || 0, type: "interval" });
+            return id;
+          };
+
+          var clearTimeout = function(id) {
+            __timerQueue = __timerQueue.filter(function(t) { return t.id !== id; });
+          };
+
+          var clearInterval = clearTimeout;
+
+          // Flush pending timers (called after main script evaluation)
+          var __flushPendingTimers = function() {
+            // Sort by ms ascending so shorter delays fire first
+            __timerQueue.sort(function(a, b) { return a.ms - b.ms; });
+            var queue = __timerQueue.slice();
+            __timerQueue = [];
+            for (var i = 0; i < queue.length; i++) {
+              try { queue[i].cb(); } catch(e) { console.log("[Timer Error] " + e); }
+            }
           };
         ''');
 
@@ -446,6 +485,8 @@ class ScriptRunnerService {
               })();
             ''';
             final result = engine.evaluate(wrappedScript);
+            // Flush deferred setTimeout/setInterval callbacks
+            engine.evaluate('if (typeof __flushPendingTimers === "function") __flushPendingTimers();');
             logger.info("Result: $result");
           } catch (e) {
             String errorMsg = "Script Error: $e";

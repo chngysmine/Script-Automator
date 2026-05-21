@@ -10,6 +10,8 @@ import 'package:script_automator/features/dashboard/presentation/widgets/glass_h
 import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:http/http.dart' as http;
+import 'package:script_automator/core/security/script_integrity_checker.dart';
+import 'package:script_automator/core/services/app_config_service.dart';
 
 /// Explore/Discovery page that fetches scripts from the community gallery.
 ///
@@ -175,6 +177,41 @@ class _ExplorePageState extends State<ExplorePage> {
               ),
             ),
           ),
+
+          // ── Maintenance Mode Banner ──
+          if (GetIt.I.isRegistered<AppConfigService>())
+            SliverToBoxAdapter(
+              child: ListenableBuilder(
+                listenable: GetIt.I<AppConfigService>(),
+                builder: (context, _) {
+                  final config = GetIt.I<AppConfigService>();
+                  if (!config.maintenanceMode) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Gallery is in maintenance mode. Some features may be unavailable.',
+                              style: TextStyle(color: Color(0xFF92400E), fontSize: 13, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
 
           // ── Search Bar (scrollable) ──
           SliverToBoxAdapter(
@@ -624,8 +661,25 @@ class _ExplorePageState extends State<ExplorePage> {
     final existingContent = scriptData['content'] ?? '';
     final scriptUrl = scriptData['scriptUrl'] ?? '';
 
-    // Show loading indicator
     if (!mounted) return;
+
+    // Show loading indicator
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 16, height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Text('Installing "$name"...'),
+          ],
+        ),
+        duration: const Duration(seconds: 15),
+        backgroundColor: LiquidTheme.primary,
+      ),
+    );
 
     String finalContent = existingContent;
 
@@ -641,6 +695,14 @@ class _ExplorePageState extends State<ExplorePage> {
         }
       } catch (e) {
         if (!mounted) return;
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to download "$name": $e'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
         return;
       }
     }
@@ -648,6 +710,21 @@ class _ExplorePageState extends State<ExplorePage> {
     if (finalContent.isEmpty) {
       finalContent =
           '// $name\n// Installed from Gallery\n\n// Script content not available offline.';
+    }
+
+    // SHA-256 integrity check (if hash is provided in gallery metadata)
+    final expectedHash = scriptData['sha256'] as String?;
+    if (!ScriptIntegrityChecker.verify(finalContent, expectedHash)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('⚠️ Script integrity check FAILED — possible tampering detected. Installation aborted.'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 6),
+        ),
+      );
+      return;
     }
 
     final galleryId =
@@ -670,5 +747,13 @@ class _ExplorePageState extends State<ExplorePage> {
     await _loadInstalledVersions();
 
     if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✅ "$name" installed successfully!'),
+        backgroundColor: Colors.green.shade700,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 }
