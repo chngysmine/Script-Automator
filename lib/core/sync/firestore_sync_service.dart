@@ -111,6 +111,8 @@ class FirestoreSyncService {
       final List<Script> toPull = [];
       final Map<String, Script> toPush = {};
 
+      int conflicts = 0;
+
       for (final id in allIds) {
         final local = localMap[id];
         final cloud = cloudMap[id];
@@ -120,11 +122,37 @@ class FirestoreSyncService {
         } else if (local == null && cloud != null) {
           toPull.add(cloud);
         } else if (local != null && cloud != null) {
-          if (local.updatedAt.isAfter(cloud.updatedAt)) {
+          // Conflict detection: check if BOTH sides changed since last sync
+          final lastSyncedStr = local.settings['lastSyncedAt'] as String?;
+          final lastSynced = lastSyncedStr != null ? DateTime.tryParse(lastSyncedStr) : null;
+          final localChanged = lastSynced != null && local.updatedAt.isAfter(lastSynced);
+          final cloudChanged = lastSynced != null && cloud.updatedAt.isAfter(lastSynced);
+
+          if (localChanged && cloudChanged && local.content != cloud.content) {
+            // TRUE CONFLICT: Both sides changed since last sync
+            final conflictScript = Script(
+              id: '${cloud.id}_conflict_${DateTime.now().millisecondsSinceEpoch}',
+              name: '${cloud.name} (Cloud Conflict)',
+              content: cloud.content,
+              createdAt: cloud.createdAt,
+              updatedAt: cloud.updatedAt,
+              settings: {...cloud.settings, 'is_conflict_copy': true, 'original_id': cloud.id},
+            );
+            toPull.add(conflictScript);
+            toPush[id] = local;
+            conflicts++;
+
+            if (GetIt.I.isRegistered<NotificationService>()) {
+              GetIt.I<NotificationService>().addNotification(
+                type: NotificationType.system,
+                title: 'Sync Conflict Detected',
+                body: '\'${cloud.name}\' was edited on another device. A conflict copy was created.',
+              );
+            }
+          } else if (local.updatedAt.isAfter(cloud.updatedAt)) {
             toPush[id] = local;
           } else if (cloud.updatedAt.isAfter(local.updatedAt)) {
             toPull.add(cloud);
-            // Notify user if local had unsaved changes being overwritten
             if (local.content != cloud.content &&
                 GetIt.I.isRegistered<NotificationService>()) {
               GetIt.I<NotificationService>().addNotification(
@@ -133,26 +161,52 @@ class FirestoreSyncService {
                 body: '\'${cloud.name}\' was updated from another device.',
               );
             }
+          } else {
+            // Equal timestamps: prefer cloud (safe default)
+            toPull.add(cloud);
           }
         }
       }
 
       // Phase 2: Execute ALL pulls first (local writes)
+      final syncTimestamp = DateTime.now().toIso8601String();
       for (final script in toPull) {
-        await repo.saveScript(script);
+        final stamped = Script(
+          id: script.id,
+          name: script.name,
+          content: script.content,
+          createdAt: script.createdAt,
+          updatedAt: script.updatedAt,
+          settings: {...script.settings, 'lastSyncedAt': syncTimestamp},
+        );
+        await repo.saveScript(stamped);
       }
 
       // Phase 3: Execute ALL pushes atomically (cloud writes)
       if (toPush.isNotEmpty) {
         final batch = _firestore.batch();
         final collection = _firestore.collection('users').doc(uid).collection('scripts');
+        final stampedPushScripts = <Script>[];
         for (final entry in toPush.entries) {
-          batch.set(collection.doc(entry.key), _scriptToMap(entry.value), SetOptions(merge: true));
+          final stamped = Script(
+            id: entry.value.id,
+            name: entry.value.name,
+            content: entry.value.content,
+            createdAt: entry.value.createdAt,
+            updatedAt: entry.value.updatedAt,
+            settings: {...entry.value.settings, 'lastSyncedAt': syncTimestamp},
+          );
+          batch.set(collection.doc(entry.key), _scriptToMap(stamped), SetOptions(merge: true));
+          stampedPushScripts.add(stamped);
         }
         await batch.commit();
+        // Only stamp local AFTER successful cloud commit
+        for (final stamped in stampedPushScripts) {
+          await repo.saveScript(stamped);
+        }
       }
 
-      debugPrint('[Sync] Bidirectional complete: pushed=${toPush.length}, pulled=${toPull.length}');
+      debugPrint('[Sync] Bidirectional complete: pushed=${toPush.length}, pulled=${toPull.length}, conflicts=$conflicts');
     } catch (e) {
       debugPrint('[Sync] Bidirectional sync failed: $e');
       // Queue for retry with exponential backoff

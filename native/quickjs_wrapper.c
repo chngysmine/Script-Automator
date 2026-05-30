@@ -119,6 +119,7 @@ void FinalizeJSValue(void *ptr) {
 
 JSValueRef *CreateJSValueRef(JSContext *ctx, JSValue val) {
   JSValueRef *ref = (JSValueRef *)malloc(sizeof(JSValueRef));
+  if (!ref) return NULL;
   ref->ctx = ctx;
   ref->val = val;
   // Note: We assume ownership is transferred or caller did JS_DupValue if

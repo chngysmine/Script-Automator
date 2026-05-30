@@ -97,6 +97,7 @@ class OpenAIService {
       await _secureStorage.delete(key: _storageKey);
       OpenAI.apiKey = "invalid_key"; // Dart_openai requires a non-null string
       _isConfigured = false;
+      _isUsingCustomKey = false;
       debugPrint("[OpenAIService] API Key cleared.");
     } catch (e) {
       debugPrint("[OpenAIService] Failed to clear key: $e");

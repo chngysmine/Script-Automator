@@ -117,8 +117,8 @@ class CloudGalleryRepository implements GalleryRepository {
       debugPrint("Moderation: Removed ${rawScripts.length - filtered.length} blocked scripts from gallery.");
       return filtered;
     } catch (e) {
-      debugPrint('Moderation check failed (bypassing): $e');
-      return rawScripts;
+      debugPrint('Moderation check failed (fail-closed): $e');
+      return [];
     }
   }
 

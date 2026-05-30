@@ -13,6 +13,8 @@ import 'package:get_it/get_it.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_header_actions.dart';
 import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
 import 'package:script_automator/core/ui/glass_sliver_header.dart';
+import 'package:script_automator/core/security/script_integrity_checker.dart';
+import 'package:script_automator/core/services/app_config_service.dart';
 import 'package:script_automator/core/ui/styled_dropdown.dart';
 
 class GalleryPage extends StatefulWidget {
@@ -706,14 +708,25 @@ class _GalleryPageState extends State<GalleryPage> {
   }
 
   Future<void> _processUrlImport(String url) async {
-    // Show Loading
     if (!mounted) return;
+
+    if (!url.startsWith('https://')) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Only HTTPS URLs are allowed for security.'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
 
     try {
       final gitService = GitService();
       final content = await gitService.downloadScript(url);
 
-      // Basic naming strategy
       final name = url
           .split('/')
           .last
@@ -730,7 +743,13 @@ class _GalleryPageState extends State<GalleryPage> {
       }
     } catch (e) {
       if (mounted) {
-        // Removed Snackbar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Import failed: $e'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
       }
     }
   }
@@ -739,6 +758,21 @@ class _GalleryPageState extends State<GalleryPage> {
     BuildContext context,
     Map<String, dynamic> item,
   ) async {
+    // Block installs during maintenance mode
+    if (GetIt.I.isRegistered<AppConfigService>() &&
+        GetIt.I<AppConfigService>().maintenanceMode) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Gallery is in maintenance mode. Installations are temporarily disabled.'),
+            backgroundColor: Colors.orange.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
     final name = item['name'] ?? 'Untitled';
     final existingContent = item['content'] ?? '';
     final scriptUrl = item['scriptUrl'] ?? '';
@@ -757,6 +791,13 @@ class _GalleryPageState extends State<GalleryPage> {
         }
       } catch (e) {
         if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to download "$name": $e'),
+              backgroundColor: Colors.red.shade700,
+              duration: const Duration(seconds: 4),
+            ),
+          );
         }
         return;
       }
@@ -765,6 +806,22 @@ class _GalleryPageState extends State<GalleryPage> {
     if (finalContent.isEmpty) {
       finalContent =
           '// $name\n// Installed from Gallery\n\n// Script content not available offline.';
+    }
+
+    // SHA-256 integrity check for remotely downloaded scripts
+    final expectedHash = item['sha256'] as String?;
+    final hasRemoteSource = scriptUrl.isNotEmpty && finalContent != existingContent;
+    if (hasRemoteSource && !ScriptIntegrityChecker.verify(finalContent, expectedHash)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('⚠️ Script integrity check FAILED — possible tampering detected. Installation aborted.'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+      return;
     }
 
     final galleryId =
@@ -788,7 +845,13 @@ class _GalleryPageState extends State<GalleryPage> {
     await repo.saveScript(script);
 
     if (context.mounted) {
-      // Removed Snackbar
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ "$name" installed successfully!'),
+          backgroundColor: Colors.green.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 }

@@ -40,6 +40,10 @@ class ScriptRunnerService {
 
   SystemAPIHandler? _apiHandler;
 
+  /// Caches moderation check results for offline fail-closed fallback.
+  /// Key: scriptId, Value: true if blocked, false if allowed.
+  final Map<String, bool> _moderationCache = {};
+
   /// Stream of logs and results from the JS Engine.
   Stream<String> get logs => _logController.stream;
 
@@ -127,20 +131,31 @@ class ScriptRunnerService {
   /// any isolate [kill]. On iOS (JSC), interrupt is unavailable — see
   /// [signalQuickJsInterruptFromProcess].
   Future<void> runScript(String script, String scriptId) async {
-    // Phase 4: Runtime Moderation Interceptor
-    // Fail-open: if Firestore is unavailable, skip moderation and allow execution.
+    // Phase 4: Runtime Moderation Interceptor — FAIL-CLOSED with cache
     try {
-      final snapshot = await FirebaseFirestore.instance
+      final moderationDoc = await FirebaseFirestore.instance
           .collection('script_moderation')
-          .where('script_id', isEqualTo: scriptId)
-          .limit(1)
-          .get();
-      if (snapshot.docs.isNotEmpty && snapshot.docs.first.data()['is_blocked'] == true) {
+          .doc(scriptId)
+          .get()
+          .timeout(const Duration(seconds: 3));
+      final isBlocked = moderationDoc.exists && moderationDoc.data()?['is_blocked'] == true;
+      _moderationCache[scriptId] = isBlocked;
+      if (isBlocked) {
         debugPrint("[SECURITY] Execution blocked: $scriptId is suppressed by Admin.");
         return;
       }
     } catch (e) {
-      // Fail open: allow execution if Firestore is unavailable or network down
+      // Fail-closed: check cache, block if unknown
+      final cachedStatus = _moderationCache[scriptId];
+      if (cachedStatus == null) {
+        debugPrint("[SECURITY] Moderation check failed & no cache — blocking $scriptId");
+        return;
+      }
+      if (cachedStatus) {
+        debugPrint("[SECURITY] Execution blocked (cached): $scriptId");
+        return;
+      }
+      debugPrint("[SECURITY] Moderation check failed — using cached ALLOW for $scriptId");
     }
 
     if (_engineIsolate == null) await initialize();

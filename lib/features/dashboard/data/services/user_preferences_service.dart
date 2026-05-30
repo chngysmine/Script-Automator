@@ -1,14 +1,25 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_ce/hive.dart';
 
 /// Persistent key-value store for user preferences (profile, settings).
-/// Uses a separate Hive box to avoid polluting script data.
+/// Uses a UID-namespaced Hive box to prevent cross-account data leakage.
 class UserPreferencesService {
   static const String _boxName = 'user_preferences';
   LazyBox<String>? _box;
 
   Future<void> init() async {
-    if (_box != null && _box!.isOpen) return;
-    _box = await Hive.openLazyBox<String>(_boxName);
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    final currentBoxName = '${_boxName}_$uid';
+
+    // Already initialized for the current user
+    if (_box != null && _box!.name == currentBoxName && _box!.isOpen) return;
+
+    // Close old box if user switched
+    if (_box != null && _box!.isOpen && _box!.name != currentBoxName) {
+      await _box!.close();
+    }
+
+    _box = await Hive.openLazyBox<String>(currentBoxName);
   }
 
   Future<String> get(String key, {String defaultValue = ''}) async {

@@ -260,7 +260,7 @@ class _ProfilePageState extends State<ProfilePage> {
     return FutureBuilder<Map<int, int>>(
       future: GetIt.I<UserStatsService>().getDailyActivity(days: 364),
       builder: (context, snapshot) {
-        // Build the 52-week x 7-day grid
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         final activityData = snapshot.data ?? {};
         final now = DateTime.now();
 
@@ -275,9 +275,15 @@ class _ProfilePageState extends State<ProfilePage> {
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.5),
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : Colors.white.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.1)
+                    : Colors.white.withValues(alpha: 0.8),
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.04),
@@ -340,6 +346,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                           date.month * 100 +
                                           date.day;
                                       final count = activityData[key] ?? 0;
+                                      final emptyColor = isDark
+                                          ? const Color(0xFF1E293B)
+                                          : const Color(0xFFE8ECF4);
                                       final intensity = count == 0
                                           ? 0.0
                                           : (count / maxVal).clamp(0.15, 1.0);
@@ -350,7 +359,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         margin: const EdgeInsets.all(1),
                                         decoration: BoxDecoration(
                                           color: count == 0
-                                              ? const Color(0xFFE8ECF4)
+                                              ? emptyColor
                                               : LiquidTheme.primary.withValues(
                                                   alpha: intensity,
                                                 ),

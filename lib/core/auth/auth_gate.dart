@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:script_automator/core/auth/auth_service.dart';
 import 'package:script_automator/core/sync/firestore_sync_service.dart';
 import 'package:script_automator/core/sync/sync_retry_queue.dart';
@@ -73,11 +75,56 @@ class _AuthGateState extends State<AuthGate> {
     // Don't sync for anonymous users — they have no cloud data yet
     if (user.isAnonymous) return;
 
-    // Fire-and-forget background sync
+    // Ban enforcement — check before allowing app access
     Future.microtask(() async {
+      bool isBanned = false;
+      final banCacheBox = await Hive.openBox('ban_status_cache');
+      final cacheKey = 'banned_${user.uid}';
+
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get()
+            .timeout(const Duration(seconds: 5));
+        isBanned = userDoc.exists && userDoc.data()?['is_banned'] == true;
+        // Persist ban status for offline enforcement
+        await banCacheBox.put(cacheKey, isBanned);
+      } catch (e) {
+        // Fail-closed: use cached ban status when Firestore is unreachable
+        isBanned = banCacheBox.get(cacheKey, defaultValue: false) as bool;
+        debugPrint('[AuthGate] Ban check failed (using cache: $isBanned): $e');
+      }
+
+      if (isBanned) {
+        debugPrint('[AuthGate] User ${user.uid} is BANNED — forcing sign out');
+        await GetIt.I<AuthService>().signOut();
+        _lastSeenUid = null;
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => AlertDialog(
+              title: const Text('Account Suspended'),
+              content: const Text(
+                'Your account has been suspended by an administrator. '
+                'Please contact support if you believe this is an error.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      // Fire-and-forget background sync
       try {
         final syncService = GetIt.I<FirestoreSyncService>();
-        // If there are persisted retries from a crashed session, do a full sync
         if (SyncRetryQueue.instance.hasPendingRetries) {
           debugPrint('[AuthGate] Pending retries detected — running fullSync');
           await syncService.fullSync(user.uid);

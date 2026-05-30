@@ -1,7 +1,15 @@
 import * as functions from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
+import { onObjectFinalized } from 'firebase-functions/v2/storage';
 
 admin.initializeApp();
+
+// ─── Security Constants ───
+const ALLOWED_MODELS = ['gpt-3.5-turbo', 'gpt-4o', 'gpt-4o-mini'];
+const MAX_TOKENS_CAP = 4096;
+const MAX_MESSAGES = 20;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 10;
 
 /**
  * Secure OpenAI Proxy Function
@@ -18,37 +26,48 @@ export const openAiProxy = functions.https.onCall(async (request) => {
     );
   }
 
-  // 2. Rate Limiting: max 10 requests per minute per user
+  // 2. Atomic Rate Limiting via Firestore Transaction
   const uid = request.auth.uid;
-  const rateLimitRef = admin.firestore().doc(`rate_limits/${uid}`);
+  const db = admin.firestore();
+  const rateLimitRef = db.doc(`rate_limits/${uid}`);
   const now = Date.now();
-  const windowMs = 60_000;
-  const maxRequests = 10;
 
-  const rateLimitDoc = await rateLimitRef.get();
-  const rlData = rateLimitDoc.data();
-  if (rlData) {
-    const windowStart = rlData.window_start ?? 0;
-    const count = rlData.count ?? 0;
-    if (now - windowStart < windowMs && count >= maxRequests) {
+  await db.runTransaction(async (txn) => {
+    const doc = await txn.get(rateLimitRef);
+    if (!doc.exists) {
+      txn.set(rateLimitRef, { window_start: now, count: 1 });
+      return;
+    }
+    const data = doc.data()!;
+    const windowStart = data.window_start ?? 0;
+    const count = data.count ?? 0;
+
+    if (now - windowStart >= RATE_LIMIT_WINDOW_MS) {
+      txn.set(rateLimitRef, { window_start: now, count: 1 });
+    } else if (count >= RATE_LIMIT_MAX) {
       throw new functions.https.HttpsError(
         'resource-exhausted',
-        `Rate limit exceeded. Max ${maxRequests} requests per minute.`
+        `Rate limit exceeded. Max ${RATE_LIMIT_MAX} requests per minute.`
       );
-    }
-    if (now - windowStart >= windowMs) {
-      await rateLimitRef.set({ window_start: now, count: 1 });
     } else {
-      await rateLimitRef.update({
+      txn.update(rateLimitRef, {
         count: admin.firestore.FieldValue.increment(1),
       });
     }
-  } else {
-    await rateLimitRef.set({ window_start: now, count: 1 });
+  });
+
+  // 3. Validate Payload & Enforce Input Limits
+  const { messages, prompt, model = 'gpt-4o', temperature = 0.2, max_tokens = 1000 } = request.data;
+
+  if (!ALLOWED_MODELS.includes(model)) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      `Model "${model}" is not allowed. Allowed: ${ALLOWED_MODELS.join(', ')}`
+    );
   }
 
-  // 3. Validate Payload
-  const { messages, prompt, model = 'gpt-4o', temperature = 0.2, max_tokens = 1000 } = request.data;
+  const safeMaxTokens = Math.min(Math.max(1, Number(max_tokens) || 1000), MAX_TOKENS_CAP);
+  const safeTemperature = Math.min(Math.max(0, Number(temperature) || 0.2), 2);
   
   let payloadMessages = messages;
   if (!payloadMessages) {
@@ -61,7 +80,21 @@ export const openAiProxy = functions.https.onCall(async (request) => {
     payloadMessages = [{ role: 'user', content: prompt }];
   }
 
-  // 4. Fetch Secret Key (In production, this should use Secret Manager)
+  if (!Array.isArray(payloadMessages) || payloadMessages.length === 0) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'Messages must be a non-empty array.'
+    );
+  }
+
+  if (payloadMessages.length > MAX_MESSAGES) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      `Too many messages. Maximum ${MAX_MESSAGES} allowed.`
+    );
+  }
+
+  // 4. Fetch Secret Key
   const openAiKey = process.env.OPENAI_API_KEY;
   if (!openAiKey) {
     throw new functions.https.HttpsError(
@@ -70,7 +103,7 @@ export const openAiProxy = functions.https.onCall(async (request) => {
     );
   }
 
-  // 4. Forward to OpenAI
+  // 5. Forward to OpenAI with sanitized parameters
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -81,8 +114,8 @@ export const openAiProxy = functions.https.onCall(async (request) => {
       body: JSON.stringify({
         model: model,
         messages: payloadMessages,
-        max_tokens: max_tokens,
-        temperature: temperature
+        max_tokens: safeMaxTokens,
+        temperature: safeTemperature
       })
     });
 
@@ -98,38 +131,113 @@ export const openAiProxy = functions.https.onCall(async (request) => {
       result: data.choices[0].message.content
     };
   } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
     console.error('[Proxy Error]', error);
     throw new functions.https.HttpsError('internal', 'Failed to communicate with OpenAI.');
   }
 });
 
 /**
- * Admin Role Setter
+ * Admin Role Management
  * 
- * Only executed once per user via a highly-secured endpoint or 
- * manually triggered by an existing admin. For safety, this currently 
- * relies on an environment-defined super-admin email list.
+ * Supports granting and revoking admin roles.
+ * Grant: any existing admin can promote a user by email.
+ * Revoke: only SUPER_ADMINS can demote an admin.
  */
 export const setAdminRole = functions.https.onCall(async (request) => {
   if (!request.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Must be authenticated');
   }
 
-  const email = request.auth.token.email;
-  const superAdmins = (process.env.SUPER_ADMINS || '').split(',');
+  const callerEmail = request.auth.token.email;
+  const callerClaims = request.auth.token;
+  const superAdmins = (process.env.SUPER_ADMINS || '').split(',').map(e => e.trim());
 
-  if (email && superAdmins.includes(email)) {
-    const uid = request.auth.uid;
-    await admin.auth().setCustomUserClaims(uid, { admin: true });
-    
-    // Also update firestore users collection
-    await admin.firestore().collection('users').doc(uid).set(
-      { role: 'admin', updated_at: admin.firestore.FieldValue.serverTimestamp() },
-      { merge: true }
-    );
-    
-    return { success: true, message: `Granted admin role to ${email}` };
+  const isCallerAdmin = callerClaims.admin === true || (callerEmail && superAdmins.includes(callerEmail));
+  if (!isCallerAdmin) {
+    throw new functions.https.HttpsError('permission-denied', 'You are not an admin');
+  }
+
+  const { email, role = 'admin' } = request.data;
+  if (!email || typeof email !== 'string') {
+    throw new functions.https.HttpsError('invalid-argument', 'Valid email is required');
+  }
+
+  // Revoke requires super admin
+  if (role === 'user' && (!callerEmail || !superAdmins.includes(callerEmail))) {
+    throw new functions.https.HttpsError('permission-denied', 'Only super admins can revoke admin roles');
+  }
+
+  // Find user by email
+  let targetUser;
+  try {
+    targetUser = await admin.auth().getUserByEmail(email);
+  } catch {
+    throw new functions.https.HttpsError('not-found', `No user found with email: ${email}`);
+  }
+
+  const isGrant = role === 'admin';
+  await admin.auth().setCustomUserClaims(targetUser.uid, { admin: isGrant });
+
+  const db = admin.firestore();
+  await db.collection('users').doc(targetUser.uid).set(
+    { role: isGrant ? 'admin' : 'user', updated_at: admin.firestore.FieldValue.serverTimestamp() },
+    { merge: true }
+  );
+
+  if (isGrant) {
+    await db.collection('admins').doc(targetUser.uid).set({
+      email: email,
+      granted_at: admin.firestore.FieldValue.serverTimestamp(),
+      granted_by: callerEmail || 'unknown',
+    });
   } else {
-    throw new functions.https.HttpsError('permission-denied', 'You are not a super admin');
+    await db.collection('admins').doc(targetUser.uid).delete();
+  }
+
+  return { success: true, message: `${isGrant ? 'Granted' : 'Revoked'} admin role for ${email}` };
+});
+
+/**
+ * Storage Upload Validator
+ * 
+ * Triggers on file uploads to /submissions/ path.
+ * Validates UTF-8, size limits, and flags suspicious patterns.
+ */
+export const validateSubmissionUpload = onObjectFinalized(async (event) => {
+  const filePath = event.data.name;
+  if (!filePath?.startsWith('submissions/')) return;
+
+  const bucket = admin.storage().bucket(event.data.bucket);
+  const file = bucket.file(filePath);
+
+  try {
+    const [content] = await file.download();
+    const text = content.toString('utf-8');
+
+    if (text.includes('\0')) {
+      console.warn(`[Validate] Binary content detected in ${filePath} — deleting`);
+      await file.delete();
+      return;
+    }
+
+    if (content.length > 512 * 1024) {
+      console.warn(`[Validate] File too large: ${filePath} (${content.length} bytes) — deleting`);
+      await file.delete();
+      return;
+    }
+
+    const dangerPatterns = [/eval\s*\(/i, /Function\s*\(/i, /__proto__/i, /constructor\s*\[/i];
+    const violations = dangerPatterns.filter(p => p.test(text));
+    if (violations.length > 0) {
+      console.warn(`[Validate] Suspicious patterns in ${filePath}: ${violations.map(v => v.source).join(', ')}`);
+      await file.setMetadata({
+        metadata: { flagged: 'true', reason: 'suspicious_patterns', patterns: violations.map(v => v.source).join(',') }
+      });
+    }
+
+    console.log(`[Validate] ${filePath} passed validation (${content.length} bytes)`);
+  } catch (e) {
+    console.error(`[Validate] Error processing ${filePath}:`, e);
   }
 });

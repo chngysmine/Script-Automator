@@ -103,6 +103,7 @@ class SyncRetryQueue {
 
     if (_queue.isEmpty) {
       clearPersistedMeta();
+      debugPrint('[SyncRetryQueue] Queue fully drained — persisted metadata cleared');
     } else {
       final backoffDelay = _baseDelay * (1 << _queue.first.attempts.clamp(0, 4));
       _retryTimer = Timer(backoffDelay, _flushQueue);

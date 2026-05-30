@@ -657,6 +657,21 @@ class _ExplorePageState extends State<ExplorePage> {
   /// If `content` is already embedded (offline fallback), uses it directly.
   /// Otherwise, downloads from `scriptUrl` first.
   Future<void> _installFromGallery(Map<String, dynamic> scriptData) async {
+    // Block installs during maintenance mode
+    if (GetIt.I.isRegistered<AppConfigService>() &&
+        GetIt.I<AppConfigService>().maintenanceMode) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Gallery is in maintenance mode. Installations are temporarily disabled.'),
+            backgroundColor: Colors.orange.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
     final name = scriptData['name'] ?? 'Untitled';
     final existingContent = scriptData['content'] ?? '';
     final scriptUrl = scriptData['scriptUrl'] ?? '';
@@ -712,9 +727,11 @@ class _ExplorePageState extends State<ExplorePage> {
           '// $name\n// Installed from Gallery\n\n// Script content not available offline.';
     }
 
-    // SHA-256 integrity check (if hash is provided in gallery metadata)
+    // SHA-256 integrity check — only for remotely downloaded scripts.
+    // Offline fallback scripts have embedded content, no remote URL, and no hash.
     final expectedHash = scriptData['sha256'] as String?;
-    if (!ScriptIntegrityChecker.verify(finalContent, expectedHash)) {
+    final hasRemoteSource = scriptUrl.isNotEmpty && finalContent != existingContent;
+    if (hasRemoteSource && !ScriptIntegrityChecker.verify(finalContent, expectedHash)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
