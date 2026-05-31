@@ -1,6 +1,7 @@
 import * as functions from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
 import { onObjectFinalized } from 'firebase-functions/v2/storage';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 admin.initializeApp();
 
@@ -239,5 +240,84 @@ export const validateSubmissionUpload = onObjectFinalized(async (event) => {
     console.log(`[Validate] ${filePath} passed validation (${content.length} bytes)`);
   } catch (e) {
     console.error(`[Validate] Error processing ${filePath}:`, e);
+  }
+});
+
+/**
+ * Ban or unban a user and sync Firebase Auth.
+ */
+export const banUser = functions.https.onCall(async (request) => {
+  if (!request.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be authenticated');
+  }
+
+  const callerClaims = request.auth.token;
+  if (callerClaims.admin !== true) {
+    throw new functions.https.HttpsError('permission-denied', 'You are not an admin');
+  }
+
+  const { uid, ban } = request.data;
+  if (!uid || typeof uid !== 'string' || typeof ban !== 'boolean') {
+    throw new functions.https.HttpsError('invalid-argument', 'uid and ban are required');
+  }
+
+  const db = admin.firestore();
+  const userRef = db.collection('users').doc(uid);
+  const isBanned = ban === true;
+
+  try {
+    await admin.auth().updateUser(uid, { disabled: isBanned });
+    await userRef.set({
+      is_banned: isBanned,
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    await db.collection('admin_audit_log').add({
+      action: isBanned ? 'ban_user' : 'unban_user',
+      actor_email: request.auth.token.email || 'unknown',
+      target: uid,
+      details: isBanned ? 'User banned and disabled in Auth' : 'User unbanned and enabled in Auth',
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      message: isBanned ? 'User banned successfully' : 'User unbanned successfully',
+    };
+  } catch (error) {
+    console.error('[banUser] Error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to update user ban state');
+  }
+});
+
+const readMetricsSnapshot = async () => {
+  const db = admin.firestore();
+  const [usersSnap, executionsSnap, widgetsSnap, recentLogsSnap] = await Promise.all([
+    db.collection('users').count().get(),
+    db.collection('telemetry_logs').where('event', '==', 'run').count().get(),
+    db.collection('gallery_published').count().get(),
+    db.collection('telemetry_logs').orderBy('created_at', 'desc').limit(200).get(),
+  ]);
+
+  const recentLogs = recentLogsSnap.docs.map(doc => doc.data());
+  const crashCount = recentLogs.filter(log => log.event === 'crash').length;
+  const crashRate = recentLogs.length > 0 ? crashCount / recentLogs.length : 0;
+
+  return {
+    total_users: usersSnap.data().count,
+    total_executions: executionsSnap.data().count,
+    total_widgets: widgetsSnap.data().count,
+    crash_rate: crashRate,
+    updated_at: admin.firestore.FieldValue.serverTimestamp(),
+  };
+};
+
+export const aggregateMetrics = onSchedule({ schedule: 'every 5 minutes' }, async () => {
+  try {
+    const metrics = await readMetricsSnapshot();
+    await admin.firestore().doc('app_config/metrics').set(metrics, { merge: true });
+    console.log('[aggregateMetrics] metrics updated');
+  } catch (error) {
+    console.error('[aggregateMetrics] Error:', error);
   }
 });

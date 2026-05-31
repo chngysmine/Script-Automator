@@ -202,6 +202,7 @@ Future<void> _setupDI() async {
   if (!GetIt.I.isRegistered<AppConfigService>()) {
     GetIt.I.registerSingleton<AppConfigService>(AppConfigService());
   }
+  await GetIt.I<AppConfigService>().initialize();
 }
 
 class MyApp extends StatefulWidget {

@@ -532,6 +532,19 @@ class ScriptRunnerService {
           } catch (e) {
             logger.severe("Error resolving async promise: $e");
           }
+        } else if (command == 'widget_action') {
+          final scriptId = message['scriptId']?.toString();
+          final actionId = message['actionId']?.toString();
+          if (scriptId != null && actionId != null) {
+            try {
+              final callback = engine.evaluate("(function(){ return (Widget._actionHandlers && Widget._actionHandlers['$actionId']) || null; })();");
+              if (callback != null && callback.toString() != 'null' && callback.toString() != 'undefined') {
+                engine.evaluate("(function(){ var cb = Widget._actionHandlers['$actionId']; if (typeof cb === 'function') { cb(); } })();");
+              }
+            } catch (e) {
+              logger.severe('Error handling widget action: $e');
+            }
+          }
         } else if (command == 'shutdown') {
           logger.info("Shutdown command received — destroying engine");
           try {
@@ -686,6 +699,8 @@ class ScriptRunnerService {
         GetIt.I<UserStatsService>().recordWidgetDeploy();
       }
 
+      await _pollPendingActions();
+
       // Trigger Widget Reload via MethodChannel
       try {
         const channel = MethodChannel(
@@ -699,6 +714,29 @@ class ScriptRunnerService {
     } catch (e) {
       print("Main Isolate Render Error: $e");
       _logController.add("[Error] Render Failed: $e");
+    }
+  }
+
+  Future<void> _pollPendingActions() async {
+    try {
+      final vfs = await VirtualFileSystemService.create();
+      await vfs.initSharedDirectory();
+      const pendingPath = 'shared/pending_action.json';
+      if (!await vfs.exists(pendingPath)) return;
+      final raw = await vfs.readString(pendingPath);
+      await vfs.delete(pendingPath);
+      final data = jsonDecode(raw);
+      if (data is! Map) return;
+      final scriptId = data['scriptId']?.toString();
+      final actionId = data['actionId']?.toString();
+      if (scriptId == null || actionId == null) return;
+      _toEnginePort?.send({
+        'command': 'widget_action',
+        'scriptId': scriptId,
+        'actionId': actionId,
+      });
+    } catch (e) {
+      debugPrint('[WidgetAction] Pending action poll failed: $e');
     }
   }
 

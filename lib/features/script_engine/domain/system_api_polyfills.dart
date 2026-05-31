@@ -152,8 +152,10 @@ class SystemAPIPolyfills {
 
   /// Polyfill for Widget Family handling
   static const String widgetPolyfill = '''
+    var __widgetState = {};
     var Widget = {
       _family: 'medium',
+      _actionHandlers: {},
       setFamily: function(family) {
         this._family = family;
       },
@@ -162,6 +164,16 @@ class SystemAPIPolyfills {
       },
       presentSize: function() {
         return (typeof __widget_present_size !== 'undefined') ? __widget_present_size : 'medium';
+      },
+      onAction: function(actionId, callback) {
+        this._actionHandlers[actionId] = callback;
+      },
+      getState: function(key, defaultVal) {
+        return Object.prototype.hasOwnProperty.call(__widgetState, key) ? __widgetState[key] : defaultVal;
+      },
+      setState: function(key, val) {
+        __widgetState[key] = val;
+        return val;
       }
     };
   ''';

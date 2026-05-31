@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:script_automator/core/security/app_secure_storage.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Handles System API requests dispatched from the JS Engine Isolate.
 ///
@@ -17,10 +18,15 @@ class SystemAPIHandler {
   final http.Client _client = http.Client();
   final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
+  late final FlutterSecureStorage _secureStorage;
   bool _notificationsInitialized = false;
 
   /// The ID of the currently executing script, used for Keychain namespacing.
   String? activeScriptId;
+
+  SystemAPIHandler() {
+    _secureStorage = AppSecureStorage.create();
+  }
 
   /// Blocked URL patterns for SSRF protection.
   static final List<RegExp> _blockedPatterns = [
@@ -76,6 +82,44 @@ class SystemAPIHandler {
       }
 
       final uri = Uri.parse(url);
+      try {
+        final resolvedHosts = await InternetAddress.lookup(uri.host);
+        for (final address in resolvedHosts) {
+          final ip = address.address;
+          final isPrivateCidr =
+              ip.startsWith('10.') ||
+              ip.startsWith('172.16.') ||
+              ip.startsWith('172.17.') ||
+              ip.startsWith('172.18.') ||
+              ip.startsWith('172.19.') ||
+              ip.startsWith('172.20.') ||
+              ip.startsWith('172.21.') ||
+              ip.startsWith('172.22.') ||
+              ip.startsWith('172.23.') ||
+              ip.startsWith('172.24.') ||
+              ip.startsWith('172.25.') ||
+              ip.startsWith('172.26.') ||
+              ip.startsWith('172.27.') ||
+              ip.startsWith('172.28.') ||
+              ip.startsWith('172.29.') ||
+              ip.startsWith('172.30.') ||
+              ip.startsWith('172.31.') ||
+              ip.startsWith('192.168.') ||
+              ip.startsWith('169.254.');
+          if (address.isLoopback || address.isLinkLocal || isPrivateCidr) {
+            return jsonEncode({
+              'error': 'Request blocked: resolved address is private or loopback',
+              'status': 403,
+            });
+          }
+        }
+      } catch (_) {
+        return jsonEncode({
+          'error': 'Request blocked: unable to resolve host securely',
+          'status': 403,
+        });
+      }
+
       http.Response response;
 
       switch (method) {
@@ -159,19 +203,18 @@ class SystemAPIHandler {
       }
 
       final namespacedKey = 'script_${activeScriptId ?? 'unknown'}.$rawKey';
-      final storage = AppSecureStorage.create();
 
       switch (action) {
         case 'set':
           if (value == null) return jsonEncode({'error': 'Value is null'});
-          await storage.write(key: namespacedKey, value: value);
+          await _secureStorage.write(key: namespacedKey, value: value);
           return jsonEncode({'success': true});
         case 'delete':
-          await storage.delete(key: namespacedKey);
+          await _secureStorage.delete(key: namespacedKey);
           return jsonEncode({'success': true});
         case 'get':
         default:
-          final readValue = await storage.read(key: namespacedKey);
+          final readValue = await _secureStorage.read(key: namespacedKey);
           return jsonEncode({'value': readValue});
       }
     } catch (e) {

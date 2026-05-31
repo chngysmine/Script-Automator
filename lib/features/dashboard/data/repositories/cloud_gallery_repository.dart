@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:script_automator/features/dashboard/domain/repositories/gallery_repository.dart';
 import 'package:script_automator/core/security/script_integrity_checker.dart';
 
@@ -13,8 +15,54 @@ import 'package:script_automator/core/security/script_integrity_checker.dart';
 /// Submissions are uploaded to Firebase Storage with metadata stored in
 /// Firestore `gallery_submissions`.
 class CloudGalleryRepository implements GalleryRepository {
+  static const _cacheBoxName = 'gallery_cache';
+  static const _cacheKey = 'templates';
+  static const _cacheTtl = Duration(hours: 24);
+
+  Future<Box> _openCacheBox() async {
+    return Hive.isBoxOpen(_cacheBoxName)
+        ? Hive.box(_cacheBoxName)
+        : await Hive.openBox(_cacheBoxName);
+  }
+
+  Future<void> _cacheTemplates(List<Map<String, dynamic>> scripts) async {
+    try {
+      final box = await _openCacheBox();
+      await box.put(_cacheKey, jsonEncode({
+        'cached_at': DateTime.now().toIso8601String(),
+        'scripts': scripts,
+      }));
+    } catch (e) {
+      debugPrint('[Gallery] Cache write error: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>?> _readCache({bool allowExpired = false}) async {
+    try {
+      final box = await _openCacheBox();
+      final raw = box.get(_cacheKey);
+      if (raw is! String || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+
+      final cachedAt = DateTime.tryParse(decoded['cached_at']?.toString() ?? '');
+      final scripts = (decoded['scripts'] as List?) ?? [];
+      if (cachedAt == null) return null;
+      if (!allowExpired && DateTime.now().difference(cachedAt) > _cacheTtl) return null;
+
+      return scripts
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } catch (e) {
+      debugPrint('[Gallery] Cache read error: $e');
+      return null;
+    }
+  }
+
   @override
   Future<List<Map<String, dynamic>>> getTemplates() async {
+    final freshCache = await _readCache();
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('gallery_published')
@@ -22,31 +70,37 @@ class CloudGalleryRepository implements GalleryRepository {
           .limit(100)
           .get();
 
-      if (snapshot.docs.isNotEmpty) {
-        final scripts = snapshot.docs.map<Map<String, dynamic>>((doc) {
-          final data = doc.data();
-          return {
-            'id': doc.id,
-            'name': data['name'] ?? '',
-            'description': data['description'] ?? '',
-            'author': data['author'] ?? '',
-            'category': data['category'] ?? 'Utilities',
-            'version': data['version'] ?? '1.0.0',
-            'icon': data['icon'] ?? 'gear',
-            'isFeatured': (data['isFeatured'] == true).toString(),
-            'scriptUrl': data['file_url'] ?? '',
-            'sha256': data['sha256'] ?? '',
-            'coverUrl': '',
-            'config': data['config'],
-          };
-        }).toList();
-        return await _filterBlockedScripts(scripts);
+      final scripts = snapshot.docs.map<Map<String, dynamic>>((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          'name': data['name'] ?? '',
+          'description': data['description'] ?? '',
+          'author': data['author'] ?? '',
+          'category': data['category'] ?? 'Utilities',
+          'version': data['version'] ?? '1.0.0',
+          'icon': data['icon'] ?? 'gear',
+          'isFeatured': (data['isFeatured'] == true).toString(),
+          'scriptUrl': data['file_url'] ?? '',
+          'sha256': data['sha256'] ?? '',
+          'coverUrl': '',
+          'config': data['config'],
+        };
+      }).toList();
+
+      if (scripts.isNotEmpty) {
+        final filtered = await _filterBlockedScripts(scripts);
+        await _cacheTemplates(filtered);
+        return filtered;
       }
 
+      if (freshCache != null) return freshCache;
       debugPrint('[Gallery] No published scripts found, using offline fallback.');
       return _getOfflineFallback();
     } catch (e) {
       debugPrint('[Gallery] Fetch error: $e');
+      final cached = await _readCache(allowExpired: true);
+      if (cached != null) return cached;
       return _getOfflineFallback();
     }
   }
@@ -59,14 +113,12 @@ class CloudGalleryRepository implements GalleryRepository {
     final content = submission['content'] as String? ?? '';
     final scriptId = submission['script_id'] as String? ?? 'untitled';
 
-    // 1. Upload JS content to Firebase Storage
     String fileUrl = '';
     int fileSize = 0;
     String sha256Hash = '';
 
     if (content.isNotEmpty) {
-      final storageRef = FirebaseStorage.instance
-          .ref('submissions/${user.uid}/$scriptId.js');
+      final storageRef = FirebaseStorage.instance.ref('submissions/${user.uid}/$scriptId.js');
       await storageRef.putString(
         content,
         format: PutStringFormat.raw,
@@ -77,7 +129,6 @@ class CloudGalleryRepository implements GalleryRepository {
       sha256Hash = ScriptIntegrityChecker.computeHash(content);
     }
 
-    // 2. Write metadata to Firestore (content NOT stored in document)
     final metadata = <String, dynamic>{
       'user_id': user.uid,
       'script_id': scriptId,
@@ -97,9 +148,7 @@ class CloudGalleryRepository implements GalleryRepository {
       metadata['original_gallery_id'] = submission['original_gallery_id'];
     }
 
-    await FirebaseFirestore.instance
-        .collection('gallery_submissions')
-        .add(metadata);
+    await FirebaseFirestore.instance.collection('gallery_submissions').add(metadata);
   }
 
   /// Queries the Firestore `script_moderation` collection and strips out blocked items.
@@ -109,12 +158,12 @@ class CloudGalleryRepository implements GalleryRepository {
           .collection('script_moderation')
           .where('is_blocked', isEqualTo: true)
           .get();
-          
+
       final blockedIds = snapshot.docs.map((doc) => doc.id).toSet();
       if (blockedIds.isEmpty) return rawScripts;
 
       final filtered = rawScripts.where((script) => !blockedIds.contains(script['id'])).toList();
-      debugPrint("Moderation: Removed ${rawScripts.length - filtered.length} blocked scripts from gallery.");
+      debugPrint('Moderation: Removed ${rawScripts.length - filtered.length} blocked scripts from gallery.');
       return filtered;
     } catch (e) {
       debugPrint('Moderation check failed (fail-closed): $e');
@@ -123,9 +172,6 @@ class CloudGalleryRepository implements GalleryRepository {
   }
 
   /// Minimal offline fallback with a single example per category.
-  ///
-  /// This ensures the Explore page is never entirely empty even without
-  /// network connectivity. Scripts are simple, self-contained, and valid.
   List<Map<String, dynamic>> _getOfflineFallback() {
     return [
       {
@@ -169,10 +215,6 @@ class CloudGalleryRepository implements GalleryRepository {
       },
     ];
   }
-
-  // ---------------------------------------------------------------------------
-  // Embedded fallback script content (minimal, production-valid).
-  // ---------------------------------------------------------------------------
 
   static const String _kWeatherScript = '''
 const widget = {

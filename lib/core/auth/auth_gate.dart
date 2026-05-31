@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -31,6 +32,7 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   String? _lastSeenUid;
+  StreamSubscription<DocumentSnapshot>? _banSubscription;
 
   @override
   Widget build(BuildContext context) {
@@ -88,10 +90,8 @@ class _AuthGateState extends State<AuthGate> {
             .get()
             .timeout(const Duration(seconds: 5));
         isBanned = userDoc.exists && userDoc.data()?['is_banned'] == true;
-        // Persist ban status for offline enforcement
         await banCacheBox.put(cacheKey, isBanned);
       } catch (e) {
-        // Fail-closed: use cached ban status when Firestore is unreachable
         isBanned = banCacheBox.get(cacheKey, defaultValue: false) as bool;
         debugPrint('[AuthGate] Ban check failed (using cache: $isBanned): $e');
       }
@@ -121,6 +121,44 @@ class _AuthGateState extends State<AuthGate> {
         }
         return;
       }
+
+      _banSubscription?.cancel();
+      _banSubscription = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .snapshots()
+          .listen((doc) async {
+        final nextIsBanned = doc.data()?['is_banned'] == true;
+        final cacheBox = await Hive.openBox('ban_status_cache');
+        await cacheBox.put(cacheKey, nextIsBanned);
+
+        if (!nextIsBanned) return;
+
+        debugPrint('[AuthGate] User ${user.uid} was banned in real time — forcing sign out');
+        await GetIt.I<AuthService>().signOut();
+        _lastSeenUid = null;
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => AlertDialog(
+              title: const Text('Account Suspended'),
+              content: const Text(
+                'Your account has been suspended by an administrator. '
+                'Please contact support if you believe this is an error.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+      }, onError: (e) {
+        debugPrint('[AuthGate] Ban listener error: $e');
+      });
 
       // Fire-and-forget background sync
       try {

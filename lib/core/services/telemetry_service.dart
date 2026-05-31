@@ -1,7 +1,9 @@
-import 'package:flutter/foundation.dart';
+import 'dart:convert';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:hive_ce/hive.dart';
 
 /// Intercepts system events and tracks memory/performance.
 ///
@@ -9,12 +11,60 @@ import 'dart:io';
 class TelemetryService {
   TelemetryService();
 
+  Future<Box> _openBufferBox() async {
+    return Hive.isBoxOpen('telemetry_buffer')
+        ? Hive.box('telemetry_buffer')
+        : await Hive.openBox('telemetry_buffer');
+  }
+
+  Map<String, dynamic> _buildTelemetryPayload({
+    required String uid,
+    required String scriptId,
+    required String event,
+    required String status,
+    int? durationMs,
+    String? errorTrace,
+  }) {
+    return {
+      'user_id': uid,
+      'script_id': scriptId,
+      'event': event,
+      'status': status,
+      'duration_ms': durationMs,
+      'error_trace': errorTrace,
+      'created_at': FieldValue.serverTimestamp(),
+    };
+  }
+
+  Future<void> flushBuffer() async {
+    try {
+      final box = await _openBufferBox();
+      if (box.isEmpty) return;
+
+      final entries = box.values.toList(growable: false);
+      final firestore = FirebaseFirestore.instance;
+      for (var i = 0; i < entries.length; i++) {
+        final entry = entries[i];
+        if (entry is! String) continue;
+        final data = jsonDecode(entry);
+        if (data is! Map) continue;
+        final payload = Map<String, dynamic>.from(data);
+        await firestore.collection('telemetry_logs').add(payload);
+      }
+      await box.clear();
+    } catch (e) {
+      debugPrint('Telemetry Buffer Flush Error: $e');
+    }
+  }
+
   /// Registers or updates the user profile for the Admin Dashboard.
   Future<void> registerProfile() async {
     try {
+      await flushBuffer();
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
-      
+      if (user.isAnonymous) return;
+
       final os = kIsWeb ? 'web' : Platform.operatingSystem;
       await FirebaseFirestore.instance.collection('user_profiles').doc(user.uid).set({
         'os': os,
@@ -80,16 +130,41 @@ class TelemetryService {
   }) async {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
-      await FirebaseFirestore.instance.collection('telemetry_logs').add({
-        'user_id': uid, // Optional, can be null
-        'script_id': scriptId,
-        'event': event,
-        'status': status,
-        'duration_ms': durationMs,
-        'error_trace': errorTrace,
-        'created_at': FieldValue.serverTimestamp(),
-      });
+      if (uid == null) return;
+      final payload = _buildTelemetryPayload(
+        uid: uid,
+        scriptId: scriptId,
+        event: event,
+        status: status,
+        durationMs: durationMs,
+        errorTrace: errorTrace,
+      );
+      await FirebaseFirestore.instance.collection('telemetry_logs').add(payload);
     } catch (e) {
+      try {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid == null) return;
+        final box = await _openBufferBox();
+        final payload = _buildTelemetryPayload(
+          uid: uid,
+          scriptId: scriptId,
+          event: event,
+          status: status,
+          durationMs: durationMs,
+          errorTrace: errorTrace,
+        );
+        final encoded = jsonEncode(payload);
+        while (box.length >= 100) {
+          if (box.isNotEmpty) {
+            await box.deleteAt(0);
+          } else {
+            break;
+          }
+        }
+        await box.add(encoded);
+      } catch (bufferError) {
+        debugPrint('Telemetry Buffer Store Error: $bufferError');
+      }
       debugPrint("Telemetry Insert Error: $e");
     }
   }

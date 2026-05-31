@@ -10,9 +10,12 @@ struct SASUPNode: Decodable, Hashable {
     let children: [SASUPNode]?
     let content: String? // Text or Image URI
     let action: SASUPAction?
+    let label: String?
+    let actionId: String?
+    let style: String?
     
     enum CodingKeys: String, CodingKey {
-        case type, id, modifiers, children, content, action
+        case type, id, modifiers, children, content, action, label, actionId, style
     }
 }
 

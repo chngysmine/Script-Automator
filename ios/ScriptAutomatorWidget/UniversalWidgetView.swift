@@ -6,11 +6,13 @@ struct UniversalWidgetView: View {
     let node: SASUPNode
     let isRoot: Bool
     let family: WidgetFamily?
+    let scriptId: String?
     
-    init(node: SASUPNode, isRoot: Bool = false, family: WidgetFamily? = nil) {
+    init(node: SASUPNode, isRoot: Bool = false, family: WidgetFamily? = nil, scriptId: String? = nil) {
         self.node = node
         self.isRoot = isRoot
         self.family = family
+        self.scriptId = scriptId
     }
     
     var body: some View {
@@ -61,21 +63,18 @@ struct UniversalWidgetView: View {
             }
         case "button":
             if #available(iOS 17.0, macOS 14.0, watchOS 10.0, *),
-               let action = node.action, action.type == "runScript",
-               let actionId = action.actionId, let scriptId = action.scriptId {
+               let actionId = node.actionId ?? node.action?.actionId,
+               let scriptId = scriptId ?? node.action?.scriptId {
                 let intent = WidgetInteractionIntent(scriptId: scriptId, actionId: actionId)
                 applyModifiers(node.modifiers, isRoot: isRoot) {
                     Button(intent: intent) {
-                        ZStack {
-                            renderChildren(node.children)
-                        }
+                        Text(node.label ?? node.content ?? "")
                     }
-                    .buttonStyle(.plain) // Prevent system coloring
+                    .buttonStyle(.plain)
                 }
             } else {
-                // Fallback for older iOS versions
                 applyModifiers(node.modifiers, isRoot: isRoot) {
-                    ZStack { renderChildren(node.children) }
+                    Text(node.label ?? node.content ?? "")
                 }
             }
         case "text":
@@ -134,7 +133,7 @@ struct UniversalWidgetView: View {
     private func renderChildren(_ children: [SASUPNode]?) -> some View {
         if let children = children {
             ForEach(children.indices, id: \.self) { index in
-                UniversalWidgetView(node: children[index], isRoot: false, family: family)
+                UniversalWidgetView(node: children[index], isRoot: false, family: family, scriptId: scriptId)
             }
         }
     }
