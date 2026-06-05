@@ -4,6 +4,8 @@ import '../../domain/repositories/script_repository.dart';
 import '../../domain/entities/script.dart';
 import '../datasources/script_local_data_source.dart';
 import '../models/script_model.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../../features/widget_renderer/data/services/widget_registry_service.dart';
 import '../../../../features/widget_renderer/domain/services/headless_widget_rendering_service.dart';
@@ -111,6 +113,21 @@ class ScriptRepositoryImpl implements ScriptRepository {
 
       // Remove from SQLite Registry
       await _widgetRegistry.removeScript(id);
+
+      // Delete from Firestore to prevent Sync Engine from pulling it back
+      try {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .collection('scripts')
+              .doc(id)
+              .delete();
+        }
+      } catch (e) {
+        // Fail silently for Firestore (offline support handles it, or it will retry later)
+      }
 
       // Cleanup orphan UI files
       try {

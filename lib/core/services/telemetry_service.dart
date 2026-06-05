@@ -32,7 +32,7 @@ class TelemetryService {
       'status': status,
       'duration_ms': durationMs,
       'error_trace': errorTrace,
-      'created_at': FieldValue.serverTimestamp(),
+      'created_at': null,
     };
   }
 
@@ -49,6 +49,7 @@ class TelemetryService {
         final data = jsonDecode(entry);
         if (data is! Map) continue;
         final payload = Map<String, dynamic>.from(data);
+        payload['created_at'] = FieldValue.serverTimestamp();
         await firestore.collection('telemetry_logs').add(payload);
       }
       await box.clear();
@@ -139,6 +140,7 @@ class TelemetryService {
         durationMs: durationMs,
         errorTrace: errorTrace,
       );
+      payload['created_at'] = FieldValue.serverTimestamp();
       await FirebaseFirestore.instance.collection('telemetry_logs').add(payload);
     } catch (e) {
       try {

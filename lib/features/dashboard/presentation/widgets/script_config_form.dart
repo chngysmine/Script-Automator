@@ -85,9 +85,11 @@ class _ScriptConfigFormState extends State<ScriptConfigForm> {
                 width: 1.5,
               ),
             ),
-            child: Form(
-              key: _formKey,
-              child: Column(
+            child: Material(
+              color: Colors.transparent,
+              child: Form(
+                key: _formKey,
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -170,6 +172,7 @@ class _ScriptConfigFormState extends State<ScriptConfigForm> {
                 ],
               ),
             ),
+          ),
           ),
         ),
       ),

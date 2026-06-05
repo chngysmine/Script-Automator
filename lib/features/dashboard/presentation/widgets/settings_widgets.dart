@@ -48,8 +48,10 @@ class SettingsGroup extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        children: children.asMap().entries.map((entry) {
+      child: Material(
+        color: Colors.transparent,
+        child: Column(
+          children: children.asMap().entries.map((entry) {
           final idx = entry.key;
           final child = entry.value;
           final isLast = idx == children.length - 1;
@@ -67,6 +69,7 @@ class SettingsGroup extends StatelessWidget {
             ],
           );
         }).toList(),
+        ),
       ),
     );
   }

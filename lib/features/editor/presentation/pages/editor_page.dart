@@ -459,7 +459,6 @@ class _EditorPageState extends State<EditorPage>
                                   const Color(0xFFE2E8F0).withValues(alpha: 0.8),
                                 ],
                         ),
-                        borderRadius: BorderRadius.circular(24),
                         border: Border.all(
                           color: isDark
                               ? Colors.white.withValues(alpha: 0.1)
@@ -482,35 +481,28 @@ class _EditorPageState extends State<EditorPage>
                                 color: LiquidTheme.primary,
                               ),
                             )
-                          : ClipRRect(
-                              borderRadius: BorderRadius.circular(24),
-                              child: LayoutBuilder(
+                          : LayoutBuilder(
                                 builder: (context, constraints) {
-                                  final contentHeight = max(
-                                    constraints.maxHeight,
-                                    _calculateHeight(),
-                                  );
                                   final availableWidth = constraints.maxWidth;
 
                                   return Scrollbar(
                                     controller: _verticalController,
                                     child: SingleChildScrollView(
                                       controller: _verticalController,
-                                      child: SizedBox(
-                                        width: availableWidth,
-                                        height: contentHeight,
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          minHeight: constraints.maxHeight,
+                                          maxWidth: availableWidth,
+                                        ),
                                         child: Stack(
                                           children: [
-                                            AnimatedBuilder(
-                                              animation: Listenable.merge([
-                                                _verticalController,
-                                                _controller,
-                                              ]),
-                                              builder: (context, _) => CustomPaint(
-                                                size: Size(
-                                                  availableWidth,
-                                                  contentHeight,
-                                                ),
+                                            Positioned.fill(
+                                              child: AnimatedBuilder(
+                                                animation: Listenable.merge([
+                                                  _verticalController,
+                                                  _controller,
+                                                ]),
+                                                builder: (context, _) => CustomPaint(
                                                 painter: ViewportAwarePainter(
                                                   controller: _controller,
                                                   scrollOffset:
@@ -530,8 +522,7 @@ class _EditorPageState extends State<EditorPage>
                                                       availableWidth - 60.0,
                                                   highlighter:
                                                       SyntaxHighlighter.adaptive(
-                                                        baseStyle:
-                                                            editorTextStyle,
+                                                        baseStyle: editorTextStyle,
                                                         brightness: isDark
                                                             ? Brightness.dark
                                                             : Brightness.light,
@@ -539,10 +530,12 @@ class _EditorPageState extends State<EditorPage>
                                                 ),
                                               ),
                                             ),
+                                            ),
                                             Padding(
                                               padding: const EdgeInsets.only(
                                                 left: 52.0,
                                                 right: 8.0,
+                                                bottom: 300.0,
                                               ),
                                               child: TextField(
                                                 controller: _inputController,
@@ -550,6 +543,7 @@ class _EditorPageState extends State<EditorPage>
                                                 maxLines: null,
                                                 keyboardType:
                                                     TextInputType.multiline,
+                                                scrollPhysics: const NeverScrollableScrollPhysics(),
                                                 showCursor: true,
                                                 style: editorTextStyle
                                                     .copyWith(
@@ -583,11 +577,10 @@ class _EditorPageState extends State<EditorPage>
                                   );
                                 },
                               ),
-                            ),
                     ),
                   ),
                 ),
-                SizedBox(height: bottomInset > 0 ? 0 : 70),
+                SizedBox(height: bottomInset > 0 ? 0 : 0),
               ],
             ),
           ),
@@ -871,13 +864,5 @@ class _EditorPageState extends State<EditorPage>
     }
   }
 
-  double _calculateHeight() {
-    // 13.5 * 1.6 = 21.6 exactly
-    // Adding extra buffer at bottom for easier typing
-    return max(
-      MediaQuery.of(context).size.height,
-      _controller.lineCount * (13.5 * 1.6) + 300,
-    );
-  }
 }
 

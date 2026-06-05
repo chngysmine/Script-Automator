@@ -41,4 +41,5 @@ const _$WidgetTypeEnumMap = {
   WidgetType.list: 'list',
   WidgetType.container: 'container',
   WidgetType.icon: 'icon',
+  WidgetType.button: 'button',
 };

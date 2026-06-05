@@ -141,12 +141,27 @@ object GlanceJsonParser {
                 }
             }
             "button" -> {
-                // Interactive widgets on Android (Buttons)
-                androidx.glance.layout.Box(
-                    modifier = glanceModifier,
-                    contentAlignment = Alignment.Center
-                ) {
-                    RenderChildren(node)
+                val actionId = node.get("actionId")?.asString
+                val scriptId = if (node.has("scriptId")) node.get("scriptId").asString else null
+                val label = if (node.has("label")) node.get("label").asString else node.get("content")?.asString ?: ""
+
+                if (!actionId.isNullOrBlank()) {
+                    val params = actionParametersOf(
+                        ScriptRunnerActionCallback.SCRIPT_ID to (scriptId ?: ""),
+                        ScriptRunnerActionCallback.ACTION_ID to actionId
+                    )
+                    Text(
+                        text = label,
+                        modifier = glanceModifier.clickable(actionRunCallback<ScriptRunnerActionCallback>(parameters = params)),
+                        style = parseTextStyle(modifiers)
+                    )
+                } else {
+                    androidx.glance.layout.Box(
+                        modifier = glanceModifier,
+                        contentAlignment = Alignment.Center
+                    ) {
+                        RenderChildren(node)
+                    }
                 }
             }
         }

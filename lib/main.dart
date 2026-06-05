@@ -90,12 +90,12 @@ Future<void> _setupDI() async {
   if (!GetIt.I.isRegistered<FirestoreSyncService>()) {
     GetIt.I.registerSingleton<FirestoreSyncService>(FirestoreSyncService());
   }
-  await SyncRetryQueue.instance.initialize();
 
   // Phase 2: Data Layer — Hive root matches App Group on iOS when available
   // (see [AppStoragePaths.hiveRootDirectory]); mirrors [Hive.initFlutter] adapters.
   final hiveDir = await AppStoragePaths.hiveRootDirectory();
   Hive.init(hiveDir.path);
+  await SyncRetryQueue.instance.initialize();
   final colorAdapter = ColorAdapter();
   if (!Hive.isAdapterRegistered(colorAdapter.typeId)) {
     Hive.registerAdapter(colorAdapter);

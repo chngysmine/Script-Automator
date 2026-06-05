@@ -55,6 +55,8 @@ class ScriptRunnerService {
   /// Completes when the engine isolate acknowledges native [JSEngine.destroy].
   Completer<void>? _engineShutdownCompleter;
 
+  VirtualFileSystemService? _cachedVfs;
+
   static const _shutdownAckTimeout = Duration(seconds: 2);
 
   /// Initializes the service by spawning a background isolate.
@@ -719,8 +721,8 @@ class ScriptRunnerService {
 
   Future<void> _pollPendingActions() async {
     try {
-      final vfs = await VirtualFileSystemService.create();
-      await vfs.initSharedDirectory();
+      _cachedVfs ??= await VirtualFileSystemService.create();
+      final vfs = _cachedVfs!;
       const pendingPath = 'shared/pending_action.json';
       if (!await vfs.exists(pendingPath)) return;
       final raw = await vfs.readString(pendingPath);
@@ -743,6 +745,7 @@ class ScriptRunnerService {
   /// Disposes the service, gracefully shuts down the engine, and kills the isolate.
   void dispose() {
     _isDisposed = true;
+    _cachedVfs = null;
     _apiHandler?.dispose();
     _engineShutdownCompleter = Completer<void>();
     _toEnginePort?.send({'command': 'shutdown'});

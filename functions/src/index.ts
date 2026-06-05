@@ -251,8 +251,11 @@ export const banUser = functions.https.onCall(async (request) => {
     throw new functions.https.HttpsError('unauthenticated', 'Must be authenticated');
   }
 
+  const callerEmail = request.auth.token.email;
   const callerClaims = request.auth.token;
-  if (callerClaims.admin !== true) {
+  const superAdmins = (process.env.SUPER_ADMINS || '').split(',').map(e => e.trim());
+  const isCallerAdmin = callerClaims.admin === true || (callerEmail && superAdmins.includes(callerEmail));
+  if (!isCallerAdmin) {
     throw new functions.https.HttpsError('permission-denied', 'You are not an admin');
   }
 
@@ -275,6 +278,7 @@ export const banUser = functions.https.onCall(async (request) => {
     await db.collection('admin_audit_log').add({
       action: isBanned ? 'ban_user' : 'unban_user',
       actor_email: request.auth.token.email || 'unknown',
+      actor_uid: request.auth.uid,
       target: uid,
       details: isBanned ? 'User banned and disabled in Auth' : 'User unbanned and enabled in Auth',
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
@@ -320,4 +324,28 @@ export const aggregateMetrics = onSchedule({ schedule: 'every 5 minutes' }, asyn
   } catch (error) {
     console.error('[aggregateMetrics] Error:', error);
   }
+});
+
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+
+export const autoGrantAdminTrigger = onDocumentCreated('admin_requests/{docId}', async (event) => {
+  const email = event.data?.data()?.email;
+  if (!email) return;
+
+  const targetUser = await admin.auth().getUserByEmail(email);
+  await admin.auth().setCustomUserClaims(targetUser.uid, { admin: true });
+
+  const db = admin.firestore();
+  await db.collection('users').doc(targetUser.uid).set(
+    { role: 'admin', updated_at: admin.firestore.FieldValue.serverTimestamp() },
+    { merge: true }
+  );
+
+  await db.collection('admins').doc(targetUser.uid).set({
+    email: email,
+    granted_at: admin.firestore.FieldValue.serverTimestamp(),
+    granted_by: 'system_trigger',
+  });
+
+  console.log(`Auto-granted admin role to ${email}`);
 });
