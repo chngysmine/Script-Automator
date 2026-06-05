@@ -20,7 +20,6 @@ import '../../../../features/script_management/domain/repositories/script_reposi
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'dart:ui';
-import 'dart:math';
 import 'dart:convert';
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_node.dart';
 import 'package:script_automator/features/widget_renderer/presentation/widgets/sasup_renderer.dart';

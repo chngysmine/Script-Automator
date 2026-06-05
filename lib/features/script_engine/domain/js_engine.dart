@@ -16,6 +16,9 @@ abstract class JSEngine {
   /// [callback] The Dart function to be called.
   void registerGlobalFunction(String name, Function callback);
 
+  /// Flush any pending microtasks/promises.
+  void flushPendingJobs();
+
   /// Destroy the runtime and free resources.
   void destroy();
 }

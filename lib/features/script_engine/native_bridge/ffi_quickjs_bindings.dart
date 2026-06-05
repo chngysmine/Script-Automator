@@ -155,6 +155,9 @@ typedef ScriptEngineClearInterruptRequest_Dart = void Function();
 typedef JS_IsException_Wrapper_C = Int32 Function(JSValue);
 typedef JS_IsException_Wrapper_Dart = int Function(JSValue);
 
+typedef JS_ExecutePendingJob_C = Int32 Function(Pointer<JSRuntime>, Pointer<Pointer<JSContext>>);
+typedef JS_ExecutePendingJob_Dart = int Function(Pointer<JSRuntime>, Pointer<Pointer<JSContext>>);
+
 /// FFI Bindings for the QuickJS Library.
 class QuickJSBindings {
   final DynamicLibrary _dylib;
@@ -188,6 +191,7 @@ class QuickJSBindings {
   late final ScriptEngineClearInterruptRequest_Dart
   ScriptEngineClearInterruptRequest;
   late final JS_IsException_Wrapper_Dart JS_IsException;
+  late final JS_ExecutePendingJob_Dart JS_ExecutePendingJob;
   late final Pointer<NativeFunction<Void Function(Pointer<Void>)>>
   addresses_FinalizeJSValue;
 
@@ -207,6 +211,7 @@ class QuickJSBindings {
           'JS_FreeContext',
         );
     JS_Eval = _dylib.lookupFunction<JS_Eval_C, JS_Eval_Dart>('JS_Eval');
+    JS_ExecutePendingJob = _dylib.lookupFunction<JS_ExecutePendingJob_C, JS_ExecutePendingJob_Dart>('JS_ExecutePendingJob');
 
     JS_NewInt32 = _dylib
         .lookupFunction<JS_NewInt32_Wrapper_C, JS_NewInt32_Wrapper_Dart>(

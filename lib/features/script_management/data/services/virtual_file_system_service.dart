@@ -244,15 +244,8 @@ class VirtualFileSystemService {
         return sharedPath;
       }
     } else {
-      // Android: Use internal storage for now (or external if needing share)
-      // For Widget share on Android, we typically use Context.filesDir
-      final docsDir = await getApplicationDocumentsDirectory();
-      // We partition it to simulate a shared zone
-      final sharedPath = path.join(docsDir.path, 'shared_container');
-      if (!await Directory(sharedPath).exists()) {
-        await Directory(sharedPath).create(recursive: true);
-      }
-      return sharedPath;
+      final supportDir = await getApplicationSupportDirectory();
+      return supportDir.path;
     }
   }
 }

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
@@ -225,9 +226,15 @@ class FirestoreSyncService {
       final prefs = GetIt.I<UserPreferencesService>();
       final profileDoc = _firestore.collection('users').doc(uid);
 
+      final user = FirebaseAuth.instance.currentUser;
+      final email = user?.email;
+      final photoUrl = user?.photoURL;
+
       await profileDoc.set({
         'displayName': await prefs.displayName,
         'bio': await prefs.bio,
+        'email': email,
+        'photoURL': photoUrl,
         'lastActive': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 

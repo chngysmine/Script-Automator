@@ -24,6 +24,9 @@ class MockJSEngine extends JSEngine {
   void destroy() {}
 
   @override
+  void flushPendingJobs() {}
+
+  @override
   void registerGlobalFunction(String name, Function callback) {}
 
   @override

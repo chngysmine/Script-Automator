@@ -67,13 +67,27 @@ class WidgetRegistryService {
     }
   }
 
-  /// Removes a script from the registry.
   Future<void> removeScript(String id) async {
     try {
       await init();
       await _db?.delete(_tableName, where: 'id = ?', whereArgs: [id]);
     } catch (e) {
       debugPrint("Failed to remove script from registry: $e");
+    }
+  }
+
+  Future<List<String>> getActiveWidgetIds() async {
+    try {
+      await init();
+      final List<Map<String, dynamic>>? maps = await _db?.query(
+        _tableName,
+        columns: ['id'],
+      );
+      if (maps == null) return [];
+      return maps.map((m) => m['id'] as String).toList();
+    } catch (e) {
+      debugPrint("Failed to get active widget IDs: $e");
+      return [];
     }
   }
 

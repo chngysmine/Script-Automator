@@ -3,12 +3,12 @@ import SwiftUI
 
 struct Provider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> SimpleEntry {
-        SimpleEntry(date: Date(), node: nil, scriptName: "Preview", error: nil)
+        SimpleEntry(date: Date(), node: nil, scriptName: "Preview", scriptId: nil, error: nil)
     }
 
     func snapshot(for configuration: ScriptSelectionIntent, in context: Context) async -> SimpleEntry {
         let result = loadJSON(scriptId: configuration.script?.id)
-        return SimpleEntry(date: Date(), node: result.node, scriptName: configuration.script?.name, error: result.error)
+        return SimpleEntry(date: Date(), node: result.node, scriptName: configuration.script?.name, scriptId: configuration.script?.id, error: result.error)
     }
     
     func timeline(for configuration: ScriptSelectionIntent, in context: Context) async -> Timeline<SimpleEntry> {
@@ -17,9 +17,8 @@ struct Provider: AppIntentTimelineProvider {
         let scriptName = configuration.script?.name
         
         let result = loadJSON(scriptId: scriptId)
-        // Reload policy
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: date)!
-        let entry = SimpleEntry(date: date, node: result.node, scriptName: scriptName, error: result.error)
+        let entry = SimpleEntry(date: date, node: result.node, scriptName: scriptName, scriptId: scriptId, error: result.error)
         
         return Timeline(entries: [entry], policy: .after(nextUpdate))
     }
@@ -74,6 +73,7 @@ struct SimpleEntry: TimelineEntry {
     let date: Date
     let node: SASUPNode?
     let scriptName: String?
+    let scriptId: String?
     let error: String?
 }
 
@@ -83,7 +83,7 @@ struct ScriptAutomatorWidgetEntryView : View {
 
     var body: some View {
         if let node = entry.node {
-            UniversalWidgetView(node: node, isRoot: true, family: family)
+            UniversalWidgetView(node: node, isRoot: true, family: family, scriptId: entry.scriptId)
                 .minimumScaleFactor(0.7) // Prevent tiny text
         } else {
             VStack {

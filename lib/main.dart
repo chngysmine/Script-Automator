@@ -4,6 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive_ce_flutter/adapters.dart';
 import 'core/storage/app_storage_paths.dart';
@@ -217,6 +218,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (GetIt.I.isRegistered<ScriptRunnerService>()) {
+        GetIt.I<ScriptRunnerService>().pollPendingActions();
+      }
+    });
   }
 
   @override
@@ -230,9 +236,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
-      // Flush safely to the persistent storage to prevent data loss on OS kill
       if (GetIt.I.isRegistered<ScriptLocalDataSource>()) {
         unawaited(GetIt.I<ScriptLocalDataSource>().flushData());
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (GetIt.I.isRegistered<ScriptRunnerService>()) {
+        GetIt.I<ScriptRunnerService>().pollPendingActions();
       }
     }
   }
@@ -263,5 +272,37 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         );
       },
     );
+  }
+}
+
+@pragma('vm:entry-point')
+void scriptRunnerMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await _setupDI();
+    final runner = GetIt.I<ScriptRunnerService>();
+    await runner.pollPendingActions();
+    final registry = GetIt.I<WidgetRegistryService>();
+    final activeIds = await registry.getActiveWidgetIds();
+    final localDataSource = GetIt.I<ScriptLocalDataSource>();
+    for (final id in activeIds) {
+      final content = await localDataSource.getScriptContent(id);
+      if (content.isNotEmpty) {
+        try {
+          await runner.runScript(content, id);
+        } catch (e) {
+          debugPrint("Failed to run background script $id: $e");
+        }
+      }
+    }
+  } catch (e, stack) {
+    debugPrint("Error in background script runner: $e\n$stack");
+  } finally {
+    try {
+      final channel = MethodChannel('com.js.scriptAutomator/background');
+      await channel.invokeMethod('scriptCompleted');
+    } catch (e) {
+      debugPrint("Failed to notify background completion: $e");
+    }
   }
 }

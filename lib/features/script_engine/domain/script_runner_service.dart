@@ -10,6 +10,7 @@ import 'js_engine.dart';
 
 import 'package:logging/logging.dart';
 import 'package:script_automator/features/script_engine/domain/system_api_polyfills.dart';
+import 'package:script_automator/features/script_management/data/datasources/script_local_data_source.dart';
 import 'package:flutter/services.dart';
 import '../../widget_renderer/domain/services/headless_widget_rendering_service.dart';
 import '../../script_management/data/services/virtual_file_system_service.dart';
@@ -243,6 +244,8 @@ class ScriptRunnerService {
     // Note: VFS is safe in Isolate (dart:io), but Headless is NOT (dart:ui).
     final vfsInitFuture = VirtualFileSystemService.create(); // Phase 2
 
+    final Map<int, Timer> activeTimers = {};
+
     // 4. Setup Engine
     JSEngine engine;
     if (Platform.isIOS) {
@@ -324,65 +327,93 @@ class ScriptRunnerService {
           return "queued_for_render";
         });
 
-        // Binding 3: setTimeout / setInterval Polyfill (Improved)
-        // Provides timer queue with IDs and deferred callback execution.
-        // True async timers would require an FFI bridge round-trip which is
-        // not feasible inside the single-threaded QuickJS sandbox. Instead:
-        //   - ms <= 0: fire immediately (sync fast-path, zero overhead)
-        //   - ms > 0: defer to end of script via a post-eval callback queue
-        //   - setInterval: implemented as repeated setTimeout
-        //   - clearTimeout/clearInterval: removes from pending queue
-        engine.registerGlobalFunction('__flushTimers', (args) {
-          // No-op on Dart side — timers are flushed in JS after eval
-          return 'flushed';
+        engine.registerGlobalFunction('__native_setTimeout', (argsJson) {
+          try {
+            final args = jsonDecode(argsJson as String);
+            final id = args['id'] as int;
+            final delay = args['delay'] as int;
+            activeTimers[id] = Timer(Duration(milliseconds: delay), () {
+              activeTimers.remove(id);
+              try {
+                engine.evaluate('__fireTimer($id);');
+              } catch (e) {
+                logger.severe("Error running timeout $id: $e");
+              }
+            });
+          } catch (e) {
+            logger.severe("native_setTimeout error: $e");
+          }
+          return 'ok';
         });
 
-        // --- JS POLYFILLS ---
-        // Injecting improved compatibility layer with timer queue
+        engine.registerGlobalFunction('__native_setInterval', (argsJson) {
+          try {
+            final args = jsonDecode(argsJson as String);
+            final id = args['id'] as int;
+            final delay = args['delay'] as int;
+            activeTimers[id] = Timer.periodic(Duration(milliseconds: delay), (timer) {
+              try {
+                engine.evaluate('__fireTimer($id);');
+              } catch (e) {
+                logger.severe("Error running interval $id: $e");
+              }
+            });
+          } catch (e) {
+            logger.severe("native_setInterval error: $e");
+          }
+          return 'ok';
+        });
+
+        engine.registerGlobalFunction('__native_clearTimer', (idStr) {
+          try {
+            final id = int.tryParse(idStr as String);
+            if (id != null) {
+              activeTimers[id]?.cancel();
+              activeTimers.remove(id);
+            }
+          } catch (e) {
+            logger.severe("native_clearTimer error: $e");
+          }
+          return 'ok';
+        });
+
         engine.evaluate('''
-          var __timerQueue = [];
+          var __timerCallbacks = {};
           var __timerId = 0;
 
           var setTimeout = function(cb, ms) {
             var id = ++__timerId;
-            if (!ms || ms <= 0) {
-              // Fast path: execute immediately
-              try { cb(); } catch(e) { console.log("[Timer Error] " + e); }
-              return id;
-            }
-            // Queue for deferred execution after main script completes
-            __timerQueue.push({ id: id, cb: cb, ms: ms, type: "timeout" });
+            __timerCallbacks[id] = { cb: cb, type: "timeout" };
+            __native_setTimeout(JSON.stringify({ id: id, delay: ms || 0 }));
             return id;
           };
 
           var setInterval = function(cb, ms) {
             var id = ++__timerId;
-            var iterations = 0;
-            var maxIterations = 100;
-            var wrapped = function() {
-              if (iterations++ < maxIterations) {
-                try { cb(); } catch(e) { console.log("[Interval Error] " + e); }
-                __timerQueue.push({ id: id, cb: wrapped, ms: ms, type: "interval" });
-              }
-            };
-            __timerQueue.push({ id: id, cb: wrapped, ms: ms || 0, type: "interval" });
+            __timerCallbacks[id] = { cb: cb, type: "interval" };
+            __native_setInterval(JSON.stringify({ id: id, delay: ms || 0 }));
             return id;
           };
 
           var clearTimeout = function(id) {
-            __timerQueue = __timerQueue.filter(function(t) { return t.id !== id; });
+            if (__timerCallbacks[id]) {
+              delete __timerCallbacks[id];
+              __native_clearTimer(String(id));
+            }
           };
 
           var clearInterval = clearTimeout;
 
-          // Flush pending timers (called after main script evaluation)
-          var __flushPendingTimers = function() {
-            // Sort by ms ascending so shorter delays fire first
-            __timerQueue.sort(function(a, b) { return a.ms - b.ms; });
-            var queue = __timerQueue.slice();
-            __timerQueue = [];
-            for (var i = 0; i < queue.length; i++) {
-              try { queue[i].cb(); } catch(e) { console.log("[Timer Error] " + e); }
+          var __fireTimer = function(id) {
+            var t = __timerCallbacks[id];
+            if (!t) return;
+            try {
+              t.cb();
+            } catch(e) {
+              console.error("[Timer Error] " + e);
+            }
+            if (t.type === "timeout") {
+              delete __timerCallbacks[id];
             }
           };
         ''');
@@ -502,8 +533,6 @@ class ScriptRunnerService {
               })();
             ''';
             final result = engine.evaluate(wrappedScript);
-            // Flush deferred setTimeout/setInterval callbacks
-            engine.evaluate('if (typeof __flushPendingTimers === "function") __flushPendingTimers();');
             logger.info("Result: $result");
           } catch (e) {
             String errorMsg = "Script Error: $e";
@@ -537,18 +566,46 @@ class ScriptRunnerService {
         } else if (command == 'widget_action') {
           final scriptId = message['scriptId']?.toString();
           final actionId = message['actionId']?.toString();
+          final script = message['script']?.toString();
           if (scriptId != null && actionId != null) {
             try {
-              final callback = engine.evaluate("(function(){ return (Widget._actionHandlers && Widget._actionHandlers['$actionId']) || null; })();");
+              final isRegistered = engine.evaluate(
+                "(function(){ return (Widget._actionHandlers && typeof Widget._actionHandlers['$actionId'] === 'function') ? 'true' : 'false'; })();"
+              ).toString() == 'true';
+
+              if (!isRegistered && script != null && script.isNotEmpty) {
+                logger.info("Widget action handler $actionId not registered. Running script $scriptId first.");
+                currentScriptId = scriptId;
+                final wrappedScript = '''
+                  (function() {
+                    $script
+                  })();
+                ''';
+                engine.evaluate(wrappedScript);
+              }
+
+              final callback = engine.evaluate(
+                "(function(){ return (Widget._actionHandlers && Widget._actionHandlers['$actionId']) || null; })();"
+              );
               if (callback != null && callback.toString() != 'null' && callback.toString() != 'undefined') {
-                engine.evaluate("(function(){ var cb = Widget._actionHandlers['$actionId']; if (typeof cb === 'function') { cb(); } })();");
+                engine.evaluate(
+                  "(function(){ var cb = Widget._actionHandlers['$actionId']; if (typeof cb === 'function') { cb(); } })();"
+                );
+              } else {
+                logger.warning("Action callback $actionId not found after evaluation.");
               }
             } catch (e) {
               logger.severe('Error handling widget action: $e');
+            } finally {
+              currentScriptId = null;
             }
           }
         } else if (command == 'shutdown') {
           logger.info("Shutdown command received — destroying engine");
+          for (var timer in activeTimers.values) {
+            timer.cancel();
+          }
+          activeTimers.clear();
           try {
             engine.destroy();
           } finally {
@@ -701,7 +758,7 @@ class ScriptRunnerService {
         GetIt.I<UserStatsService>().recordWidgetDeploy();
       }
 
-      await _pollPendingActions();
+      await pollPendingActions();
 
       // Trigger Widget Reload via MethodChannel
       try {
@@ -719,7 +776,7 @@ class ScriptRunnerService {
     }
   }
 
-  Future<void> _pollPendingActions() async {
+  Future<void> pollPendingActions() async {
     try {
       _cachedVfs ??= await VirtualFileSystemService.create();
       final vfs = _cachedVfs!;
@@ -732,10 +789,18 @@ class ScriptRunnerService {
       final scriptId = data['scriptId']?.toString();
       final actionId = data['actionId']?.toString();
       if (scriptId == null || actionId == null) return;
+
+      final localDataSource = GetIt.I<ScriptLocalDataSource>();
+      final script = await localDataSource.getScriptContent(scriptId);
+
+      if (_engineIsolate == null) await initialize();
+      await _initCompleter!.future;
+
       _toEnginePort?.send({
         'command': 'widget_action',
         'scriptId': scriptId,
         'actionId': actionId,
+        'script': script,
       });
     } catch (e) {
       debugPrint('[WidgetAction] Pending action poll failed: $e');

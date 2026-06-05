@@ -277,6 +277,9 @@ class JSCEngine implements JSEngine, Finalizable {
   // JSHandle createHandle removed as it relied on missing native symbols.
   // If needed in future, implement manual JSValueProtect/Unprotect.
 
+  @override
+  void flushPendingJobs() {}
+
   /// Destroys the engine context and releases all native resources.
   ///
   /// Detaches the [NativeFinalizer] first to prevent a double-free if the

@@ -163,12 +163,9 @@ class _AuthGateState extends State<AuthGate> {
       // Fire-and-forget background sync
       try {
         final syncService = GetIt.I<FirestoreSyncService>();
+        await syncService.fullSync(user.uid);
         if (SyncRetryQueue.instance.hasPendingRetries) {
-          debugPrint('[AuthGate] Pending retries detected — running fullSync');
-          await syncService.fullSync(user.uid);
           SyncRetryQueue.instance.clearPersistedMeta();
-        } else {
-          await syncService.syncBidirectional(user.uid);
         }
         debugPrint('[AuthGate] Background sync completed for ${user.uid}');
       } catch (e) {

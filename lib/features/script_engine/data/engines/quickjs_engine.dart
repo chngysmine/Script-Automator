@@ -84,7 +84,9 @@ class QuickJSEngine implements JSEngine {
             'JavaScript evaluation aborted (interrupt/error).',
           );
         }
-        return _jsValueToDart(val);
+        final result = _jsValueToDart(val);
+        flushPendingJobs();
+        return result;
       } finally {
         _lib.JS_FreeValue(_ctx!, val);
       }
@@ -273,6 +275,19 @@ class QuickJSEngine implements JSEngine {
   void registerHostObject(Object obj, String varName) {
     final id = HostObjectRegistry().register(obj);
     developer.log("Registered host object $obj with ID $id as $varName");
+  }
+
+  @override
+  void flushPendingJobs() {
+    if (_ctx == null || _ctx == nullptr) return;
+    final ctxPtr = calloc<Pointer<JSContext>>();
+    try {
+      while (_lib.JS_ExecutePendingJob(_rt!, ctxPtr) > 0) {}
+    } catch (e) {
+      developer.log("Error executing pending jobs: $e");
+    } finally {
+      calloc.free(ctxPtr);
+    }
   }
 
   /// Destroys the engine context and releases resources.
