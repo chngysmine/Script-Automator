@@ -24,6 +24,42 @@ struct SASUPAction: Decodable, Hashable {
     let scriptId: String?
     let actionId: String?
     let url: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case type, scriptId, actionId, url, payload
+    }
+    
+    enum PayloadKeys: String, CodingKey {
+        case actionId, scriptId
+    }
+    
+    init(type: String, scriptId: String? = nil, actionId: String? = nil, url: String? = nil) {
+        self.type = type
+        self.scriptId = scriptId
+        self.actionId = actionId
+        self.url = url
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.type = try container.decode(String.self, forKey: .type)
+        self.url = try container.decodeIfPresent(String.self, forKey: .url)
+        
+        var decodedScriptId = try container.decodeIfPresent(String.self, forKey: .scriptId)
+        var decodedActionId = try container.decodeIfPresent(String.self, forKey: .actionId)
+        
+        if let payloadContainer = try? container.nestedContainer(keyedBy: PayloadKeys.self, forKey: .payload) {
+            if decodedActionId == nil {
+                decodedActionId = try payloadContainer.decodeIfPresent(String.self, forKey: .actionId)
+            }
+            if decodedScriptId == nil {
+                decodedScriptId = try payloadContainer.decodeIfPresent(String.self, forKey: .scriptId)
+            }
+        }
+        
+        self.scriptId = decodedScriptId
+        self.actionId = decodedActionId
+    }
 }
 
 struct SASUPModifiers: Decodable, Hashable {
@@ -68,29 +104,55 @@ struct SASUPPadding: Decodable, Hashable {
 
 struct ColorParser {
     static func parse(_ value: String?) -> Color {
-        guard let hex = value, hex.hasPrefix("#") else { return .clear }
-        let cleanHex = String(hex.dropFirst())
-        let scanner = Scanner(string: cleanHex)
-        var rgbValue: UInt64 = 0
-        scanner.scanHexInt64(&rgbValue)
+        guard let val = value?.trimmingCharacters(in: .whitespacesAndNewlines) else { return .clear }
         
-        if cleanHex.count == 8 {
-            // #AARRGGBB format
-            let a = (rgbValue & 0xFF000000) >> 24
-            let r = (rgbValue & 0x00FF0000) >> 16
-            let g = (rgbValue & 0x0000FF00) >> 8
-            let b = rgbValue & 0x000000FF
-            return Color(
-                red: Double(r) / 0xFF,
-                green: Double(g) / 0xFF,
-                blue: Double(b) / 0xFF
-            ).opacity(Double(a) / 0xFF)
-        } else {
-            // #RRGGBB format (6 chars)
-            let r = (rgbValue & 0xFF0000) >> 16
-            let g = (rgbValue & 0x00FF00) >> 8
-            let b = rgbValue & 0x0000FF
-            return Color(red: Double(r) / 0xFF, green: Double(g) / 0xFF, blue: Double(b) / 0xFF)
+        if val.hasPrefix("#") {
+            let cleanHex = String(val.dropFirst())
+            let scanner = Scanner(string: cleanHex)
+            var rgbValue: UInt64 = 0
+            scanner.scanHexInt64(&rgbValue)
+            
+            if cleanHex.count == 8 {
+                let a = (rgbValue & 0xFF000000) >> 24
+                let r = (rgbValue & 0x00FF0000) >> 16
+                let g = (rgbValue & 0x0000FF00) >> 8
+                let b = rgbValue & 0x000000FF
+                return Color(
+                    red: Double(r) / 0xFF,
+                    green: Double(g) / 0xFF,
+                    blue: Double(b) / 0xFF
+                ).opacity(Double(a) / 0xFF)
+            } else {
+                let r = (rgbValue & 0xFF0000) >> 16
+                let g = (rgbValue & 0x00FF00) >> 8
+                let b = rgbValue & 0x0000FF
+                return Color(red: Double(r) / 0xFF, green: Double(g) / 0xFF, blue: Double(b) / 0xFF)
+            }
+        } else if val.hasPrefix("rgba") {
+            let cleaned = val.replacingOccurrences(of: "rgba(", with: "")
+                             .replacingOccurrences(of: ")", with: "")
+                             .replacingOccurrences(of: " ", with: "")
+            let components = cleaned.components(separatedBy: ",")
+            if components.count == 4,
+               let r = Double(components[0]),
+               let g = Double(components[1]),
+               let b = Double(components[2]),
+               let a = Double(components[3]) {
+                return Color(red: r / 255.0, green: g / 255.0, blue: b / 255.0).opacity(a)
+            }
+        } else if val.hasPrefix("rgb") {
+            let cleaned = val.replacingOccurrences(of: "rgb(", with: "")
+                             .replacingOccurrences(of: ")", with: "")
+                             .replacingOccurrences(of: " ", with: "")
+            let components = cleaned.components(separatedBy: ",")
+            if components.count == 3,
+               let r = Double(components[0]),
+               let g = Double(components[1]),
+               let b = Double(components[2]) {
+                return Color(red: r / 255.0, green: g / 255.0, blue: b / 255.0)
+            }
         }
+        
+        return .clear
     }
 }

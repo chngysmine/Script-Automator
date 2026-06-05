@@ -52,6 +52,28 @@ class ScriptRepositoryImpl implements ScriptRepository {
   }
 
   @override
+  Future<Either<Failure, List<Script>>> getScriptsWithContent() async {
+    try {
+      final models = await _dataSource.getScriptsMetadata();
+      final futures = models.map((m) async {
+        final content = await _dataSource.getScriptContent(m.id);
+        return Script(
+          id: m.id,
+          name: m.name,
+          content: content,
+          createdAt: m.createdAt,
+          updatedAt: m.updatedAt,
+          settings: m.settings,
+        );
+      });
+      final entities = await Future.wait(futures);
+      return Right(entities);
+    } catch (e) {
+      return Left(StorageFailure(e.toString()));
+    }
+  }
+
+  @override
   /// Retrieves the detailed information for a single script by its [id].
   ///
   /// This method fetches the full script content.

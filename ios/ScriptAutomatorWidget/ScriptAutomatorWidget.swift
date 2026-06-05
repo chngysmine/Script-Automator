@@ -8,7 +8,8 @@ struct Provider: AppIntentTimelineProvider {
 
     func snapshot(for configuration: ScriptSelectionIntent, in context: Context) async -> SimpleEntry {
         let result = loadJSON(scriptId: configuration.script?.id)
-        return SimpleEntry(date: Date(), node: result.node, scriptName: configuration.script?.name, scriptId: configuration.script?.id, error: result.error)
+        let effectiveScriptId = configuration.script?.id ?? result.scriptId
+        return SimpleEntry(date: Date(), node: result.node, scriptName: configuration.script?.name, scriptId: effectiveScriptId, error: result.error)
     }
     
     func timeline(for configuration: ScriptSelectionIntent, in context: Context) async -> Timeline<SimpleEntry> {
@@ -18,18 +19,19 @@ struct Provider: AppIntentTimelineProvider {
         
         let result = loadJSON(scriptId: scriptId)
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: date)!
-        let entry = SimpleEntry(date: date, node: result.node, scriptName: scriptName, scriptId: scriptId, error: result.error)
+        let effectiveScriptId = scriptId ?? result.scriptId
+        let entry = SimpleEntry(date: date, node: result.node, scriptName: scriptName, scriptId: effectiveScriptId, error: result.error)
         
         return Timeline(entries: [entry], policy: .after(nextUpdate))
     }
     
     // MARK: - Shared Storage Loading
     
-    private func loadJSON(scriptId: String?) -> (node: SASUPNode?, error: String?) {
+    private func loadJSON(scriptId: String?) -> (node: SASUPNode?, scriptId: String?, error: String?) {
         let fileManager = FileManager.default
         // Corrected App Group ID
         guard let directory = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.js.scriptAutomator") else {
-            return (nil, "App Group Not Found")
+            return (nil, nil, "App Group Not Found")
         }
         
         let fileURL: URL
@@ -40,14 +42,14 @@ struct Provider: AppIntentTimelineProvider {
             // If the specific script file doesn't exist, it means it's empty or deleted.
             // DO NOT fallback to the global sasup_ui.json, as that belongs to potentially another script.
             if !fileManager.fileExists(atPath: fileURL.path) {
-                return (nil, "Script Output Not Found")
+                return (nil, nil, "Script Output Not Found")
             }
         } else {
             // Fallback: Latest Run (sasup_ui.json) when no specific script is selected
             fileURL = directory.appendingPathComponent("sasup_ui.json")
             
             if !fileManager.fileExists(atPath: fileURL.path) {
-                return (nil, nil) // Normal first launch state
+                return (nil, nil, nil) // Normal first launch state
             }
         }
         
@@ -55,10 +57,10 @@ struct Provider: AppIntentTimelineProvider {
             let data = try Data(contentsOf: fileURL)
             let decoder = JSONDecoder()
             let schema = try decoder.decode(SASUPRoot.self, from: data)
-            return (schema.root, nil)
+            return (schema.root, schema.scriptId, nil)
         } catch {
             print("Widget Load Error: \(error)")
-            return (nil, "Err: \(error.localizedDescription)")
+            return (nil, nil, "Err: \(error.localizedDescription)")
         }
     }
 }
@@ -66,6 +68,7 @@ struct Provider: AppIntentTimelineProvider {
 // Wrapper for Root
 struct SASUPRoot: Decodable {
     let family: String?
+    let scriptId: String?
     let root: SASUPNode
 }
 

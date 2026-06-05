@@ -104,15 +104,12 @@ class ScriptLocalDataSourceImpl implements ScriptLocalDataSource {
 
   /// Helper to ensure metadata box is initialized and open.
   Future<LazyBox<ScriptModel>> get _safeMetadataBox async {
-    // If injected for test, skip init
-    if (_metadataBox != null) return _metadataBox!;
     await init();
     return _metadataBox!;
   }
 
   /// Helper to ensure content box is initialized and open.
   Future<LazyBox<String>> get _safeContentBox async {
-    if (_contentBox != null) return _contentBox!;
     await init();
     return _contentBox!;
   }

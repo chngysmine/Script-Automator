@@ -39,6 +39,7 @@ class _PremiumBentoCardState extends State<PremiumBentoCard>
   late Animation<double> _scaleAnimation;
   String? _previewPath;
   WidgetNode? _previewNode;
+  String? _previewFamily;
 
   @override
   void initState() {
@@ -67,9 +68,11 @@ class _PremiumBentoCardState extends State<PremiumBentoCard>
         final nodeMap = jsonDecode(content);
         final nodeJson = nodeMap['root'] ?? nodeMap;
         final node = WidgetNode.fromJson(nodeJson as Map<String, dynamic>);
+        final family = nodeMap['family'] as String? ?? 'medium';
         if (mounted) {
           setState(() {
             _previewNode = node;
+            _previewFamily = family;
           });
         }
         return;
@@ -154,14 +157,9 @@ class _PremiumBentoCardState extends State<PremiumBentoCard>
                             Positioned.fill(
                               child: ClipRRect(
                                 child: IgnorePointer(
-                                  child: FittedBox(
-                                    fit: BoxFit.cover,
-                                    alignment: Alignment.center,
-                                    child: SizedBox(
-                                      width: 180,
-                                      height: isLarge ? 200 : 150,
-                                      child: SasupRenderer(node: _previewNode!),
-                                    ),
+                                  child: SasupRenderer(
+                                    node: _previewNode!,
+                                    family: _previewFamily ?? 'medium',
                                   ),
                                 ),
                               ),

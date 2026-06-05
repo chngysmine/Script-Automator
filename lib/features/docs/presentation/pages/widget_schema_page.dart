@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:script_automator/core/ui/mesh_gradient_background.dart';
 import 'package:script_automator/features/docs/data/widget_schema_data.dart';
 
@@ -57,8 +58,11 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: LiquidTheme.darkBackground,
+      backgroundColor: isDark ? LiquidTheme.darkBackground : LiquidTheme.lightBackground,
       body: Stack(
         children: [
           const Positioned.fill(child: MeshGradientBackground()),
@@ -67,23 +71,23 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  _buildHeader(context),
+                  _buildHeader(context, colors),
                   const SizedBox(height: 16),
-                  _buildSearchBar(),
+                  _buildSearchBar(colors),
                   const SizedBox(height: 16),
                   Expanded(
                     child: ListView(
                       children: [
-                        _buildQuickStart(),
+                        _buildQuickStart(colors, isDark),
                         const SizedBox(height: 18),
                         ..._filteredEntries.map(
                           (entry) => Padding(
                             padding: const EdgeInsets.only(bottom: 14),
-                            child: _buildEntryCard(entry),
+                            child: _buildEntryCard(entry, colors, isDark),
                           ),
                         ),
                         const SizedBox(height: 8),
-                        _buildModifiersReference(),
+                        _buildModifiersReference(colors),
                       ],
                     ),
                   ),
@@ -96,15 +100,32 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, LiquidColors colors) {
     return Row(
       children: [
+        SizedBox(
+          width: 52,
+          height: 52,
+          child: IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: Icon(Icons.arrow_back_ios_new_rounded, color: colors.textTitle, size: 20),
+            padding: EdgeInsets.zero,
+            style: IconButton.styleFrom(
+              backgroundColor: colors.headerActionBackground,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: colors.headerActionBorder),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 14),
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
+            color: colors.headerActionBackground,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            border: Border.all(color: colors.headerActionBorder),
           ),
           child: const Icon(
             Icons.view_module_rounded,
@@ -120,7 +141,7 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
               Text(
                 'Widget Schema',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
+                  color: colors.textTitle,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -129,7 +150,7 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
                 'Learn the SASUP JSON structure used to build native widgets.',
                 style: Theme.of(
                   context,
-                ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                ).textTheme.bodyMedium?.copyWith(color: colors.textBody),
               ),
             ],
           ),
@@ -138,21 +159,21 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildSearchBar(LiquidColors colors) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: colors.searchBarBackground,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: colors.searchBarBorder),
       ),
       child: TextField(
         controller: _searchController,
         onChanged: (value) => setState(() => _query = value),
-        style: const TextStyle(color: Colors.white),
+        style: TextStyle(color: colors.textTitle),
         decoration: InputDecoration(
           hintText: 'Search node types or properties',
-          hintStyle: const TextStyle(color: Colors.white54),
-          prefixIcon: const Icon(Icons.search, color: Colors.white54),
+          hintStyle: TextStyle(color: colors.searchBarHint),
+          prefixIcon: Icon(Icons.search, color: colors.searchBarHint),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
@@ -160,7 +181,7 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
           ),
           suffixIcon: _query.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.white54),
+                  icon: Icon(Icons.clear, color: colors.searchBarHint),
                   onPressed: () {
                     _searchController.clear();
                     setState(() => _query = '');
@@ -172,7 +193,7 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
     );
   }
 
-  Widget _buildQuickStart() {
+  Widget _buildQuickStart(LiquidColors colors, bool isDark) {
     const code = '''{
   "type": "container",
   "modifiers": {
@@ -200,40 +221,40 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: colors.cardBackground,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: colors.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Quick Start',
             style: TextStyle(
-              color: Colors.white,
+              color: colors.textTitle,
               fontSize: 18,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'A complete weather widget with text, icons, and an interactive button.',
-            style: TextStyle(color: Colors.white70),
+            style: TextStyle(color: colors.textBody),
           ),
           const SizedBox(height: 14),
-          _buildCodeBlock(code),
+          _buildCodeBlock(code, isDark),
         ],
       ),
     );
   }
 
-  Widget _buildEntryCard(WidgetSchemaEntry entry) {
+  Widget _buildEntryCard(WidgetSchemaEntry entry, LiquidColors colors, bool isDark) {
     final expanded = _expandedNode == entry.nodeType;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: colors.cardBackground,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: colors.cardBorder),
       ),
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -248,8 +269,8 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
                     children: [
                       Text(
                         entry.nodeType,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: colors.textTitle,
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
                         ),
@@ -257,8 +278,8 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
                       const SizedBox(height: 6),
                       Text(
                         entry.description,
-                        style: const TextStyle(
-                          color: Colors.white70,
+                        style: TextStyle(
+                          color: colors.textBody,
                           height: 1.4,
                         ),
                       ),
@@ -273,13 +294,13 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
                     expanded
                         ? Icons.expand_less_rounded
                         : Icons.expand_more_rounded,
-                    color: Colors.white70,
+                    color: colors.textCaption,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 14),
-            _buildPropertiesTable(entry.properties),
+            _buildPropertiesTable(entry.properties, colors),
             const SizedBox(height: 14),
             InkWell(
               borderRadius: BorderRadius.circular(14),
@@ -293,23 +314,23 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.18),
+                  color: colors.secondaryButtonBackground,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.06),
+                    color: colors.cardBorder,
                   ),
                 ),
                 child: Row(
-                  children: const [
+                  children: [
                     Text(
                       'JSON Example',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: colors.secondaryButtonText,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    Spacer(),
-                    Icon(Icons.code_rounded, color: Colors.white70),
+                    const Spacer(),
+                    Icon(Icons.code_rounded, color: colors.textCaption),
                   ],
                 ),
               ),
@@ -318,7 +339,7 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
               firstChild: const SizedBox.shrink(),
               secondChild: Padding(
                 padding: const EdgeInsets.only(top: 12),
-                child: _buildCodeBlock(entry.example),
+                child: _buildCodeBlock(entry.example, isDark),
               ),
               crossFadeState: expanded
                   ? CrossFadeState.showSecond
@@ -331,13 +352,13 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
     );
   }
 
-  Widget _buildPropertiesTable(List<SchemaProperty> properties) {
+  Widget _buildPropertiesTable(List<SchemaProperty> properties, LiquidColors colors) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.16),
+        color: colors.secondaryButtonBackground.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: colors.cardBorder),
       ),
       child: Column(
         children: [
@@ -346,23 +367,23 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
             'Type',
             'Required',
             'Description',
-          ], isHeader: true),
+          ], colors, isHeader: true),
           ...properties.map(
             (property) => _tableRow([
               property.name,
               property.type,
               property.required ? 'Yes' : 'No',
               property.description,
-            ]),
+            ], colors),
           ),
         ],
       ),
     );
   }
 
-  Widget _tableRow(List<String> cells, {bool isHeader = false}) {
+  Widget _tableRow(List<String> cells, LiquidColors colors, {bool isHeader = false}) {
     final textStyle = TextStyle(
-      color: isHeader ? Colors.white : Colors.white70,
+      color: isHeader ? colors.textTitle : colors.textBody,
       fontWeight: isHeader ? FontWeight.w700 : FontWeight.w500,
       fontSize: 12,
       height: 1.35,
@@ -371,7 +392,7 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: Colors.white.withValues(alpha: isHeader ? 0.12 : 0.06),
+            color: isHeader ? colors.divider : colors.divider.withValues(alpha: 0.5),
           ),
         ),
       ),
@@ -391,22 +412,22 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
     );
   }
 
-  Widget _buildModifiersReference() {
+  Widget _buildModifiersReference(LiquidColors colors) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: colors.cardBackground,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: colors.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Modifiers Reference',
             style: TextStyle(
-              color: Colors.white,
+              color: colors.textTitle,
               fontSize: 18,
               fontWeight: FontWeight.w800,
             ),
@@ -424,13 +445,14 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.06),
+                      color: colors.chipBackground,
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: colors.cardBorder),
                     ),
                     child: Text(
                       item.$1,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: colors.textTitle,
                         fontFamily: 'monospace',
                         fontSize: 12,
                       ),
@@ -440,8 +462,8 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
                   Expanded(
                     child: Text(
                       '${item.$2} · ${item.$3}',
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: colors.textBody,
                         height: 1.35,
                       ),
                     ),
@@ -455,19 +477,23 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
     );
   }
 
-  Widget _buildCodeBlock(String code) {
+  Widget _buildCodeBlock(String code, bool isDark) {
+    final bg = isDark ? const Color(0xFF0B1220) : const Color(0xFFF1F5F9);
+    final textCol = isDark ? const Color(0xFFE5E7EB) : const Color(0xFF1E293B);
+    final borderCol = isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2E8F0);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0B1220),
+        color: bg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: borderCol),
       ),
       child: SelectableText(
         code,
-        style: const TextStyle(
-          color: Color(0xFFE5E7EB),
+        style: TextStyle(
+          color: textCol,
           fontFamily: 'monospace',
           fontSize: 13,
           height: 1.5,

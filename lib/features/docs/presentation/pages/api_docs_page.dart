@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:script_automator/core/ui/mesh_gradient_background.dart';
 import 'package:script_automator/features/docs/data/api_reference_data.dart';
 
@@ -50,9 +51,11 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: LiquidTheme.darkBackground,
+      backgroundColor: isDark ? LiquidTheme.darkBackground : LiquidTheme.lightBackground,
       body: Stack(
         children: [
           const Positioned.fill(child: MeshGradientBackground()),
@@ -61,19 +64,19 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  _buildHeader(context),
+                  _buildHeader(context, colors),
                   const SizedBox(height: 16),
-                  _buildSearchBar(),
+                  _buildSearchBar(colors),
                   const SizedBox(height: 16),
-                  _buildCategoryFilter(),
+                  _buildCategoryFilter(colors),
                   const SizedBox(height: 16),
                   Expanded(
                     child: _filteredEntries.isEmpty
-                        ? _buildEmptyState(theme)
+                        ? _buildEmptyState(colors)
                         : ListView.separated(
                             itemCount: _filteredEntries.length,
                             separatorBuilder: (_, _) => const SizedBox(height: 14),
-                            itemBuilder: (context, index) => _buildEntryCard(_filteredEntries[index]),
+                            itemBuilder: (context, index) => _buildEntryCard(_filteredEntries[index], colors, isDark),
                           ),
                   ),
                 ],
@@ -85,15 +88,32 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, LiquidColors colors) {
     return Row(
       children: [
+        SizedBox(
+          width: 52,
+          height: 52,
+          child: IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: Icon(Icons.arrow_back_ios_new_rounded, color: colors.textTitle, size: 20),
+            padding: EdgeInsets.zero,
+            style: IconButton.styleFrom(
+              backgroundColor: colors.headerActionBackground,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: colors.headerActionBorder),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 14),
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
+            color: colors.headerActionBackground,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            border: Border.all(color: colors.headerActionBorder),
           ),
           child: const Icon(Icons.menu_book_rounded, color: LiquidTheme.primary, size: 28),
         ),
@@ -105,14 +125,14 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
               Text(
                 'API Reference',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
+                      color: colors.textTitle,
                       fontWeight: FontWeight.w800,
                     ),
               ),
               const SizedBox(height: 4),
               Text(
                 'Explore every built-in scripting API with examples.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colors.textBody),
               ),
             ],
           ),
@@ -121,26 +141,26 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildSearchBar(LiquidColors colors) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: colors.searchBarBackground,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: colors.searchBarBorder),
       ),
       child: TextField(
         controller: _searchController,
         onChanged: (value) => setState(() => _query = value),
-        style: const TextStyle(color: Colors.white),
+        style: TextStyle(color: colors.textTitle),
         decoration: InputDecoration(
           hintText: 'Search APIs, categories, or signatures',
-          hintStyle: const TextStyle(color: Colors.white54),
-          prefixIcon: const Icon(Icons.search, color: Colors.white54),
+          hintStyle: TextStyle(color: colors.searchBarHint),
+          prefixIcon: Icon(Icons.search, color: colors.searchBarHint),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           suffixIcon: _query.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.white54),
+                  icon: Icon(Icons.clear, color: colors.searchBarHint),
                   onPressed: () {
                     _searchController.clear();
                     setState(() => _query = '');
@@ -152,7 +172,7 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
     );
   }
 
-  Widget _buildCategoryFilter() {
+  Widget _buildCategoryFilter(LiquidColors colors) {
     return SizedBox(
       height: 42,
       child: ListView.separated(
@@ -166,13 +186,13 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
             label: Text(category),
             selected: selected,
             selectedColor: LiquidTheme.primary.withValues(alpha: 0.22),
-            backgroundColor: Colors.white.withValues(alpha: 0.05),
+            backgroundColor: colors.chipBackground,
             labelStyle: TextStyle(
-              color: selected ? LiquidTheme.primary : Colors.white70,
+              color: selected ? LiquidTheme.primary : colors.textCaption,
               fontWeight: FontWeight.w600,
             ),
             side: BorderSide(
-              color: selected ? LiquidTheme.primary.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.08),
+              color: selected ? LiquidTheme.primary.withValues(alpha: 0.5) : colors.cardBorder,
             ),
             onSelected: (_) => setState(() => _selectedCategory = category),
           );
@@ -181,13 +201,13 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
     );
   }
 
-  Widget _buildEntryCard(ApiEntry entry) {
+  Widget _buildEntryCard(ApiEntry entry, LiquidColors colors, bool isDark) {
     final expanded = _expandedApi == entry.name;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: colors.cardBackground,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: colors.cardBorder),
       ),
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -203,8 +223,8 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
                     children: [
                       Text(
                         entry.name,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: colors.textTitle,
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
                         ),
@@ -222,7 +242,7 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
                       const SizedBox(height: 10),
                       Text(
                         entry.description,
-                        style: const TextStyle(color: Colors.white70, height: 1.4),
+                        style: TextStyle(color: colors.textBody, height: 1.4),
                       ),
                     ],
                   ),
@@ -247,7 +267,7 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
             ),
             if (entry.params != null && entry.params!.isNotEmpty) ...[
               const SizedBox(height: 14),
-              _buildParams(entry.params!),
+              _buildParams(entry.params!, colors),
             ],
             const SizedBox(height: 14),
             InkWell(
@@ -257,20 +277,20 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.18),
+                  color: colors.secondaryButtonBackground,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                  border: Border.all(color: colors.cardBorder),
                 ),
                 child: Row(
                   children: [
-                    const Text(
+                    Text(
                       'Example',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                      style: TextStyle(color: colors.secondaryButtonText, fontWeight: FontWeight.w700),
                     ),
                     const Spacer(),
                     Icon(
                       expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                      color: Colors.white70,
+                      color: colors.textCaption,
                     ),
                   ],
                 ),
@@ -280,7 +300,7 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
               firstChild: const SizedBox.shrink(),
               secondChild: Padding(
                 padding: const EdgeInsets.only(top: 12),
-                child: _buildCodeBlock(entry.example),
+                child: _buildCodeBlock(entry.example, isDark),
               ),
               crossFadeState: expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
               duration: const Duration(milliseconds: 220),
@@ -291,13 +311,13 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
     );
   }
 
-  Widget _buildParams(List<ApiParam> params) {
+  Widget _buildParams(List<ApiParam> params, LiquidColors colors) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Parameters',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          style: TextStyle(color: colors.textTitle, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 10),
         ...params.map(
@@ -309,19 +329,20 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.06),
+                    color: colors.chipBackground,
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: colors.cardBorder),
                   ),
                   child: Text(
                     param.name,
-                    style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 12),
+                    style: TextStyle(color: colors.textTitle, fontFamily: 'monospace', fontSize: 12),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     '${param.type}${param.required ? ' · required' : ''} · ${param.description}',
-                    style: const TextStyle(color: Colors.white70, height: 1.35),
+                    style: TextStyle(color: colors.textBody, height: 1.35),
                   ),
                 ),
               ],
@@ -332,19 +353,23 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
     );
   }
 
-  Widget _buildCodeBlock(String code) {
+  Widget _buildCodeBlock(String code, bool isDark) {
+    final bg = isDark ? const Color(0xFF0B1220) : const Color(0xFFF1F5F9);
+    final textCol = isDark ? const Color(0xFFE5E7EB) : const Color(0xFF1E293B);
+    final borderCol = isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2E8F0);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0B1220),
+        color: bg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: borderCol),
       ),
       child: SelectableText(
         code,
-        style: const TextStyle(
-          color: Color(0xFFE5E7EB),
+        style: TextStyle(
+          color: textCol,
           fontFamily: 'monospace',
           fontSize: 13,
           height: 1.5,
@@ -353,14 +378,14 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
     );
   }
 
-  Widget _buildEmptyState(ThemeData theme) {
+  Widget _buildEmptyState(LiquidColors colors) {
     return Center(
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
+          color: colors.cardBackground,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          border: Border.all(color: colors.cardBorder),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -369,12 +394,12 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
             const SizedBox(height: 12),
             Text(
               'No APIs match your search.',
-              style: theme.textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+              style: TextStyle(color: colors.textTitle, fontWeight: FontWeight.w700, fontSize: 16),
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Try a different keyword or category.',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: colors.textBody),
             ),
           ],
         ),

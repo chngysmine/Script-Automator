@@ -55,6 +55,7 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
   late TabController _tabController;
   String? _previewImagePath;
   WidgetNode? _previewNode;
+  String? _previewFamily;
   String _fullContent = '';
   bool _isLoadingContent = false;
 
@@ -85,9 +86,11 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
         final nodeMap = jsonDecode(content);
         final nodeJson = nodeMap['root'] ?? nodeMap;
         final node = WidgetNode.fromJson(nodeJson as Map<String, dynamic>);
+        final family = nodeMap['family'] as String? ?? 'medium';
         if (mounted) {
           setState(() {
             _previewNode = node;
+            _previewFamily = family;
           });
         }
         return;
@@ -383,31 +386,46 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
     final colors = Theme.of(context).extension<LiquidColors>()!;
 
     if (_previewNode != null) {
+      final family = _previewFamily ?? 'medium';
+      
+      double aspectRatio = 329 / 155; // Default medium
+      if (family == 'small') {
+        aspectRatio = 155 / 155;
+      } else if (family == 'large') {
+        aspectRatio = 329 / 345;
+      }
+
       return Center(
         child: Container(
           margin: EdgeInsets.symmetric(
             horizontal: LiquidTheme.pageHorizontalPadding,
-            vertical: 8,
+            vertical: 16,
           ),
-          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
-          decoration: BoxDecoration(
-            color: colors.cardBackground,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: colors.cardBorder,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
+          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 500),
+          child: AspectRatio(
+            aspectRatio: aspectRatio,
+            child: Container(
+              decoration: BoxDecoration(
+                color: colors.cardBackground,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: colors.cardBorder,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: SingleChildScrollView(
-              child: SasupRenderer(node: _previewNode!),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: SasupRenderer(
+                  node: _previewNode!,
+                  family: family,
+                ),
+              ),
             ),
           ),
         ),

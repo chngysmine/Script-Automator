@@ -9,8 +9,6 @@ import 'package:script_automator/features/dashboard/presentation/pages/gallery_p
 import 'package:script_automator/features/dashboard/presentation/pages/profile_page.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_dock.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/new_script_dialog.dart';
-import 'package:script_automator/features/docs/presentation/pages/api_docs_page.dart';
-import 'package:script_automator/features/docs/presentation/pages/widget_schema_page.dart';
 
 import 'package:get_it/get_it.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
@@ -80,32 +78,6 @@ class AppShellState extends State<AppShell> {
       extendBodyBehindAppBar: true,
       extendBody: true,
       backgroundColor: LiquidTheme.darkBackground,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text('Script Automator'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.menu_book_rounded),
-            onPressed: () {
-              Navigator.push(
-                context,
-                LiquidPageRoute(page: const ApiDocsPage()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.schema_rounded),
-            onPressed: () {
-              Navigator.push(
-                context,
-                LiquidPageRoute(page: const WidgetSchemaPage()),
-              );
-            },
-          ),
-        ],
-      ),
-
       body: Stack(
         children: [
           const Positioned.fill(child: MeshGradientBackground()),

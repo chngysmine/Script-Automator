@@ -1,6 +1,8 @@
 import 'dart:ui';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:script_automator/features/dashboard/presentation/widgets/install_progress_dialog.dart';
 
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
@@ -711,147 +713,136 @@ class _GalleryPageState extends State<GalleryPage> {
     if (!mounted) return;
 
     if (!url.startsWith('https://')) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Only HTTPS URLs are allowed for security.'),
-            backgroundColor: Colors.red.shade700,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+      showDialog(
+        context: context,
+        builder: (context) => InstallProgressDialog(
+          scriptName: 'Import from URL',
+          installTask: (updateProgress) async {
+            throw Exception('Only HTTPS URLs are allowed for security.');
+          },
+        ),
+      );
       return;
     }
 
-    try {
-      final gitService = GitService();
-      final content = await gitService.downloadScript(url);
+    final name = url
+        .split('/')
+        .last
+        .replaceAll('.js', '')
+        .replaceAll('.json', '');
 
-      final name = url
-          .split('/')
-          .last
-          .replaceAll('.js', '')
-          .replaceAll('.json', '');
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => InstallProgressDialog(
+        scriptName: name,
+        installTask: (updateProgress) async {
+          updateProgress('Downloading remote script...');
+          final gitService = GitService();
+          final content = await gitService.downloadScript(url);
 
-      if (mounted) {
-        final item = {
-          'name': name,
-          'content': content,
-          'description': 'Imported from $url',
-        };
-        await _installScript(context, item);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Import failed: $e'),
-            backgroundColor: Colors.red.shade700,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    }
+          updateProgress('Registering widget local storage...');
+          final script = Script(
+            id: 'gallery_${name.toLowerCase().replaceAll(' ', '_')}',
+            name: name,
+            content: content,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+            settings: {
+              'gallery_id': name.toLowerCase().replaceAll(' ', '_'),
+              'gallery_version': '1.0.0',
+              'gallery_script_url': url,
+              'is_modified_from_gallery': false,
+            },
+          );
+          final repo = GetIt.I<ScriptRepository>();
+          await repo.saveScript(script);
+        },
+      ),
+    );
   }
 
   Future<void> _installScript(
     BuildContext context,
     Map<String, dynamic> item,
   ) async {
+    final name = item['name'] ?? 'Untitled';
+
     // Block installs during maintenance mode
     if (GetIt.I.isRegistered<AppConfigService>() &&
         GetIt.I<AppConfigService>().maintenanceMode) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Gallery is in maintenance mode. Installations are temporarily disabled.'),
-            backgroundColor: Colors.orange.shade700,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-      return;
-    }
-
-    final name = item['name'] ?? 'Untitled';
-    final existingContent = item['content'] ?? '';
-    final scriptUrl = item['scriptUrl'] ?? '';
-
-    String finalContent = existingContent;
-
-    if (finalContent.isEmpty && scriptUrl.isNotEmpty) {
-      try {
-        final response = await http
-            .get(Uri.parse(scriptUrl))
-            .timeout(const Duration(seconds: 15));
-        if (response.statusCode == 200) {
-          finalContent = response.body;
-        } else {
-          throw Exception('HTTP ${response.statusCode}');
-        }
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to download "$name": $e'),
-              backgroundColor: Colors.red.shade700,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
-        return;
-      }
-    }
-
-    if (finalContent.isEmpty) {
-      finalContent =
-          '// $name\n// Installed from Gallery\n\n// Script content not available offline.';
-    }
-
-    // SHA-256 integrity check for remotely downloaded scripts
-    final expectedHash = item['sha256'] as String?;
-    final hasRemoteSource = scriptUrl.isNotEmpty && finalContent != existingContent;
-    if (hasRemoteSource && !ScriptIntegrityChecker.verify(finalContent, expectedHash)) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('⚠️ Script integrity check FAILED — possible tampering detected. Installation aborted.'),
-            backgroundColor: Colors.red.shade700,
-            duration: const Duration(seconds: 6),
-          ),
-        );
-      }
-      return;
-    }
-
-    final galleryId =
-        item['id'] ?? name.toLowerCase().replaceAll(' ', '_');
-    final galleryVersion = item['version'] ?? '1.0.0';
-
-    final repo = GetIt.I<ScriptRepository>();
-    final script = Script(
-      id: 'gallery_${name.toLowerCase().replaceAll(' ', '_')}',
-      name: name,
-      content: finalContent,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-      settings: {
-        'gallery_id': galleryId,
-        'gallery_version': galleryVersion,
-        'gallery_script_url': scriptUrl,
-        'is_modified_from_gallery': false,
-      },
-    );
-    await repo.saveScript(script);
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ "$name" installed successfully!'),
-          backgroundColor: Colors.green.shade700,
-          duration: const Duration(seconds: 3),
+      showDialog(
+        context: context,
+        builder: (context) => InstallProgressDialog(
+          scriptName: name,
+          installTask: (updateProgress) async {
+            throw Exception('Gallery is in maintenance mode. Installations are disabled.');
+          },
         ),
       );
+      return;
     }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => InstallProgressDialog(
+        scriptName: name,
+        installTask: (updateProgress) async {
+          final existingContent = item['content'] ?? '';
+          final scriptUrl = item['scriptUrl'] ?? '';
+
+          String finalContent = existingContent;
+
+          if (finalContent.isEmpty && scriptUrl.isNotEmpty) {
+            updateProgress('Connecting to store storage...');
+            final response = await http
+                .get(Uri.parse(scriptUrl))
+                .timeout(const Duration(seconds: 15));
+            if (response.statusCode == 200) {
+              finalContent = utf8.decode(response.bodyBytes);
+            } else {
+              throw Exception('Server returned HTTP ${response.statusCode}');
+            }
+          }
+
+          if (finalContent.isEmpty) {
+            finalContent =
+                '// $name\n// Installed from Gallery\n\n// Script content not available offline.';
+          }
+
+          // SHA-256 integrity check for remotely downloaded scripts
+          final expectedHash = item['sha256'] as String?;
+          final hasRemoteSource = scriptUrl.isNotEmpty && finalContent != existingContent;
+          if (hasRemoteSource) {
+            updateProgress('Verifying script integrity...');
+            if (!ScriptIntegrityChecker.verify(finalContent, expectedHash)) {
+              throw Exception('Script integrity check failed (SHA-256 mismatch). possible tampering detected.');
+            }
+          }
+
+          updateProgress('Registering widget local storage...');
+          final galleryId =
+              item['id'] ?? name.toLowerCase().replaceAll(' ', '_');
+          final galleryVersion = item['version'] ?? '1.0.0';
+
+          final repo = GetIt.I<ScriptRepository>();
+          final script = Script(
+            id: 'gallery_${name.toLowerCase().replaceAll(' ', '_')}',
+            name: name,
+            content: finalContent,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+            settings: {
+              'gallery_id': galleryId,
+              'gallery_version': galleryVersion,
+              'gallery_script_url': scriptUrl,
+              'is_modified_from_gallery': false,
+            },
+          );
+          await repo.saveScript(script);
+        },
+      ),
+    );
   }
 }

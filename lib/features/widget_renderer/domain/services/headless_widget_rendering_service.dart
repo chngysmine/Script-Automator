@@ -23,9 +23,8 @@ class HeadlessWidgetRenderingService {
       final directory = await getSharedDirectory();
       await _cleanupOldCache(directory);
 
-      // Parse and re-serialize to validate JSON structure
       final jsonMap = jsonDecode(jsonString);
-      final rootMap = {'family': family, 'root': jsonMap};
+      final rootMap = {'family': family, 'scriptId': scriptId, 'root': jsonMap};
       final sanitizedMap = _sanitizeForJson(rootMap);
       final jsonPayload = jsonEncode(sanitizedMap);
 
@@ -80,7 +79,7 @@ class HeadlessWidgetRenderingService {
       );
 
       final jsonFile = File('${directory.path}/sasup_ui_$scriptId.json');
-      final rootMap = {'root': imageNode.toJson()};
+      final rootMap = {'scriptId': scriptId, 'root': imageNode.toJson()};
       final sanitizedMap = _sanitizeForJson(rootMap);
       final jsonPayload = jsonEncode(sanitizedMap);
 

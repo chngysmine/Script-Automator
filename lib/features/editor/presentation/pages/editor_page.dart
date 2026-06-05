@@ -11,7 +11,9 @@ import '../widgets/console_log_widget.dart'; // Enhanced Console
 import '../widgets/editor_app_bar.dart';
 import '../widgets/ai_generate_sheet.dart';
 import '../widgets/ai_onboarding_dialog.dart';
+import '../widgets/draggable_ai_fab.dart';
 import '../../../../features/dashboard/presentation/widgets/publish_script_sheet.dart';
+
 import '../widgets/editor_constants.dart';
 import '../syntax_highlighter.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
@@ -26,6 +28,9 @@ import 'package:script_automator/features/widget_renderer/presentation/widgets/s
 import 'package:script_automator/features/widget_renderer/domain/services/headless_widget_rendering_service.dart';
 import 'package:script_automator/features/editor/domain/editor_history.dart';
 import 'package:script_automator/features/dashboard/data/services/user_stats_service.dart';
+import 'package:script_automator/features/docs/presentation/pages/api_docs_page.dart';
+import 'package:script_automator/features/docs/presentation/pages/widget_schema_page.dart';
+import 'package:script_automator/core/theme/liquid_page_route.dart';
 
 class EditorPage extends StatefulWidget {
   final Script? script;
@@ -36,7 +41,7 @@ class EditorPage extends StatefulWidget {
 }
 
 class _EditorPageState extends State<EditorPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late CodeForgeController _controller;
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _verticalController = ScrollController();
@@ -57,6 +62,12 @@ class _EditorPageState extends State<EditorPage>
   final ScriptRunnerService _runnerService = GetIt.I<ScriptRunnerService>();
   StreamSubscription<String>? _logSubscription;
   StreamSubscription<String>? _renderSubscription;
+  
+  final ValueNotifier<WidgetNode?> _previewNodeNotifier = ValueNotifier<WidgetNode?>(null);
+  final ValueNotifier<String> _previewFamilyNotifier = ValueNotifier<String>('medium');
+  Offset? _aiFabPosition;
+  late AnimationController _snapController;
+  Animation<Offset>? _snapAnimation;
 
   @override
   void initState() {
@@ -72,6 +83,11 @@ class _EditorPageState extends State<EditorPage>
       curve: Curves.easeOutQuart,
     );
     _animController.forward();
+
+    _snapController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
 
     _initScriptContent();
 
@@ -220,57 +236,270 @@ class _EditorPageState extends State<EditorPage>
     _verticalController.dispose();
     _focusNode.dispose();
     _animController.dispose();
+    _snapController.dispose();
     _logSubscription?.cancel();
     _renderSubscription?.cancel();
+    _previewNodeNotifier.dispose();
+    _previewFamilyNotifier.dispose();
     super.dispose();
   }
 
-  void _showLivePreview(String jsonString) {
-    try {
-      final nodeMap = jsonDecode(jsonString);
-      final node = WidgetNode.fromJson(nodeMap as Map<String, dynamic>);
+  void _showDocsSheet(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-      showDialog(
-        context: context,
-        builder: (context) => Center(
-          child: Container(
-            margin: const EdgeInsets.all(24),
-            constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(32),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  blurRadius: 30,
-                  offset: const Offset(0, 15),
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return ClipRRect(
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? LiquidTheme.darkBackground.withValues(alpha: 0.8)
+                    : Colors.white.withValues(alpha: 0.85),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
                 ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(32),
-              child: Stack(
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SasupRenderer(node: node),
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: IconButton.filled(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.black26,
-                        foregroundColor: Colors.white,
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: colors.divider,
+                        borderRadius: BorderRadius.circular(10),
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Documentation',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: colors.textTitle,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Choose the reference guide you want to read.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: colors.textCaption,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildDocOption(
+                    context,
+                    title: 'API Reference',
+                    description: 'Explore every built-in scripting API with examples.',
+                    icon: Icons.menu_book_rounded,
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        LiquidPageRoute(page: const ApiDocsPage()),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _buildDocOption(
+                    context,
+                    title: 'Widget Schema',
+                    description: 'Learn the SASUP JSON structure used to build native widgets.',
+                    icon: Icons.schema_rounded,
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        LiquidPageRoute(page: const WidgetSchemaPage()),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDocOption(
+    BuildContext context, {
+    required String title,
+    required String description,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colors.cardBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colors.cardBorder),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: LiquidTheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                color: LiquidTheme.primary,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: colors.textTitle,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.textBody,
+                      height: 1.3,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: colors.textCaption,
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
+
+  void _showLivePreview(String renderPayload) {
+    try {
+      final envelope = jsonDecode(renderPayload) as Map<String, dynamic>;
+      final jsonString = envelope['payload'] as String;
+      final family = envelope['family'] as String? ?? 'medium';
+
+      final nodeMap = jsonDecode(jsonString);
+      final node = WidgetNode.fromJson(nodeMap as Map<String, dynamic>);
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        final isShowing = _previewNodeNotifier.value != null;
+        _previewFamilyNotifier.value = family;
+        _previewNodeNotifier.value = node;
+
+        if (!isShowing) {
+          showDialog(
+            context: context,
+            barrierDismissible: true,
+            builder: (dialogContext) => Center(
+              child: Container(
+                margin: const EdgeInsets.all(24),
+                constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 30,
+                      offset: const Offset(0, 15),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(32),
+                  child: Stack(
+                    children: [
+                      ValueListenableBuilder<WidgetNode?>(
+                        valueListenable: _previewNodeNotifier,
+                        builder: (context, activeNode, _) {
+                          if (activeNode == null) return const SizedBox.shrink();
+                          return ValueListenableBuilder<String>(
+                            valueListenable: _previewFamilyNotifier,
+                            builder: (context, activeFamily, _) {
+                              return SasupRenderer(
+                                node: activeNode,
+                                family: activeFamily,
+                                onActionTriggered: (actionId) {
+                                  final scriptId = widget.script?.id ?? 'manual_run';
+                                  _runnerService.triggerWidgetAction(
+                                    scriptId,
+                                    actionId,
+                                    fallbackScriptContent: _controller.text,
+                                  );
+                                },
+                              );
+                            },
+                          );
+                        },
+                      ),
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: IconButton.filled(
+                          onPressed: () => Navigator.pop(dialogContext),
+                          icon: const Icon(Icons.close),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.black26,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ).then((_) {
+            // Reset notifier when dialog is dismissed
+            _previewNodeNotifier.value = null;
+          });
+        }
+      });
     } catch (e) {
       debugPrint("Preview Error: $e");
+      _runnerService.addSystemLog("[SEVERE] Live Preview Error: $e");
     }
   }
 
@@ -360,7 +589,17 @@ class _EditorPageState extends State<EditorPage>
 
   @override
   Widget build(BuildContext context) {
-    final double bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final mediaQuery = MediaQuery.of(context);
+    final double bottomInset = mediaQuery.viewInsets.bottom;
+    final screenWidth = mediaQuery.size.width;
+    final screenHeight = mediaQuery.size.height;
+
+    // Default position: bottom right, above keyboard toolbar
+    _aiFabPosition ??= Offset(
+      screenWidth - 72.0, // 56px FAB + 16px padding
+      screenHeight - 220.0, // above bottom toolbar/console
+    );
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final editorBg = isDark
         ? LiquidTheme.darkBackground
@@ -414,29 +653,16 @@ class _EditorPageState extends State<EditorPage>
                   isSaving: _isSaving,
                   onBack: () => Navigator.pop(context),
                   onPlay: _runScript,
-                  onPublish: () {
-                    if (widget.script != null) {
-                      PublishScriptSheet.show(
-                        context, 
-                        widget.script!.copyWith(
-                          content: _controller.text, 
-                          settings: widget.script!.settings,
-                        ),
-                      );
-                    }
+                  onDocsTap: () => _showDocsSheet(context),
+                  onPublish: widget.script == null ? null : () {
+                    PublishScriptSheet.show(
+                      context, 
+                      widget.script!.copyWith(
+                        content: _controller.text, 
+                        settings: widget.script!.settings,
+                      ),
+                    );
                   },
-                  onAiTap: () async {
-                    if (CodeForgeController.activeAiProvider == null) {
-                      if (context.mounted) {
-                        await showAiOnboardingDialog(context);
-                      }
-                      if (CodeForgeController.activeAiProvider == null) return;
-                    }
-                    await _controller.triggerGhostText();
-                    HapticFeedback.lightImpact();
-                  },
-                  onAiLongPress: () => showAiOnboardingDialog(context),
-                  onAiGenerate: () => _showAiGenerateSheet(context),
                 ),
                 Expanded(
                   child: FadeTransition(
@@ -620,6 +846,40 @@ class _EditorPageState extends State<EditorPage>
               onRedo: _handleRedo,
             ),
           ),
+
+          // 4. Draggable Floating AI Button
+          if (_aiFabPosition != null)
+            Positioned(
+              left: _aiFabPosition!.dx,
+              top: _aiFabPosition!.dy,
+              child: GestureDetector(
+                onPanUpdate: (details) {
+                  _snapController.stop();
+                  setState(() {
+                    double newX = _aiFabPosition!.dx + details.delta.dx;
+                    double newY = _aiFabPosition!.dy + details.delta.dy;
+                    
+                    newX = newX.clamp(-10.0, screenWidth - 46.0);
+                    final double topLimit = mediaQuery.padding.top + 76.0;
+                    newY = newY.clamp(topLimit, screenHeight - 72.0 - mediaQuery.padding.bottom);
+                    
+                    _aiFabPosition = Offset(newX, newY);
+                  });
+                },
+                onPanEnd: (details) {
+                  _snapToEdge(
+                    _aiFabPosition!,
+                    screenWidth,
+                    screenHeight,
+                    mediaQuery.padding.bottom,
+                  );
+                },
+                child: DraggableAiFab(
+                  onTap: () => _showAiGenerateSheet(context),
+                  onLongPress: () => showAiOnboardingDialog(context),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -653,6 +913,37 @@ class _EditorPageState extends State<EditorPage>
     _isUndoRedoAction = false;
     
     // _controller.setText already triggers CustomPaint rebuild via Listenable
+  }
+
+  void _snapToEdge(Offset currentPosition, double screenWidth, double screenHeight, double bottomPadding) {
+    final double leftTarget = 16.0;
+    final double rightTarget = screenWidth - 72.0;
+    
+    final double targetX = (currentPosition.dx < screenWidth / 2) ? leftTarget : rightTarget;
+    final double topLimit = MediaQuery.of(context).padding.top + 76.0;
+    final double targetY = currentPosition.dy.clamp(topLimit, screenHeight - 72.0 - bottomPadding);
+    
+    final Offset targetPosition = Offset(targetX, targetY);
+    
+    _snapAnimation = Tween<Offset>(
+      begin: currentPosition,
+      end: targetPosition,
+    ).animate(CurvedAnimation(
+      parent: _snapController,
+      curve: Curves.easeOutBack,
+    ));
+    
+    _snapController.removeListener(_onSnapTick);
+    _snapController.addListener(_onSnapTick);
+    _snapController.forward(from: 0.0);
+  }
+
+  void _onSnapTick() {
+    if (_snapAnimation != null) {
+      setState(() {
+        _aiFabPosition = _snapAnimation!.value;
+      });
+    }
   }
 
   // Minimal Pill (Generic System Status)
@@ -803,6 +1094,12 @@ class _EditorPageState extends State<EditorPage>
   // ────────────────────── AI Code Generation Sheet ──────────────────────
 
   Future<void> _showAiGenerateSheet(BuildContext ctx) async {
+    final openai = GetIt.I<OpenAIService>();
+    if (!openai.isReady) {
+      await showAiOnboardingDialog(ctx);
+      return;
+    }
+
     final isDark = Theme.of(ctx).brightness == Brightness.dark;
     final colors = Theme.of(ctx).extension<LiquidColors>()!;
 
@@ -814,16 +1111,7 @@ class _EditorPageState extends State<EditorPage>
         return AiGenerateSheetContent(
           isDark: isDark,
           colors: colors,
-          onGenerate: (prompt) async {
-            final openai = GetIt.I<OpenAIService>();
-            if (!openai.isReady) {
-              return null; // signal to show onboarding
-            }
-            return openai.generateCode(
-              prompt,
-              existingCode: _inputController.text,
-            );
-          },
+          editorCode: _inputController.text,
         );
       },
     );
@@ -831,22 +1119,7 @@ class _EditorPageState extends State<EditorPage>
     // Handle result after sheet is fully dismissed
     if (generatedCode == null) return;
 
-    // Check if we need to show onboarding (special sentinel)
-    if (generatedCode == '__NEED_ONBOARDING__' && mounted) {
-      await showAiOnboardingDialog(context);
-      return;
-    }
-
     if (!mounted) return;
-
-    // Detect error responses from AI and show snackbar instead of polluting editor
-    if (generatedCode.startsWith('// Error')) {
-      final errorMsg = generatedCode
-          .replaceFirst('// Error generating code: ', '')
-          .replaceFirst('// Error: ', '');
-      debugPrint('AI Error: $errorMsg');
-      return;
-    }
 
     if (generatedCode.isNotEmpty) {
       // AI always returns the complete script (whether new, fixed, or modified)
@@ -859,7 +1132,6 @@ class _EditorPageState extends State<EditorPage>
       _onTextChanged();
       // _controller.setText already triggers CustomPaint rebuild via Listenable
       HapticFeedback.mediumImpact();
-
     }
   }
 

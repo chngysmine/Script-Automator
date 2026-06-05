@@ -11,9 +11,7 @@ class EditorAppBar extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onPlay;
   final VoidCallback? onPublish;
-  final VoidCallback onAiTap;
-  final VoidCallback onAiLongPress;
-  final VoidCallback? onAiGenerate;
+  final VoidCallback onDocsTap;
 
   const EditorAppBar({
     super.key,
@@ -22,9 +20,7 @@ class EditorAppBar extends StatelessWidget {
     required this.onBack,
     required this.onPlay,
     this.onPublish,
-    required this.onAiTap,
-    required this.onAiLongPress,
-    this.onAiGenerate,
+    required this.onDocsTap,
   });
 
   @override
@@ -109,17 +105,14 @@ class EditorAppBar extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // AI Code Generate (replaces old gear/settings icon)
                     _buildActionButton(
                       context,
-                      Icons.auto_awesome_rounded,
-                      onAiGenerate ?? onAiTap,
-                      onLongPress: onAiLongPress,
-                      isHighlight: true,
-                      tooltip: "AI Generate",
+                      Icons.menu_book_rounded,
+                      onDocsTap,
+                      tooltip: "Documentation",
                       iconColor: iconDefaultColor,
-                      highlightColor: LiquidTheme.secondary,
                     ),
+
                     const SizedBox(width: 8),
                     if (onPublish != null) ...[
                       _buildActionButton(

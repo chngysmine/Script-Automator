@@ -17,6 +17,18 @@ abstract class WidgetNode with _$WidgetNode {
     SASUPAction? action,
   }) = _WidgetNode;
 
-  factory WidgetNode.fromJson(Map<String, dynamic> json) =>
-      _$WidgetNodeFromJson(json);
+  factory WidgetNode.fromJson(Map<String, dynamic> json) {
+    // Process button label to content
+    if (json['type'] == 'button' && json['label'] != null && json['content'] == null) {
+      json['content'] = json['label'];
+    }
+    // Process actionId to action object
+    if (json['actionId'] != null && json['action'] == null) {
+      json['action'] = {
+        'type': 'widget_action',
+        'payload': {'actionId': json['actionId']}
+      };
+    }
+    return _$WidgetNodeFromJson(json);
+  }
 }

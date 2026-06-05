@@ -62,19 +62,29 @@ struct UniversalWidgetView: View {
                 }
             }
         case "button":
+            let textStr = node.label ?? node.content ?? ""
+            let buttonContent = Text(textStr)
+                .font(parseFont(node.modifiers, family: family))
+                .foregroundColor(ColorParser.parse(node.modifiers?.color ?? "#FFFFFF"))
+                .fontWeight(parseWeight(node.modifiers?.font))
+            
+            let actId = node.actionId ?? node.action?.actionId
+            let scrId = scriptId ?? node.action?.scriptId
+            let _ = NSLog("UniversalWidgetView debug: textStr=%@, actionId=%@, scriptId=%@", textStr, actId ?? "nil", scrId ?? "nil")
+            
             if #available(iOS 17.0, macOS 14.0, watchOS 10.0, *),
-               let actionId = node.actionId ?? node.action?.actionId,
-               let scriptId = scriptId ?? node.action?.scriptId {
+               let actionId = actId,
+               let scriptId = scrId {
                 let intent = WidgetInteractionIntent(scriptId: scriptId, actionId: actionId)
                 applyModifiers(node.modifiers, isRoot: isRoot) {
                     Button(intent: intent) {
-                        Text(node.label ?? node.content ?? "")
+                        buttonContent
                     }
                     .buttonStyle(.plain)
                 }
             } else {
                 applyModifiers(node.modifiers, isRoot: isRoot) {
-                    Text(node.label ?? node.content ?? "")
+                    buttonContent
                 }
             }
         case "text":

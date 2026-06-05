@@ -30,7 +30,7 @@ class FirestoreSyncService {
   Future<void> pushLocalToCloud(String uid) async {
     try {
       final repo = GetIt.I<ScriptRepository>();
-      final result = await repo.getScripts();
+      final result = await repo.getScriptsWithContent();
 
       await result.fold(
         (failure) async {
@@ -87,7 +87,7 @@ class FirestoreSyncService {
   Future<void> syncBidirectional(String uid) async {
     try {
       final repo = GetIt.I<ScriptRepository>();
-      final localResult = await repo.getScripts();
+      final localResult = await repo.getScriptsWithContent();
 
       final localScripts = localResult.fold(
         (failure) => <Script>[],

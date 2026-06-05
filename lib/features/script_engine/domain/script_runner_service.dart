@@ -48,6 +48,11 @@ class ScriptRunnerService {
   /// Stream of logs and results from the JS Engine.
   Stream<String> get logs => _logController.stream;
 
+  /// Public entry point to add manual system logs.
+  void addSystemLog(String message) {
+    _logController.add(message);
+  }
+
   /// Stream of SASUP JSON strings for live preview.
   Stream<String> get renderRequests => _renderController.stream;
 
@@ -256,6 +261,7 @@ class ScriptRunnerService {
 
     // Context for current execution
     String? currentScriptId;
+    String currentWidgetFamily = 'medium';
 
     // 5. Initialize Sequence
     Future<void> initializeAll() async {
@@ -303,28 +309,49 @@ class ScriptRunnerService {
           logger.info("[JS stdout] $message");
         });
 
-        // Binding 2: Render Widget (Headless)
-        engine.registerGlobalFunction('renderWidget', (jsonString) {
-          logger.info("JS requested renderWidget (Proxying to Main)");
-          if (currentScriptId == null) {
-            logger.warning(
-              "renderWidget called without active scriptId context",
-            );
-            return "error_no_context";
-          }
-          String family = 'medium';
+        engine.registerGlobalFunction('__native_setFamily', (family) {
+          currentWidgetFamily = family.toString();
+          return "ok";
+        });
+
+        engine.registerGlobalFunction('renderWidget', (jsonPayload) {
           try {
-            family = engine.evaluate('Widget.getFamily()').toString();
-          } catch (e) {
-            // fallback gracefully
+            logger.info("[JS binding] renderWidget called. Payload type: ${jsonPayload.runtimeType}");
+            if (currentScriptId == null) {
+              logger.warning(
+                "[JS binding] renderWidget called without active scriptId context",
+              );
+              return "error_no_context";
+            }
+            final family = currentWidgetFamily;
+            logger.info("[JS binding] Using active widget family: $family");
+
+            dynamic payloadToSend = jsonPayload;
+            if (jsonPayload is! String) {
+              try {
+                payloadToSend = jsonEncode(jsonPayload);
+                logger.info("[JS binding] Encoded object payload to string (Length: ${payloadToSend.length})");
+              } catch (e) {
+                logger.severe("[JS binding] Failed to serialize renderWidget payload: $e");
+                return "error_invalid_payload";
+              }
+            } else {
+              logger.info("[JS binding] Payload is already a String (Length: ${jsonPayload.length})");
+            }
+
+            mainSendPort.send({
+              'type': 'sys_render',
+              'payload': payloadToSend,
+              'family': family,
+              'scriptId': currentScriptId,
+            });
+            logger.info("[JS binding] Message sent to mainSendPort");
+            return "queued_for_render";
+          } catch (e, stack) {
+            print("ERROR IN renderWidget: $e\n$stack");
+            logger.severe("ERROR IN renderWidget: $e\n$stack");
+            return "error_exception";
           }
-          mainSendPort.send({
-            'type': 'sys_render',
-            'payload': jsonString,
-            'family': family,
-            'scriptId': currentScriptId,
-          });
-          return "queued_for_render";
         });
 
         engine.registerGlobalFunction('__native_setTimeout', (argsJson) {
@@ -332,12 +359,17 @@ class ScriptRunnerService {
             final args = jsonDecode(argsJson as String);
             final id = args['id'] as int;
             final delay = args['delay'] as int;
+            final timerScriptId = currentScriptId;
             activeTimers[id] = Timer(Duration(milliseconds: delay), () {
               activeTimers.remove(id);
+              final oldScriptId = currentScriptId;
+              currentScriptId = timerScriptId;
               try {
                 engine.evaluate('__fireTimer($id);');
               } catch (e) {
                 logger.severe("Error running timeout $id: $e");
+              } finally {
+                currentScriptId = oldScriptId;
               }
             });
           } catch (e) {
@@ -351,11 +383,16 @@ class ScriptRunnerService {
             final args = jsonDecode(argsJson as String);
             final id = args['id'] as int;
             final delay = args['delay'] as int;
+            final timerScriptId = currentScriptId;
             activeTimers[id] = Timer.periodic(Duration(milliseconds: delay), (timer) {
+              final oldScriptId = currentScriptId;
+              currentScriptId = timerScriptId;
               try {
                 engine.evaluate('__fireTimer($id);');
               } catch (e) {
                 logger.severe("Error running interval $id: $e");
+              } finally {
+                currentScriptId = oldScriptId;
               }
             });
           } catch (e) {
@@ -548,20 +585,26 @@ class ScriptRunnerService {
             }
           } finally {
             currentScriptId = null; // Clear context
+            currentWidgetFamily = 'medium'; // Reset to default
           }
         } else if (command == 'response') {
           // Handle asynchronous response from main isolate
           final requestId = message['requestId'];
           final responseString = message['response'] as String;
+          final responseScriptId = message['scriptId']?.toString();
           logger.info("Injecting async response for reqId: $requestId");
 
           // Safely escape the JSON string for evaluation in JS
           final escapedJson = jsonEncode(responseString);
           
+          final oldScriptId = currentScriptId;
+          currentScriptId = responseScriptId;
           try {
             engine.evaluate('__resolve_async_task($requestId, $escapedJson);');
           } catch (e) {
             logger.severe("Error resolving async promise: $e");
+          } finally {
+            currentScriptId = oldScriptId;
           }
         } else if (command == 'widget_action') {
           final scriptId = message['scriptId']?.toString();
@@ -569,13 +612,15 @@ class ScriptRunnerService {
           final script = message['script']?.toString();
           if (scriptId != null && actionId != null) {
             try {
+              // Set the active scriptId context before executing the action callback or script
+              currentScriptId = scriptId;
+
               final isRegistered = engine.evaluate(
                 "(function(){ return (Widget._actionHandlers && typeof Widget._actionHandlers['$actionId'] === 'function') ? 'true' : 'false'; })();"
               ).toString() == 'true';
 
               if (!isRegistered && script != null && script.isNotEmpty) {
                 logger.info("Widget action handler $actionId not registered. Running script $scriptId first.");
-                currentScriptId = scriptId;
                 final wrappedScript = '''
                   (function() {
                     $script
@@ -598,6 +643,7 @@ class ScriptRunnerService {
               logger.severe('Error handling widget action: $e');
             } finally {
               currentScriptId = null;
+              currentWidgetFamily = 'medium';
             }
           }
         } else if (command == 'shutdown') {
@@ -662,6 +708,7 @@ class ScriptRunnerService {
         }
         return;
       }
+      _logController.add("[Main Isolate] Received sys_message: $type");
       print("Main Isolate received sys_message: $type");
       if (type == 'sys_render') {
         _handleRenderRequest(message['payload'], message['family'], message['scriptId']);
@@ -735,13 +782,22 @@ class ScriptRunnerService {
   /// Uses **Native JSON Passthrough**: saves the raw SASUP JSON directly to
   /// shared storage so iOS SwiftUI and Android Glance render native components
   /// (text, gradients, icons) instead of a static PNG bitmap.
-  Future<void> _handleRenderRequest(String jsonString, String? family, String? scriptId) async {
+  Future<void> _handleRenderRequest(dynamic jsonInput, String? family, String? scriptId) async {
     try {
+      final String jsonString = jsonInput is String ? jsonInput : jsonEncode(jsonInput);
+      _logController.add("[Main Isolate] _handleRenderRequest parsed JSON string (Length: ${jsonString.length})");
       print("Main Isolate: Received Render Request for $scriptId, family: $family");
-      _renderController.add(jsonString); // Broadcast for Live Preview
+      
+      final renderPayload = jsonEncode({
+        'payload': jsonString,
+        'family': family ?? 'medium',
+      });
+      _renderController.add(renderPayload); // Broadcast for Live Preview
+      _logController.add("[Main Isolate] Broadcasted JSON envelope to _renderController");
 
       if (scriptId == null) throw Exception("Missing scriptId for render");
 
+      _logController.add("[Main Isolate] Calling headlessService.renderNativeJson...");
       final headlessService = GetIt.I<HeadlessWidgetRenderingService>();
 
       // Use Native JSON Passthrough (preferred) instead of PNG rasterization
@@ -806,6 +862,33 @@ class ScriptRunnerService {
       debugPrint('[WidgetAction] Pending action poll failed: $e');
     }
   }
+
+  Future<void> triggerWidgetAction(
+    String scriptId,
+    String actionId, {
+    String? fallbackScriptContent,
+  }) async {
+    try {
+      String script = fallbackScriptContent ?? '';
+      if (script.isEmpty) {
+        final localDataSource = GetIt.I<ScriptLocalDataSource>();
+        script = await localDataSource.getScriptContent(scriptId);
+      }
+
+      if (_engineIsolate == null) await initialize();
+      await _initCompleter!.future;
+
+      _toEnginePort?.send({
+        'command': 'widget_action',
+        'scriptId': scriptId,
+        'actionId': actionId,
+        'script': script,
+      });
+    } catch (e) {
+      debugPrint('[WidgetAction] Trigger widget action failed: $e');
+    }
+  }
+
 
   /// Disposes the service, gracefully shuts down the engine, and kills the isolate.
   void dispose() {

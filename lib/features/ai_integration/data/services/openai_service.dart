@@ -265,4 +265,74 @@ class OpenAIService {
       return '// Error generating code: $e';
     }
   }
+
+  /// Generates a response for a back-and-forth conversation history.
+  /// @param messages A list of maps representing the conversation history:
+  ///   e.g. [{'role': 'user', 'content': 'Hello'}, {'role': 'assistant', 'content': 'Hi'}]
+  /// @param existingCode Optional current editor content for context
+  /// @return `Future<String?>` AI response text
+  Future<String?> chatWithAi(List<Map<String, String>> messages, {String? existingCode}) async {
+    if (!_isConfigured) return 'Error: AI Service not ready.';
+
+    try {
+      final systemContent = "You are an expert AI JavaScript coding assistant inside the Script Automator mobile IDE. "
+          "You are chatting with a developer who is working on a script. "
+          "The user's current editor code is provided below for context (if any). "
+          "RULES:\n"
+          "1. Assist the developer by writing, fixing, or modifying JavaScript code.\n"
+          "2. You can explain your changes and converse naturally like a helpful teammate.\n"
+          "3. When you present code, ALWAYS wrap it in standard markdown code blocks (e.g. ```javascript ... ```). "
+          "This is CRITICAL because the chat UI will render it and show an 'Apply Code' button for the developer.\n"
+          "4. Keep explanations clear, professional, and concise.\n"
+          "5. Available APIs: console.log(), setTimeout(), JSON.parse/stringify(), fetch(), and renderWidget(json) for widget UI rendering.\n"
+          "Current editor code context:\n"
+          "```javascript\n${existingCode ?? '// No code in editor'}\n```";
+
+      final List<Map<String, String>> apiMessages = [
+        {'role': 'system', 'content': systemContent},
+        ...messages
+      ];
+
+      String? text;
+
+      if (_isUsingCustomKey) {
+        final sdkMessages = apiMessages.map((msg) {
+          final role = msg['role'] == 'system'
+              ? OpenAIChatMessageRole.system
+              : msg['role'] == 'assistant'
+                  ? OpenAIChatMessageRole.assistant
+                  : OpenAIChatMessageRole.user;
+          return OpenAIChatCompletionChoiceMessageModel(
+            role: role,
+            content: [OpenAIChatCompletionChoiceMessageContentItemModel.text(msg['content'] ?? '')],
+          );
+        }).toList();
+
+        final completion = await OpenAI.instance.chat.create(
+          model: _currentModel,
+          messages: sdkMessages,
+          temperature: 0.5,
+          maxTokens: 2048,
+        );
+        text = completion.choices.first.message.content?.first.text;
+      } else {
+        final callable = FirebaseFunctions.instance.httpsCallable('openAiProxy');
+        final response = await callable.call({
+          'model': _currentModel,
+          'messages': apiMessages,
+          'temperature': 0.5,
+          'max_tokens': 2048
+        });
+        text = response.data['result'] as String?;
+      }
+
+      return text?.trim();
+    } catch (e) {
+      debugPrint("[OpenAIService] Chat failed: $e");
+      return 'Error chatting with AI: $e';
+    }
+  }
 }
+
+
+

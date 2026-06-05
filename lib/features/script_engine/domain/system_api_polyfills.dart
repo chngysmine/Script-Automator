@@ -158,6 +158,9 @@ class SystemAPIPolyfills {
       _actionHandlers: {},
       setFamily: function(family) {
         this._family = family;
+        if (typeof __native_setFamily !== 'undefined') {
+          __native_setFamily(family);
+        }
       },
       getFamily: function() {
         return this._family;

@@ -17,6 +17,11 @@ class ScriptDatabase {
         openDatabase()
     }
 
+    private func ensureDatabaseOpen() {
+        if db != nil { return }
+        openDatabase()
+    }
+
     private func openDatabase() {
         guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupId) else {
             NSLog("ScriptDatabase ERROR: Failed to get App Group container. Check AppGroup entitlements for ID: \(appGroupId)")
@@ -28,6 +33,7 @@ class ScriptDatabase {
         // Open in Read-Only mode for safety in Extension
         if sqlite3_open_v2(dbURL.path, &db, SQLITE_OPEN_READONLY, nil) != SQLITE_OK {
             print("ScriptDatabase: Error opening database")
+            db = nil
         }
     }
 
@@ -38,6 +44,7 @@ class ScriptDatabase {
     }
 
     func getAllScripts() -> [ScriptMetadata] {
+        ensureDatabaseOpen()
         var scripts: [ScriptMetadata] = []
         let queryStatementString = "SELECT id, name, updated_at FROM scripts ORDER BY updated_at DESC;"
         var queryStatement: OpaquePointer?
@@ -64,6 +71,7 @@ class ScriptDatabase {
     }
     
     func getScript(id: String) -> ScriptMetadata? {
+        ensureDatabaseOpen()
         let queryStatementString = "SELECT id, name, updated_at FROM scripts WHERE id = ?;"
         var queryStatement: OpaquePointer?
         

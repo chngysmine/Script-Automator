@@ -6,6 +6,7 @@ import Foundation
 @available(iOS 17.0, macOS 14.0, watchOS 10.0, *)
 struct WidgetInteractionIntent: AppIntent {
     static var title: LocalizedStringResource = "Run Widget Action"
+    static var openAppWhenRun: Bool = true
 
     @Parameter(title: "Script ID")
     var scriptId: String

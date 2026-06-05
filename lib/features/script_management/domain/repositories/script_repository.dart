@@ -18,6 +18,9 @@ abstract class ScriptRepository {
   /// Get all scripts (Metadata only).
   Future<Either<Failure, List<Script>>> getScripts();
 
+  /// Get all scripts with their full content loaded.
+  Future<Either<Failure, List<Script>>> getScriptsWithContent();
+
   /// Get full script content.
   Future<Either<Failure, Script>> getScriptDetail(String id);
 
