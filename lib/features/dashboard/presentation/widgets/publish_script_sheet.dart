@@ -14,12 +14,111 @@ class PublishScriptSheet extends StatefulWidget {
 
   const PublishScriptSheet({super.key, required this.script});
 
-  static Future<void> show(BuildContext context, Script script) {
-    return showModalBottomSheet(
+  static Future<bool?> show(BuildContext context, Script script) {
+    return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => PublishScriptSheet(script: script),
+    );
+  }
+
+  static void showSuccessDialog(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: isDark 
+                    ? LiquidTheme.darkBackground.withValues(alpha: 0.85)
+                    : Colors.white.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: colors.glassBorder),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [LiquidTheme.cyan, LiquidTheme.primary],
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: LiquidTheme.cyan.withValues(alpha: 0.3),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        )
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.favorite_rounded,
+                      color: Colors.white,
+                      size: 36,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    "Thank You for Your Contribution!",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: colors.textTitle,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    "Your script has been submitted for moderation review. Once approved, it will be visible to the community in the Gallery!",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: colors.textCaption,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      height: 48,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [LiquidTheme.cyan, LiquidTheme.primary],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        "Awesome",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -93,7 +192,7 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
       });
 
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {

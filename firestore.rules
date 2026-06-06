@@ -12,7 +12,12 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && (request.auth.token.admin == true || request.auth.token.email == 'chaunganpenny@gmail.com');
+      return isSignedIn() && (request.auth.token.admin == true || (request.auth.token.email == 'chaunganpenny@gmail.com' && request.auth.token.email_verified == true));
+    }
+
+    function isNotBanned() {
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) || 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.is_banned != true;
     }
 
     function validString(field) {
@@ -23,19 +28,25 @@ service cloud.firestore {
     // Users can only read/write their own profile and sub-collections.
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid);
-      allow update: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) && isNotBanned();
+      allow update: if (isOwner(uid) && isNotBanned()) || isAdmin();
       allow delete: if isAdmin();
 
       // Scripts sub-collection — owner full access, admin read-only
       match /scripts/{scriptId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) && isNotBanned();
         allow read: if isAdmin();
+      }
+
+      // Notifications subcollection — owner read/write, admin read/write
+      match /notifications/{notifId} {
+        allow read, write: if isOwner(uid) && isNotBanned();
+        allow read, write: if isAdmin();
       }
 
       // Profile sub-documents
       match /{subcollection=**} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) && isNotBanned();
         allow read: if isAdmin();
       }
     }
@@ -43,7 +54,7 @@ service cloud.firestore {
     // ── Telemetry Logs ────────────────────────────────────────────────
     // Authenticated users can insert logs. Only admins can read/query.
     match /telemetry_logs/{logId} {
-      allow create: if isSignedIn()
+      allow create: if isSignedIn() && isNotBanned()
         && request.resource.data.user_id == request.auth.uid
         && validString(request.resource.data.script_id)
         && validString(request.resource.data.event)
@@ -65,7 +76,7 @@ service cloud.firestore {
     // Authenticated users can submit scripts for review.
     // Admins can approve/reject. Authors can read their own submissions.
     match /gallery_submissions/{subId} {
-      allow create: if isSignedIn()
+      allow create: if isSignedIn() && isNotBanned()
         && validString(request.resource.data.name)
         && validString(request.resource.data.user_id)
         && request.resource.data.user_id == request.auth.uid;
@@ -99,13 +110,13 @@ service cloud.firestore {
     // ── User Profiles (Telemetry Registration) ─────────────────────
     match /user_profiles/{uid} {
       allow read: if isAdmin();
-      allow create, update: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid && isNotBanned();
     }
 
     // ── Widget Stats (Telemetry) ─────────────────────────────────────
     match /widget_stats/{doc} {
       allow read: if isAdmin();
-      allow create: if isSignedIn()
+      allow create: if isSignedIn() && isNotBanned()
         && validString(request.resource.data.script_id)
         && request.resource.data.timestamp == request.time;
     }
@@ -119,6 +130,12 @@ service cloud.firestore {
     match /admin_audit_log/{doc} {
       allow read: if isAdmin();
       allow create: if isAdmin();
+    }
+
+    // ── User Feedback ───────────────────────────────────────────────
+    match /user_feedback/{feedbackId} {
+      allow create: if isSignedIn() && isNotBanned();
+      allow read, update, delete: if isAdmin();
     }
 
     // ── Rate Limits ──────────────────────────────────────────────────

@@ -45,6 +45,7 @@ class _EditorPageState extends State<EditorPage>
   late CodeForgeController _controller;
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _verticalController = ScrollController();
+  final ScrollController _textFieldScrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
   final List<ConsoleLogEntry> _logs = []; // Enhanced log entries
 
@@ -73,6 +74,11 @@ class _EditorPageState extends State<EditorPage>
   void initState() {
     super.initState();
     _controller = CodeForgeController();
+    _textFieldScrollController.addListener(() {
+      if (_textFieldScrollController.offset != 0) {
+        _textFieldScrollController.jumpTo(0);
+      }
+    });
 
     _animController = AnimationController(
       vsync: this,
@@ -148,12 +154,17 @@ class _EditorPageState extends State<EditorPage>
   void _handleTextInput() {
     if (_isUndoRedoAction) return;
     
-    if (_controller.text != _inputController.text) {
-      _controller.setText(_inputController.text);
+    final textChanged = _controller.text != _inputController.text;
+    final selectionChanged = _controller.selection != _inputController.selection;
+
+    if (textChanged || selectionChanged) {
+      if (textChanged) {
+        _controller.setText(_inputController.text);
+        _history.record(_inputController.text, _inputController.selection.baseOffset);
+        _onTextChanged(); // Trigger Debounce Save
+      }
       _controller.selection = _inputController.selection;
-      _history.record(_inputController.text, _inputController.selection.baseOffset);
-      _onTextChanged(); // Trigger Debounce Save
-      setState(() {}); // Trigger rebuild for syntax highlighting update
+      setState(() {}); // Trigger rebuild for syntax highlighting/selection update
     }
   }
 
@@ -234,6 +245,7 @@ class _EditorPageState extends State<EditorPage>
     _controller.dispose();
     _inputController.dispose();
     _verticalController.dispose();
+    _textFieldScrollController.dispose();
     _focusNode.dispose();
     _animController.dispose();
     _snapController.dispose();
@@ -654,14 +666,17 @@ class _EditorPageState extends State<EditorPage>
                   onBack: () => Navigator.pop(context),
                   onPlay: _runScript,
                   onDocsTap: () => _showDocsSheet(context),
-                  onPublish: widget.script == null ? null : () {
-                    PublishScriptSheet.show(
+                  onPublish: widget.script == null ? null : () async {
+                    final success = await PublishScriptSheet.show(
                       context, 
                       widget.script!.copyWith(
                         content: _controller.text, 
                         settings: widget.script!.settings,
                       ),
                     );
+                    if (success == true && context.mounted) {
+                      PublishScriptSheet.showSuccessDialog(context);
+                    }
                   },
                 ),
                 Expanded(
@@ -740,6 +755,8 @@ class _EditorPageState extends State<EditorPage>
                                                       constraints.maxHeight,
                                                   textStyle:
                                                       editorTextStyle,
+                                                  strutStyle: kEditorStrutStyle,
+                                                  textScaler: MediaQuery.textScalerOf(context),
                                                   gutterWidth: 44.0,
                                                   codePaddingLeft: 8.0,
                                                   isDark: isDark,
@@ -764,6 +781,7 @@ class _EditorPageState extends State<EditorPage>
                                               ),
                                               child: TextField(
                                                 controller: _inputController,
+                                                scrollController: _textFieldScrollController,
                                                 focusNode: _focusNode,
                                                 maxLines: null,
                                                 keyboardType:
@@ -775,12 +793,7 @@ class _EditorPageState extends State<EditorPage>
                                                       color:
                                                           Colors.transparent,
                                                     ),
-                                                strutStyle: const StrutStyle(
-                                                  fontSize: 13.5,
-                                                  height: 1.6,
-                                                  leading: 0,
-                                                  forceStrutHeight: true,
-                                                ),
+                                                strutStyle: kEditorStrutStyle,
                                                 cursorColor: const Color(
                                                   0xFF0284C7,
                                                 ),

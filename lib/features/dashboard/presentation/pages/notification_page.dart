@@ -58,14 +58,10 @@ class _NotificationPageState extends State<NotificationPage>
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
         centerTitle: true,
-        // Frosted glass effect on scroll
-        flexibleSpace: ClipRRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Container(color: colors.glassOverlay),
-          ),
-        ),
         leading: IconButton(
           icon: Icon(
             Icons.arrow_back_ios_new_rounded,
@@ -152,9 +148,23 @@ class _NotificationPageState extends State<NotificationPage>
                           child: TabBar(
                             controller: _tabController,
                             onTap: (_) => setState(() {}),
+                            indicatorPadding: const EdgeInsets.all(2),
                             indicator: BoxDecoration(
                               color: LiquidTheme.primary,
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                width: 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(
+                                    alpha: Theme.of(context).brightness == Brightness.dark ? 0.3 : 0.08,
+                                  ),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1.5),
+                                ),
+                              ],
                             ),
                             indicatorSize: TabBarIndicatorSize.tab,
                             dividerColor: Colors.transparent,
@@ -387,6 +397,7 @@ class _NotificationPageState extends State<NotificationPage>
               if (!notif.isRead) {
                 _notificationService.markAsRead(notif.id);
               }
+              _showNotificationDetail(context, notif);
             },
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -524,6 +535,138 @@ class _NotificationPageState extends State<NotificationPage>
                                 style: TextStyle(color: Colors.redAccent)),
                           ],
                         ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showNotificationDetail(BuildContext context, AppNotification notif) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final (icon, iconColor) = _resolveIcon(notif.type);
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: isDark 
+                    ? LiquidTheme.darkBackground.withValues(alpha: 0.85)
+                    : Colors.white.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: colors.glassBorder),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: iconColor.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(icon, color: iconColor, size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              notif.title,
+                              style: TextStyle(
+                                color: colors.textTitle,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _formatTime(notif.timestamp),
+                              style: TextStyle(
+                                color: colors.textCaption,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : Colors.black.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: colors.cardBorder,
+                      ),
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxHeight: 250,
+                      ),
+                      child: SingleChildScrollView(
+                        child: SelectableText(
+                          notif.body,
+                          style: TextStyle(
+                            color: colors.textBody,
+                            fontSize: 14,
+                            height: 1.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: TextButton.styleFrom(
+                          foregroundColor: colors.textCaption,
+                        ),
+                        child: const Text("Close"),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          _notificationService.dismiss(notif.id);
+                          Navigator.pop(context);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
+                          foregroundColor: Colors.redAccent,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text("Delete"),
                       ),
                     ],
                   ),

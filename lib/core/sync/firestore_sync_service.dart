@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -20,6 +21,7 @@ import 'package:script_automator/features/dashboard/domain/services/notification
 ///   - `users/{uid}/preferences` — dark mode, notifications, etc.
 class FirestoreSyncService {
   final FirebaseFirestore _firestore;
+  StreamSubscription<QuerySnapshot>? _notifSub;
 
   FirestoreSyncService({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
@@ -263,6 +265,52 @@ class FirestoreSyncService {
     }
   }
 
+  /// Listens to real-time notification events from Firestore users/{uid}/notifications
+  void listenForNotifications(String uid) {
+    _notifSub?.cancel();
+    _notifSub = _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('notifications')
+        .snapshots()
+        .listen((snapshot) async {
+      if (snapshot.docs.isEmpty) return;
+
+      final notifService = GetIt.I<NotificationService>();
+      final batch = _firestore.batch();
+
+      for (final doc in snapshot.docs) {
+        try {
+          final data = doc.data();
+          final typeVal = data['type'] as int? ?? 2; // default system
+          final type = NotificationType.values[typeVal.clamp(0, NotificationType.values.length - 1)];
+          final title = data['title'] as String? ?? 'Notification';
+          final body = data['body'] as String? ?? '';
+
+          notifService.addNotification(
+            type: type,
+            title: title,
+            body: body,
+          );
+
+          batch.delete(doc.reference);
+        } catch (e) {
+          debugPrint('[Sync] Failed to process notification: $e');
+        }
+      }
+
+      await batch.commit();
+    }, onError: (e) {
+      debugPrint('[Sync] Notification listener error: $e');
+    });
+  }
+
+  /// Cancels the notification subscription when user logs out.
+  void cancelNotificationListener() {
+    _notifSub?.cancel();
+    _notifSub = null;
+  }
+
   /// Pulls cloud profile to local preferences.
   Future<void> pullProfile(String uid) async {
     try {
@@ -277,6 +325,25 @@ class FirestoreSyncService {
       }
       if (data['bio'] != null) {
         await prefs.setBio(data['bio'] as String);
+      }
+
+      // Pull stats (taking the maximum of cloud and local to prevent overwrite with 0)
+      if (GetIt.I.isRegistered<UserStatsService>()) {
+        final stats = GetIt.I<UserStatsService>();
+        if (data['totalRuns'] != null) {
+          final cloudRuns = data['totalRuns'] as int;
+          final localRuns = await stats.get('total_runs');
+          if (cloudRuns > localRuns) {
+            await stats.set('total_runs', cloudRuns);
+          }
+        }
+        if (data['streakDays'] != null) {
+          final cloudStreak = data['streakDays'] as int;
+          final localStreak = await stats.get('streak_days');
+          if (cloudStreak > localStreak) {
+            await stats.set('streak_days', cloudStreak);
+          }
+        }
       }
 
       // Pull preferences
@@ -307,6 +374,7 @@ class FirestoreSyncService {
 
   /// Performs a complete bidirectional sync of all data.
   Future<void> fullSync(String uid) async {
+    await pullProfile(uid); // Pull profile first!
     await syncBidirectional(uid);
     await pushProfile(uid);
   }

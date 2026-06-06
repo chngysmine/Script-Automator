@@ -13,6 +13,14 @@ const TextStyle kEditorTextStyle = TextStyle(
   fontWeight: FontWeight.w500,
 );
 
+const StrutStyle kEditorStrutStyle = StrutStyle(
+  fontFamily: 'monospace',
+  fontSize: 13.5,
+  height: 1.6,
+  leading: 0,
+  forceStrutHeight: true,
+);
+
 /// Common pastel colors used across the editor UI.
 class CommonColors {
   CommonColors._();

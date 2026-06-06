@@ -53,12 +53,20 @@ class ViewportAwarePainter extends CustomPainter {
   /// Whether the editor is in dark mode.
   final bool isDark;
 
+  /// Strut style to force identical line heights as the companion TextField.
+  final StrutStyle? strutStyle;
+
+  /// System text scaler to ensure exact line height matching with TextField.
+  final TextScaler textScaler;
+
   /// Creates a [ViewportAwarePainter] bound to [controller].
   ViewportAwarePainter({
     required this.controller,
     required this.scrollOffset,
     required this.viewportHeight,
     required this.textStyle,
+    required this.textScaler,
+    this.strutStyle,
     this.cursorColor = const Color(0xFF0284C7),
     this.selectionColor = const Color(0x402196F3),
     this.gutterWidth = 48.0,
@@ -74,6 +82,8 @@ class ViewportAwarePainter extends CustomPainter {
     final metricPainter = TextPainter(
       text: TextSpan(text: 'M', style: textStyle),
       textDirection: TextDirection.ltr,
+      strutStyle: strutStyle,
+      textScaler: textScaler,
     )..layout();
     final singleLineHeight = metricPainter.height;
 
@@ -147,6 +157,8 @@ class ViewportAwarePainter extends CustomPainter {
         text: textSpan,
         textDirection: TextDirection.ltr,
         maxLines: null, // allow wrapping
+        strutStyle: strutStyle,
+        textScaler: textScaler,
       )..layout(maxWidth: wrapWidth);
 
       final lineVisualHeight = linePainter.height;
@@ -172,6 +184,8 @@ class ViewportAwarePainter extends CustomPainter {
           text: lineNumSpan,
           textAlign: TextAlign.right,
           textDirection: TextDirection.ltr,
+          strutStyle: strutStyle,
+          textScaler: textScaler,
         )..layout(minWidth: gutterWidth - 12, maxWidth: gutterWidth - 12);
         lineNumPainter.paint(canvas, Offset(4, currentY));
 
@@ -194,6 +208,8 @@ class ViewportAwarePainter extends CustomPainter {
         oldDelegate.viewportHeight != viewportHeight ||
         oldDelegate.controller != controller ||
         oldDelegate.textStyle != textStyle ||
+        oldDelegate.strutStyle != strutStyle ||
+        oldDelegate.textScaler != textScaler ||
         oldDelegate.highlighter != highlighter ||
         oldDelegate.isDark != isDark ||
         oldDelegate.maxLineWidth != maxLineWidth;

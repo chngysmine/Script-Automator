@@ -25,6 +25,7 @@ void main() {
                     fontSize: 14,
                     color: Colors.black,
                   ),
+                  textScaler: TextScaler.noScaling,
                 ),
               ),
             ),

@@ -1,5 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:get_it/get_it.dart';
+import 'package:script_automator/core/sync/firestore_sync_service.dart';
 
 /// Tracks user activity metrics for achievements and profile stats.
 /// Stores counters in a dedicated Hive box.
@@ -62,21 +64,36 @@ class UserStatsService {
     }
     await _updateStreak();
     await _recordDailyActivity();
+    await _syncToCloud();
   }
 
   Future<void> recordWidgetDeploy() async {
     await increment('widgets_deployed');
     await _recordDailyActivity();
+    await _syncToCloud();
   }
 
   Future<void> recordAiSuggestion() async {
     await increment('ai_suggestions');
     await _recordDailyActivity();
+    await _syncToCloud();
   }
 
   Future<void> recordLinesWritten(int lines) async {
     await increment('lines_written', by: lines);
     await _recordDailyActivity();
+    await _syncToCloud();
+  }
+
+  Future<void> _syncToCloud() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null && uid != 'guest') {
+      if (GetIt.I.isRegistered<FirestoreSyncService>()) {
+        GetIt.I<FirestoreSyncService>().pushProfile(uid).catchError((e) {
+          // Ignore offline/network issues
+        });
+      }
+    }
   }
 
   /// Records a +1 activity count for today (for heatmap).

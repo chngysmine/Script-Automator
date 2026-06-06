@@ -225,15 +225,26 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
               decoration: BoxDecoration(
                 color: colors.chipBackground,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: colors.cardBorder,
+                  width: 1,
+                ),
               ),
               child: TabBar(
                 controller: _tabController,
+                indicatorPadding: const EdgeInsets.all(2),
                 indicator: BoxDecoration(
                   color: colors.sheetBackground,
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: colors.cardBorder,
+                    width: 1,
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
+                      color: Colors.black.withValues(
+                        alpha: Theme.of(context).brightness == Brightness.dark ? 0.25 : 0.06,
+                      ),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -310,9 +321,17 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
 
                 // Publish button
                 GestureDetector(
-                  onTap: () {
-                    Navigator.pop(context); // Close preview
-                    PublishScriptSheet.show(context, widget.script);
+                  onTap: () async {
+                    final navigator = Navigator.of(context);
+                    final navigatorContext = navigator.context;
+                    final success = await PublishScriptSheet.show(
+                      context, 
+                      widget.script.copyWith(content: _fullContent),
+                    );
+                    if (success == true && navigatorContext.mounted) {
+                      navigator.pop(); // Close preview
+                      PublishScriptSheet.showSuccessDialog(navigatorContext);
+                    }
                   },
                   child: Container(
                     width: 48,
@@ -345,7 +364,9 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
                     child: Container(
                       height: 48,
                       decoration: BoxDecoration(
-                        gradient: LiquidTheme.brandDarkGradient,
+                        gradient: Theme.of(context).brightness == Brightness.dark
+                            ? LiquidTheme.primaryGradient
+                            : LiquidTheme.brandDarkGradient,
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(

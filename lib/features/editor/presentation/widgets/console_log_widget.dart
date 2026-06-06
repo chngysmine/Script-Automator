@@ -19,32 +19,39 @@ class ConsoleLogEntry {
   /// Parse a raw log string into a ConsoleLogEntry
   factory ConsoleLogEntry.fromRawLog(String log) {
     LogLevel detectLevel() {
-      if (log.contains('[SEVERE]') || log.contains('[JS stderr]')) {
+      final lowerLog = log.toLowerCase();
+      if (log.contains('[SEVERE]') || log.contains('[JS stderr]') || log.contains('[ERROR]') || lowerLog.contains('error') || log.contains('Exception:')) {
         return LogLevel.error;
       }
-      if (log.contains('[WARNING]') || log.contains('[JS warn]')) {
+      if (log.contains('[WARNING]') || log.contains('[JS warn]') || lowerLog.contains('warning')) {
         return LogLevel.warning;
       }
-      if (log.contains('[JS debug]')) {
+      if (log.contains('[JS debug]') || lowerLog.contains('debug')) {
         return LogLevel.debug;
       }
-      // Also catch native runtime errors that might just have "Error:"
-      if (log.toLowerCase().contains('error:') || log.contains('Exception:')) {
-        return LogLevel.error;
+      if (log.contains('[SUCCESS]') || log.contains('✓') || lowerLog.contains('success')) {
+        return LogLevel.success;
       }
       return LogLevel.info; 
     }
 
     // Clean up the prefix for display
     String displayMessage = log;
-    if (log.contains('[JS stdout] ')) {
-      displayMessage = log.replaceFirst('[JS stdout] ', '');
-    } else if (log.contains('[JS stderr] ')) {
-      displayMessage = log.replaceFirst('[JS stderr] ', '');
-    } else if (log.contains('[JS warn] ')) {
-      displayMessage = log.replaceFirst('[JS warn] ', '');
-    } else if (log.contains('[JS debug] ')) {
-      displayMessage = log.replaceFirst('[JS debug] ', '');
+    final prefixes = [
+      '[JS stdout] ',
+      '[JS stderr] ',
+      '[JS warn] ',
+      '[JS debug] ',
+      '[INFO] ',
+      '[ERROR] ',
+      '[SUCCESS] ',
+      '[WARNING] '
+    ];
+    for (final prefix in prefixes) {
+      if (displayMessage.startsWith(prefix)) {
+        displayMessage = displayMessage.substring(prefix.length);
+        break;
+      }
     }
 
     return ConsoleLogEntry(

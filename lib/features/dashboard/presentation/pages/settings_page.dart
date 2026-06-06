@@ -13,9 +13,9 @@ import 'package:script_automator/features/dashboard/presentation/widgets/edit_pr
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
 import 'package:script_automator/features/script_management/data/datasources/script_local_data_source.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/settings_widgets.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/settings_auth_section.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/feedback_sheet.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -50,7 +50,24 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _loadPreferences() async {
     final prefs = GetIt.I<UserPreferencesService>();
     final notifications = await prefs.notificationsEnabled;
-    final darkMode = await prefs.isDarkMode;
+    final isDarkRaw = await prefs.isDarkModeRaw;
+    final bool darkMode;
+    if (isDarkRaw != null) {
+      darkMode = isDarkRaw;
+    } else {
+      if (GetIt.I.isRegistered<ValueNotifier<ThemeMode>>()) {
+        final currentMode = GetIt.I<ValueNotifier<ThemeMode>>().value;
+        if (currentMode == ThemeMode.dark) {
+          darkMode = true;
+        } else if (currentMode == ThemeMode.light) {
+          darkMode = false;
+        } else {
+          darkMode = WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+        }
+      } else {
+        darkMode = false;
+      }
+    }
     final name = await prefs.displayName;
     final bio = await prefs.bio;
     if (mounted) {
@@ -232,31 +249,36 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _sendFeedback() async {
-    final subject = Uri.encodeComponent(
-      'Script Automator Feedback — v$_appVersion',
-    );
-    final body = Uri.encodeComponent(
-      'Hi Script Automator Team,\n\n'
-      'App Version: $_appVersion\n'
-      'Platform: ${Platform.operatingSystem}\n\n'
-      '--- Describe your feedback below ---\n\n',
-    );
-    final mailUri = Uri.parse(
-      'mailto:feedback@scriptautomator.app?subject=$subject&body=$body',
+    final submitted = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => FeedbackSheet(appVersion: _appVersion),
     );
 
-    if (await canLaunchUrl(mailUri)) {
-      await launchUrl(mailUri);
-    } else {
-      // Fallback: open GitHub issues in browser
-      final githubUri = Uri.parse(
-        'https://github.com/chngysmine/Script-Automator/issues/new',
+    if (submitted == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Feedback submitted! Thank you.',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: LiquidTheme.cyan,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
       );
-      if (await canLaunchUrl(githubUri)) {
-        await launchUrl(githubUri, mode: LaunchMode.externalApplication);
-      } else if (mounted) {
-        debugPrint("Could not open email or browser.");
-      }
     }
   }
 
@@ -456,7 +478,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   title: "Version",
                   trailingText: _appVersion,
                   onTap: () {},
-                  iconColor: Colors.grey.shade600,
+                  iconColor: colors.textCaption,
                 ),
                 SettingsActionItem(
                   icon: Icons.description_rounded,
@@ -468,13 +490,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       applicationVersion: _appVersion,
                     );
                   },
-                  iconColor: Colors.grey.shade600,
+                  iconColor: colors.textCaption,
                 ),
                 SettingsActionItem(
                   icon: Icons.bug_report_rounded,
                   title: "Send Feedback",
                   onTap: _sendFeedback,
-                  iconColor: Colors.grey.shade600,
+                  iconColor: colors.textCaption,
                 ),
               ]).animate(delay: 350.ms).fadeIn().slideY(begin: 0.1),
             ],

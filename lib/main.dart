@@ -153,9 +153,11 @@ Future<void> _setupDI() async {
     GetIt.I.registerSingleton<UserPreferencesService>(prefs);
     
     // Register Global Theme Notifier
-    final isDarkMode = await prefs.isDarkMode;
+    final isDarkRaw = await prefs.isDarkModeRaw;
     final themeNotifier = ValueNotifier<ThemeMode>(
-      isDarkMode ? ThemeMode.dark : ThemeMode.light
+      isDarkRaw == null
+          ? ThemeMode.system
+          : (isDarkRaw ? ThemeMode.dark : ThemeMode.light),
     );
     GetIt.I.registerSingleton<ValueNotifier<ThemeMode>>(themeNotifier);
   }

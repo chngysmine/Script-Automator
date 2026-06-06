@@ -24,6 +24,7 @@ class StyledDropdown<T> extends StatelessWidget {
   final ValueChanged<T> onChanged;
   final IconData? icon;
   final double? width;
+  final bool iconOnly;
 
   const StyledDropdown({
     super.key,
@@ -33,6 +34,7 @@ class StyledDropdown<T> extends StatelessWidget {
     required this.onChanged,
     this.icon,
     this.width,
+    this.iconOnly = false,
   });
 
   @override
@@ -111,7 +113,9 @@ class StyledDropdown<T> extends StatelessWidget {
           ];
         },
           child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: iconOnly
+            ? const EdgeInsets.all(10)
+            : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: colors.searchBarBackground,
           borderRadius: BorderRadius.circular(20),
@@ -124,29 +128,35 @@ class StyledDropdown<T> extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 18, color: colors.textCaption),
-              const SizedBox(width: 10),
-            ],
-            Text(
-              labelBuilder(value),
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: colors.textTitle,
+        child: iconOnly
+            ? Icon(
+                icon ?? Icons.tune_rounded,
+                size: 20,
+                color: colors.textCaption,
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 18, color: colors.textCaption),
+                    const SizedBox(width: 10),
+                  ],
+                  Text(
+                    labelBuilder(value),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: colors.textTitle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.unfold_more_rounded,
+                    size: 18,
+                    color: colors.textCaption,
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              Icons.unfold_more_rounded,
-              size: 18,
-              color: colors.textCaption,
-            ),
-          ],
-        ),
       ),
     ),
   );

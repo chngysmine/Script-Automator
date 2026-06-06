@@ -27,66 +27,85 @@ export const openAiProxy = functions.https.onCall(async (request) => {
     );
   }
 
-  // 2. Atomic Rate Limiting via Firestore Transaction
   const uid = request.auth.uid;
   const db = admin.firestore();
-  const rateLimitRef = db.doc(`rate_limits/${uid}`);
+
+  // 1.1. Enforce Ban Check
+  const userDoc = await db.collection('users').doc(uid).get();
+  if (userDoc.exists && userDoc.data()?.is_banned === true) {
+    throw new functions.https.HttpsError(
+      'permission-denied',
+      'Your account has been suspended by an administrator.'
+    );
+  }
+
+  // 2. Perform Rate Limiting
+  const rateLimitRef = db.collection('rate_limits').doc(uid);
   const now = Date.now();
 
-  await db.runTransaction(async (txn) => {
-    const doc = await txn.get(rateLimitRef);
-    if (!doc.exists) {
-      txn.set(rateLimitRef, { window_start: now, count: 1 });
-      return;
-    }
-    const data = doc.data()!;
-    const windowStart = data.window_start ?? 0;
-    const count = data.count ?? 0;
+  try {
+    await db.runTransaction(async (transaction) => {
+      const doc = await transaction.get(rateLimitRef);
+      if (!doc.exists) {
+        transaction.set(rateLimitRef, {
+          tokensUsed: 1,
+          windowStart: now
+        });
+        return;
+      }
 
-    if (now - windowStart >= RATE_LIMIT_WINDOW_MS) {
-      txn.set(rateLimitRef, { window_start: now, count: 1 });
-    } else if (count >= RATE_LIMIT_MAX) {
-      throw new functions.https.HttpsError(
-        'resource-exhausted',
-        `Rate limit exceeded. Max ${RATE_LIMIT_MAX} requests per minute.`
-      );
-    } else {
-      txn.update(rateLimitRef, {
-        count: admin.firestore.FieldValue.increment(1),
-      });
-    }
-  });
+      const data = doc.data();
+      if (!data) return;
 
-  // 3. Validate Payload & Enforce Input Limits
-  const { messages, prompt, model = 'gpt-4o', temperature = 0.2, max_tokens = 1000 } = request.data;
+      if (now - data.windowStart > RATE_LIMIT_WINDOW_MS) {
+        // Reset window
+        transaction.update(rateLimitRef, {
+          tokensUsed: 1,
+          windowStart: now
+        });
+      } else {
+        if (data.tokensUsed >= RATE_LIMIT_MAX) {
+          throw new functions.https.HttpsError(
+            'resource-exhausted',
+            'Rate limit exceeded. Please try again in a minute.'
+          );
+        }
+        transaction.update(rateLimitRef, {
+          tokensUsed: data.tokensUsed + 1
+        });
+      }
+    });
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('[Rate Limit Error]', error);
+    throw new functions.https.HttpsError('internal', 'Rate limit evaluation failed.');
+  }
 
+  // 3. Validate Inputs
+  const { model, messages } = request.data;
   if (!ALLOWED_MODELS.includes(model)) {
     throw new functions.https.HttpsError(
       'invalid-argument',
-      `Model "${model}" is not allowed. Allowed: ${ALLOWED_MODELS.join(', ')}`
+      'Model not allowed on public API.'
     );
   }
 
-  const safeMaxTokens = Math.min(Math.max(1, Number(max_tokens) || 1000), MAX_TOKENS_CAP);
-  const safeTemperature = Math.min(Math.max(0, Number(temperature) || 0.2), 2);
-  
-  let payloadMessages = messages;
-  if (!payloadMessages) {
-    if (!prompt || typeof prompt !== 'string') {
-      throw new functions.https.HttpsError(
-        'invalid-argument',
-        'The function must be called with valid "messages" array or a "prompt" string.'
-      );
-    }
-    payloadMessages = [{ role: 'user', content: prompt }];
-  }
-
-  if (!Array.isArray(payloadMessages) || payloadMessages.length === 0) {
+  if (!Array.isArray(messages)) {
     throw new functions.https.HttpsError(
       'invalid-argument',
-      'Messages must be a non-empty array.'
+      'Messages must be an array.'
     );
   }
+
+  // Enforce Max Tokens Cap
+  const safeMaxTokens = Math.min(request.data.max_tokens || 1024, MAX_TOKENS_CAP);
+  const safeTemperature = Math.max(0, Math.min(request.data.temperature || 0.7, 2));
+
+  // Sanitize message payloads (Only role and content)
+  const payloadMessages = messages.map((m: any) => ({
+    role: m.role === 'user' || m.role === 'assistant' || m.role === 'system' ? m.role : 'user',
+    content: typeof m.content === 'string' ? m.content.slice(0, 10000) : ''
+  }));
 
   if (payloadMessages.length > MAX_MESSAGES) {
     throw new functions.https.HttpsError(
@@ -326,26 +345,4 @@ export const aggregateMetrics = onSchedule({ schedule: 'every 5 minutes' }, asyn
   }
 });
 
-import { onDocumentCreated } from 'firebase-functions/v2/firestore';
-
-export const autoGrantAdminTrigger = onDocumentCreated('admin_requests/{docId}', async (event) => {
-  const email = event.data?.data()?.email;
-  if (!email) return;
-
-  const targetUser = await admin.auth().getUserByEmail(email);
-  await admin.auth().setCustomUserClaims(targetUser.uid, { admin: true });
-
-  const db = admin.firestore();
-  await db.collection('users').doc(targetUser.uid).set(
-    { role: 'admin', updated_at: admin.firestore.FieldValue.serverTimestamp() },
-    { merge: true }
-  );
-
-  await db.collection('admins').doc(targetUser.uid).set({
-    email: email,
-    granted_at: admin.firestore.FieldValue.serverTimestamp(),
-    granted_by: 'system_trigger',
-  });
-
-  console.log(`Auto-granted admin role to ${email}`);
-});
+// Removed autoGrantAdminTrigger for security compliance (Privilege Escalation Risk)

@@ -105,10 +105,18 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
                               letterSpacing: 0.5,
                             ),
                           ),
-                          ShaderMask(
-                            shaderCallback: (bounds) => LiquidTheme
-                                .brandDarkGradient
-                                .createShader(bounds),
+                           ShaderMask(
+                            shaderCallback: (bounds) {
+                              final isDark = Theme.of(context).brightness == Brightness.dark;
+                              return (isDark
+                                      ? const LinearGradient(
+                                          colors: [Colors.white, Color(0xFFCBD5E1)],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        )
+                                      : LiquidTheme.brandDarkGradient)
+                                  .createShader(bounds);
+                            },
                             blendMode: BlendMode.srcIn,
                             child: const Text(
                               "CodeForge",

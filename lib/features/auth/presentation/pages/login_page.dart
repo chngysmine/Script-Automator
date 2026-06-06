@@ -239,21 +239,23 @@ class _LoginPageState extends State<LoginPage> {
                           const SizedBox(height: 20),
 
                           // ── Social ──
-                          _socialBtn(
-                                Icons.apple_rounded,
-                                'Continue with Apple',
-                                c,
-                                isDark,
-                                isApple: true,
-                                onTap: () => _run(
-                                  () =>
-                                      GetIt.I<AuthService>().signInWithApple(),
-                                ),
-                              )
-                              .animate(delay: 800.ms)
-                              .fadeIn(duration: 300.ms)
-                              .slideY(begin: 0.04),
-                          const SizedBox(height: 10),
+                          if (Theme.of(context).platform == TargetPlatform.iOS) ...[
+                            _socialBtn(
+                                  Icons.apple_rounded,
+                                  'Continue with Apple',
+                                  c,
+                                  isDark,
+                                  isApple: true,
+                                  onTap: () => _run(
+                                    () =>
+                                        GetIt.I<AuthService>().signInWithApple(),
+                                  ),
+                                )
+                                .animate(delay: 800.ms)
+                                .fadeIn(duration: 300.ms)
+                                .slideY(begin: 0.04),
+                            const SizedBox(height: 10),
+                          ],
                           _socialBtn(
                                 Icons.g_mobiledata_rounded,
                                 'Continue with Google',

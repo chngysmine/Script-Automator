@@ -246,18 +246,20 @@ void showLinkAccountSheet(BuildContext context, {VoidCallback? onLinked}) {
                 onLinked: onLinked,
               ),
             ),
-            const SizedBox(height: 12),
-            _LinkButton(
-              icon: Icons.apple_rounded,
-              label: "Continue with Apple",
-              color: colors.textTitle,
-              onTap: () => _linkProvider(
-                context,
-                linkFn: auth.linkWithApple,
-                providerName: "Apple",
-                onLinked: onLinked,
+            if (Theme.of(context).platform == TargetPlatform.iOS) ...[
+              const SizedBox(height: 12),
+              _LinkButton(
+                icon: Icons.apple_rounded,
+                label: "Continue with Apple",
+                color: colors.textTitle,
+                onTap: () => _linkProvider(
+                  context,
+                  linkFn: auth.linkWithApple,
+                  providerName: "Apple",
+                  onLinked: onLinked,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       );

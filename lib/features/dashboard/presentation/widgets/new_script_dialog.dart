@@ -157,7 +157,9 @@ class _NewScriptDialogState extends State<NewScriptDialog> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               decoration: BoxDecoration(
-                                gradient: LiquidTheme.brandDarkGradient,
+                                gradient: Theme.of(context).brightness == Brightness.dark
+                                    ? LiquidTheme.primaryGradient
+                                    : LiquidTheme.brandDarkGradient,
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(

@@ -65,6 +65,40 @@ class SystemAPIHandler {
   ///
   /// Returns a JSON string with `status`, `headers`, and `body` fields.
   /// Returns `{ "error": "...", "status": 0 }` on failure.
+  bool _isPrivateIp(String ip) {
+    if (ip.startsWith('10.') ||
+        ip.startsWith('192.168.') ||
+        ip.startsWith('169.254.')) {
+      return true;
+    }
+    if (ip.startsWith('172.')) {
+      final parts = ip.split('.');
+      if (parts.length >= 2) {
+        final secondPart = int.tryParse(parts[1]);
+        if (secondPart != null && secondPart >= 16 && secondPart <= 31) {
+          return true;
+        }
+      }
+    }
+    if (ip == '::1' || ip == '0:0:0:0:0:0:0:1') return true;
+    final lowerIp = ip.toLowerCase();
+    if (lowerIp.startsWith('fc00:') ||
+        lowerIp.startsWith('fd00:') ||
+        lowerIp.startsWith('fe80:')) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Executes an HTTP fetch request.
+  ///
+  /// [payload] must be a JSON string:
+  /// ```json
+  /// { "url": "...", "method": "GET", "headers": {...}, "body": "..." }
+  /// ```
+  ///
+  /// Returns a JSON string with `status`, `headers`, and `body` fields.
+  /// Returns `{ "error": "...", "status": 0 }` on failure.
   Future<String> handleFetch(String payload) async {
     try {
       final Map<String, dynamic> requestData = jsonDecode(payload);
@@ -74,6 +108,16 @@ class SystemAPIHandler {
           Map<String, String>.from(requestData['headers'] ?? {});
       final String? body = requestData['body'];
 
+      final uri = Uri.parse(url);
+      final String scheme = uri.scheme.toLowerCase();
+
+      if (scheme != 'http' && scheme != 'https') {
+        return jsonEncode({
+          'error': 'Request blocked: unsupported scheme. Only http and https are allowed',
+          'status': 400,
+        });
+      }
+
       if (_isBlockedUrl(url)) {
         return jsonEncode({
           'error': 'Request blocked: private/loopback addresses are not allowed',
@@ -81,60 +125,80 @@ class SystemAPIHandler {
         });
       }
 
-      final uri = Uri.parse(url);
+      String resolvedIp = uri.host;
+      bool isHostIp = false;
       try {
-        final resolvedHosts = await InternetAddress.lookup(uri.host);
-        for (final address in resolvedHosts) {
-          final ip = address.address;
-          final isPrivateCidr =
-              ip.startsWith('10.') ||
-              ip.startsWith('172.16.') ||
-              ip.startsWith('172.17.') ||
-              ip.startsWith('172.18.') ||
-              ip.startsWith('172.19.') ||
-              ip.startsWith('172.20.') ||
-              ip.startsWith('172.21.') ||
-              ip.startsWith('172.22.') ||
-              ip.startsWith('172.23.') ||
-              ip.startsWith('172.24.') ||
-              ip.startsWith('172.25.') ||
-              ip.startsWith('172.26.') ||
-              ip.startsWith('172.27.') ||
-              ip.startsWith('172.28.') ||
-              ip.startsWith('172.29.') ||
-              ip.startsWith('172.30.') ||
-              ip.startsWith('172.31.') ||
-              ip.startsWith('192.168.') ||
-              ip.startsWith('169.254.');
-          if (address.isLoopback || address.isLinkLocal || isPrivateCidr) {
+        InternetAddress(uri.host);
+        isHostIp = true;
+      } catch (_) {}
+
+      if (!isHostIp) {
+        try {
+          final resolvedHosts = await InternetAddress.lookup(uri.host)
+              .timeout(const Duration(seconds: 5));
+          if (resolvedHosts.isEmpty) {
+            return jsonEncode({
+              'error': 'Request blocked: unable to resolve host securely',
+              'status': 403,
+            });
+          }
+          final address = resolvedHosts.first;
+          resolvedIp = address.address;
+
+          if (address.isLoopback || address.isLinkLocal || _isPrivateIp(resolvedIp)) {
             return jsonEncode({
               'error': 'Request blocked: resolved address is private or loopback',
               'status': 403,
             });
           }
+        } catch (_) {
+          return jsonEncode({
+            'error': 'Request blocked: unable to resolve host securely or DNS lookup timed out',
+            'status': 403,
+          });
         }
-      } catch (_) {
-        return jsonEncode({
-          'error': 'Request blocked: unable to resolve host securely',
-          'status': 403,
-        });
+      } else {
+        if (_isPrivateIp(resolvedIp) || resolvedIp == '127.0.0.1' || resolvedIp == '::1') {
+          return jsonEncode({
+            'error': 'Request blocked: target IP is private or loopback',
+            'status': 403,
+          });
+        }
+      }
+
+      // Pin the target host to IP for HTTP requests to prevent DNS Rebinding.
+      // Rely on TLS/SSL Handshake hostname validation for HTTPS requests.
+      Uri targetUri;
+      if (scheme == 'http') {
+        targetUri = uri.replace(host: resolvedIp);
+        headers['Host'] = uri.host;
+      } else {
+        targetUri = uri;
       }
 
       http.Response response;
 
       switch (method) {
         case 'POST':
-          response = await _client.post(uri, headers: headers, body: body);
+          response = await _client
+              .post(targetUri, headers: headers, body: body)
+              .timeout(const Duration(seconds: 15));
           break;
         case 'PUT':
-          response = await _client.put(uri, headers: headers, body: body);
+          response = await _client
+              .put(targetUri, headers: headers, body: body)
+              .timeout(const Duration(seconds: 15));
           break;
         case 'DELETE':
-          response = await _client.delete(uri, headers: headers, body: body);
+          response = await _client
+              .delete(targetUri, headers: headers, body: body)
+              .timeout(const Duration(seconds: 15));
           break;
         case 'GET':
         default:
-          response = await _client.get(uri, headers: headers);
+          response = await _client
+              .get(targetUri, headers: headers)
+              .timeout(const Duration(seconds: 15));
           break;
       }
 

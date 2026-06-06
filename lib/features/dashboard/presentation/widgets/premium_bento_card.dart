@@ -291,8 +291,12 @@ class _PremiumBentoCardState extends State<PremiumBentoCard>
                               ),
                               child: Text(
                                 widget.isUpdateAvailable ? "UPDATE" : "GET",
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: widget.isUpdateAvailable
+                                      ? Colors.white
+                                      : (Theme.of(context).brightness == Brightness.dark
+                                          ? const Color(0xFF0F172A)
+                                          : Colors.white),
                                   fontSize: 10,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 0.5,

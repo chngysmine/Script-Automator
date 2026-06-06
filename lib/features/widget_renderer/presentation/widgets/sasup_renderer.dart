@@ -33,7 +33,14 @@ class SasupRenderer extends StatelessWidget {
       height = 345;
     }
 
-    final rootWidget = _buildWidget(node, path: 'root', isRoot: true);
+    // Root layout always starts with bounded dimensions thanks to the parent constraints
+    final rootWidget = _buildWidget(
+      node,
+      path: 'root',
+      isRoot: true,
+      isHorizontalBounded: true,
+      isVerticalBounded: true,
+    );
 
     return ExcludeSemantics(
       key: const ValueKey('sasup_renderer_exclude_semantics'),
@@ -58,61 +65,26 @@ class SasupRenderer extends StatelessWidget {
     );
   }
 
-  Widget _buildWidget(WidgetNode node, {required String path, bool isRoot = false}) {
+  Widget _buildWidget(
+    WidgetNode node, {
+    required String path,
+    bool isRoot = false,
+    required bool isHorizontalBounded,
+    required bool isVerticalBounded,
+  }) {
     Widget widget;
 
     switch (node.type) {
       case WidgetType.container:
-        final children = <Widget>[];
-        if (node.children != null) {
-          for (int i = 0; i < node.children!.length; i++) {
-            final childNode = node.children![i];
-            final childPath = '${path}_c$i';
-            final w = _buildWidget(childNode, path: childPath, isRoot: false);
-            
-            int? flex = childNode.modifiers?.flex;
-            if (childNode.type == WidgetType.spacer &&
-                flex == null &&
-                childNode.modifiers?.width == null &&
-                childNode.modifiers?.height == null) {
-              flex = 1;
-            }
-
-            children.add(
-              (flex != null && flex > 0)
-                  ? Expanded(
-                      key: ValueKey('${childPath}_flex'),
-                      flex: flex,
-                      child: w,
-                    )
-                  : w,
-            );
-          }
-        }
-        final spacing = node.modifiers?.spacing?.toDouble() ?? 0.0;
-
-        widget = SizedBox(
-          width: double.infinity,
-          child: SafeColumn(
-            key: ValueKey(node.id ?? '${path}_container_column'),
-            mainAxisSize: isRoot ? MainAxisSize.max : MainAxisSize.min,
-            crossAxisAlignment: node.modifiers?.alignment != null
-                ? _parseCrossAxis(node.modifiers?.alignment)
-                : CrossAxisAlignment.stretch,
-            mainAxisAlignment: _parseMainAxis(node.modifiers?.alignment),
-            children: _applySpacing(children, spacing, Axis.vertical, path),
-          ),
-        );
-        break;
-
       case WidgetType.column:
         final children = <Widget>[];
+        final spacing = node.modifiers?.spacing?.toDouble() ?? 0.0;
+
         if (node.children != null) {
           for (int i = 0; i < node.children!.length; i++) {
             final childNode = node.children![i];
             final childPath = '${path}_c$i';
-            final w = _buildWidget(childNode, path: childPath, isRoot: false);
-            
+
             int? flex = childNode.modifiers?.flex;
             if (childNode.type == WidgetType.spacer &&
                 flex == null &&
@@ -121,8 +93,19 @@ class SasupRenderer extends StatelessWidget {
               flex = 1;
             }
 
+            // A child in a Column can only flex vertically if the Column's vertical constraint is bounded.
+            final bool canFlex = isVerticalBounded && flex != null && flex > 0;
+
+            final w = _buildWidget(
+              childNode,
+              path: childPath,
+              isRoot: false,
+              isHorizontalBounded: isHorizontalBounded, // Cross axis inherits parent constraint
+              isVerticalBounded: canFlex, // If child is expanded, its vertical axis becomes bounded
+            );
+
             children.add(
-              (flex != null && flex > 0)
+              canFlex
                   ? Expanded(
                       key: ValueKey('${childPath}_flex'),
                       flex: flex,
@@ -132,29 +115,34 @@ class SasupRenderer extends StatelessWidget {
             );
           }
         }
-        final spacing = node.modifiers?.spacing?.toDouble() ?? 0.0;
 
-        widget = SizedBox(
-          width: double.infinity,
-          child: SafeColumn(
-            key: ValueKey(node.id ?? '${path}_column'),
-            mainAxisSize: isRoot ? MainAxisSize.max : MainAxisSize.min,
-            crossAxisAlignment: node.modifiers?.alignment != null
+        widget = Column(
+          key: ValueKey(node.id ?? '${path}_column'),
+          mainAxisSize: isRoot ? MainAxisSize.max : (isVerticalBounded ? MainAxisSize.max : MainAxisSize.min),
+          crossAxisAlignment: (() {
+            final align = node.modifiers?.alignment != null
                 ? _parseCrossAxis(node.modifiers?.alignment)
-                : CrossAxisAlignment.stretch,
-            mainAxisAlignment: _parseMainAxis(node.modifiers?.alignment),
-            children: _applySpacing(children, spacing, Axis.vertical, path),
-          ),
+                : CrossAxisAlignment.stretch;
+            // Safe-guard: if horizontal constraint is unbounded, stretching will crash.
+            if (!isHorizontalBounded && align == CrossAxisAlignment.stretch) {
+              return CrossAxisAlignment.start;
+            }
+            return align;
+          })(),
+          mainAxisAlignment: _parseMainAxis(node.modifiers?.alignment),
+          children: _applySpacing(children, spacing, Axis.vertical, path),
         );
         break;
+
       case WidgetType.row:
         final children = <Widget>[];
+        final spacing = node.modifiers?.spacing?.toDouble() ?? 0.0;
+
         if (node.children != null) {
           for (int i = 0; i < node.children!.length; i++) {
             final childNode = node.children![i];
             final childPath = '${path}_r$i';
-            final w = _buildWidget(childNode, path: childPath, isRoot: false);
-            
+
             int? flex = childNode.modifiers?.flex;
             if (childNode.type == WidgetType.spacer &&
                 flex == null &&
@@ -163,8 +151,19 @@ class SasupRenderer extends StatelessWidget {
               flex = 1;
             }
 
+            // A child in a Row can only flex horizontally if the Row's horizontal constraint is bounded.
+            final bool canFlex = isHorizontalBounded && flex != null && flex > 0;
+
+            final w = _buildWidget(
+              childNode,
+              path: childPath,
+              isRoot: false,
+              isHorizontalBounded: canFlex, // If child is expanded, its horizontal axis becomes bounded
+              isVerticalBounded: isVerticalBounded, // Cross axis inherits parent constraint
+            );
+
             children.add(
-              (flex != null && flex > 0)
+              canFlex
                   ? Expanded(
                       key: ValueKey('${childPath}_flex'),
                       flex: flex,
@@ -174,26 +173,36 @@ class SasupRenderer extends StatelessWidget {
             );
           }
         }
-        final spacing = node.modifiers?.spacing?.toDouble() ?? 0.0;
 
-        widget = SizedBox(
-          width: double.infinity,
-          child: SafeRow(
-            key: ValueKey(node.id ?? '${path}_row'),
-            mainAxisSize: isRoot ? MainAxisSize.max : MainAxisSize.min,
-            crossAxisAlignment: node.modifiers?.alignment != null
+        widget = Row(
+          key: ValueKey(node.id ?? '${path}_row'),
+          mainAxisSize: isHorizontalBounded ? MainAxisSize.max : MainAxisSize.min,
+          crossAxisAlignment: (() {
+            final align = node.modifiers?.alignment != null
                 ? _parseCrossAxis(node.modifiers?.alignment)
-                : CrossAxisAlignment.center,
-            mainAxisAlignment: _parseMainAxis(node.modifiers?.alignment),
-            children: _applySpacing(children, spacing, Axis.horizontal, path),
-          ),
+                : CrossAxisAlignment.center;
+            // Safe-guard: if vertical constraint is unbounded, stretching will crash.
+            if (!isVerticalBounded && align == CrossAxisAlignment.stretch) {
+              return CrossAxisAlignment.center;
+            }
+            return align;
+          })(),
+          mainAxisAlignment: _parseMainAxis(node.modifiers?.alignment),
+          children: _applySpacing(children, spacing, Axis.horizontal, path),
         );
         break;
+
       case WidgetType.stack:
         final children = <Widget>[];
         if (node.children != null) {
           for (int i = 0; i < node.children!.length; i++) {
-            children.add(_buildWidget(node.children![i], path: '${path}_s$i', isRoot: false));
+            children.add(_buildWidget(
+              node.children![i],
+              path: '${path}_s$i',
+              isRoot: false,
+              isHorizontalBounded: isHorizontalBounded,
+              isVerticalBounded: isVerticalBounded,
+            ));
           }
         }
         widget = Stack(
@@ -202,6 +211,7 @@ class SasupRenderer extends StatelessWidget {
           children: children,
         );
         break;
+
       case WidgetType.text:
         widget = Text(
           node.content ?? "",
@@ -210,6 +220,7 @@ class SasupRenderer extends StatelessWidget {
           style: _parseTextStyle(node.modifiers),
         );
         break;
+
       case WidgetType.icon:
         widget = Icon(
           _parseIconData(node.content),
@@ -218,6 +229,7 @@ class SasupRenderer extends StatelessWidget {
           color: _parseColor(node.modifiers?.color ?? "#FFFFFF"),
         );
         break;
+
       case WidgetType.image:
         final imageKey = ValueKey(node.id ?? '${path}_image');
         if (node.content != null && node.content!.startsWith("file://")) {
@@ -241,6 +253,7 @@ class SasupRenderer extends StatelessWidget {
           );
         }
         break;
+
       case WidgetType.spacer:
         final mods = node.modifiers;
         final spacerKey = ValueKey(node.id ?? '${path}_spacer');
@@ -251,16 +264,21 @@ class SasupRenderer extends StatelessWidget {
             height: mods?.height?.toDouble(),
           );
         } else {
-          // Use SizedBox.shrink() instead of Spacer() here to avoid ParentDataWidget errors
-          // when wrapped in modifiers. The Column/Row handles flex-wrapping.
           widget = SizedBox.shrink(key: spacerKey);
         }
         break;
+
       case WidgetType.button:
         final children = <Widget>[];
         if (node.children != null) {
           for (int i = 0; i < node.children!.length; i++) {
-            children.add(_buildWidget(node.children![i], path: '${path}_b$i', isRoot: false));
+            children.add(_buildWidget(
+              node.children![i],
+              path: '${path}_b$i',
+              isRoot: false,
+              isHorizontalBounded: isHorizontalBounded,
+              isVerticalBounded: isVerticalBounded,
+            ));
           }
         }
         if (children.isEmpty && node.content != null) {
@@ -293,6 +311,7 @@ class SasupRenderer extends StatelessWidget {
           ),
         );
         break;
+
       default:
         widget = SizedBox.shrink(key: ValueKey('${path}_shrink'));
     }
@@ -427,7 +446,7 @@ class SasupRenderer extends StatelessWidget {
     if (colorStr == null) return Colors.transparent;
     final clean = colorStr.trim().toLowerCase();
     if (clean == 'transparent') return Colors.transparent;
-    
+
     if (clean.startsWith('rgba')) {
       try {
         final match = RegExp(r'rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d\.]+)\s*\)').firstMatch(clean);
@@ -440,7 +459,7 @@ class SasupRenderer extends StatelessWidget {
         }
       } catch (_) {}
     }
-    
+
     if (clean.startsWith('rgb')) {
       try {
         final match = RegExp(r'rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)').firstMatch(clean);
@@ -457,15 +476,15 @@ class SasupRenderer extends StatelessWidget {
     if (hex.startsWith('#')) {
       hex = hex.substring(1);
     }
-    
+
     if (hex.length == 3) {
       hex = hex.split('').map((c) => c + c).join();
     }
-    
+
     if (hex.length == 6) {
       hex = 'ff$hex';
     }
-    
+
     if (hex.length == 8) {
       try {
         return Color(int.parse('0x$hex'));
@@ -551,77 +570,5 @@ class SasupRenderer extends StatelessWidget {
     final RegExp regex = RegExp(r'#(?:[0-9a-fA-F]{3,8})');
     final matches = regex.allMatches(input);
     return matches.map((m) => _parseColor(m.group(0))).toList();
-  }
-}
-
-Widget _stripFlex(Widget c) {
-  if (c is Expanded) {
-    return c.child;
-  }
-  if (c is Flexible) {
-    return c.child;
-  }
-  return c;
-}
-
-class SafeColumn extends StatelessWidget {
-  final MainAxisAlignment mainAxisAlignment;
-  final CrossAxisAlignment crossAxisAlignment;
-  final MainAxisSize mainAxisSize;
-  final List<Widget> children;
-
-  const SafeColumn({
-    super.key,
-    this.mainAxisAlignment = MainAxisAlignment.start,
-    this.crossAxisAlignment = CrossAxisAlignment.center,
-    this.mainAxisSize = MainAxisSize.max,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final bool isBounded = constraints.maxHeight != double.infinity;
-        final processed = children.map((c) => isBounded ? c : _stripFlex(c)).toList();
-        return Column(
-          mainAxisAlignment: mainAxisAlignment,
-          crossAxisAlignment: crossAxisAlignment,
-          mainAxisSize: isBounded ? mainAxisSize : MainAxisSize.min,
-          children: processed,
-        );
-      },
-    );
-  }
-}
-
-class SafeRow extends StatelessWidget {
-  final MainAxisAlignment mainAxisAlignment;
-  final CrossAxisAlignment crossAxisAlignment;
-  final MainAxisSize mainAxisSize;
-  final List<Widget> children;
-
-  const SafeRow({
-    super.key,
-    this.mainAxisAlignment = MainAxisAlignment.start,
-    this.crossAxisAlignment = CrossAxisAlignment.center,
-    this.mainAxisSize = MainAxisSize.max,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final bool isBounded = constraints.maxWidth != double.infinity;
-        final processed = children.map((c) => isBounded ? c : _stripFlex(c)).toList();
-        return Row(
-          mainAxisAlignment: mainAxisAlignment,
-          crossAxisAlignment: crossAxisAlignment,
-          mainAxisSize: isBounded ? mainAxisSize : MainAxisSize.min,
-          children: processed,
-        );
-      },
-    );
   }
 }

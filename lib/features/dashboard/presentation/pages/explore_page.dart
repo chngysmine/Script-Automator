@@ -41,29 +41,29 @@ class _ExplorePageState extends State<ExplorePage> {
 
   final List<String> _categories = [
     "All",
-    "Weather",
-    "Finance",
-    "Utilities",
-    "AI",
-    "Games",
+    "System",
+    "Productivity",
+    "Lifestyle",
+    "Entertainment",
+    "Other",
   ];
 
   /// Icon mapping for known script categories.
   static final Map<String, IconData> _categoryIcons = {
-    'Weather': Icons.cloud_rounded,
-    'Finance': Icons.currency_bitcoin_rounded,
-    'Utilities': Icons.build_rounded,
-    'AI': Icons.auto_awesome,
-    'Games': Icons.sports_esports_rounded,
+    'System': Icons.settings_suggest_rounded,
+    'Productivity': Icons.checklist_rtl_rounded,
+    'Lifestyle': Icons.favorite_rounded,
+    'Entertainment': Icons.sports_esports_rounded,
+    'Other': Icons.extension_rounded,
   };
 
   /// Color mapping for known script categories.
   static final Map<String, Color> _categoryColors = {
-    'Weather': LiquidTheme.cyan,
-    'Finance': const Color(0xFFEAB308),
-    'Utilities': LiquidTheme.primary,
-    'AI': const Color(0xFF8B5CF6),
-    'Games': const Color(0xFFEC4899),
+    'System': LiquidTheme.primary,
+    'Productivity': const Color(0xFFEAB308),
+    'Lifestyle': LiquidTheme.cyan,
+    'Entertainment': const Color(0xFFEC4899),
+    'Other': const Color(0xFF8B5CF6),
   };
 
   @override
@@ -141,7 +141,7 @@ class _ExplorePageState extends State<ExplorePage> {
           SliverPersistentHeader(
             pinned: true,
             delegate: GlassSliverHeaderDelegate(
-              height: MediaQuery.of(context).padding.top + 64,
+              height: MediaQuery.of(context).padding.top + 76,
               child: SafeArea(
                 bottom: false,
                 child: Padding(
@@ -188,23 +188,36 @@ class _ExplorePageState extends State<ExplorePage> {
                 builder: (context, _) {
                   final config = GetIt.I<AppConfigService>();
                   if (!config.maintenanceMode) return const SizedBox.shrink();
+                  final isDark = Theme.of(context).brightness == Brightness.dark;
                   return Padding(
                     padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3C7),
+                        color: isDark
+                            ? const Color(0xFF78350F).withValues(alpha: 0.2)
+                            : const Color(0xFFFEF3C7),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
+                        border: Border.all(
+                          color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.25 : 0.3),
+                        ),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
-                          SizedBox(width: 10),
+                          Icon(
+                            Icons.warning_amber_rounded, 
+                            color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706), 
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               'Gallery is in maintenance mode. Some features may be unavailable.',
-                              style: TextStyle(color: Color(0xFF92400E), fontSize: 13, fontWeight: FontWeight.w500),
+                              style: TextStyle(
+                                color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E), 
+                                fontSize: 13, 
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ],
@@ -630,21 +643,29 @@ class _ExplorePageState extends State<ExplorePage> {
         ),
       );
     } else {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.grey.shade300,
+          color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.1),
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_rounded, size: 14, color: Colors.grey.shade600),
+            Icon(
+              Icons.check_rounded, 
+              size: 14, 
+              color: isDark ? Colors.white70 : Colors.black54,
+            ),
             const SizedBox(width: 4),
             Text(
               "Installed",
               style: TextStyle(
-                color: Colors.grey.shade600,
+                color: isDark ? Colors.white70 : Colors.black54,
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
               ),

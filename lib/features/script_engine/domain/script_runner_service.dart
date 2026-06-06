@@ -173,11 +173,22 @@ class ScriptRunnerService {
 
     // Create a per-script completion tracker for timeout detection
     final evalCompleter = Completer<void>();
+    final startTime = DateTime.now();
 
     // Listen for the eval result or timeout
     late StreamSubscription<String> sub;
     sub = _logController.stream.listen((log) {
-      if (log.contains('Result:') || log.contains('Script Error:')) {
+      if (log.contains('Result:')) {
+        final duration = DateTime.now().difference(startTime);
+        if (GetIt.I.isRegistered<TelemetryService>()) {
+          GetIt.I<TelemetryService>().recordScriptExecutionDuration(scriptId, duration);
+        }
+        if (!evalCompleter.isCompleted) evalCompleter.complete();
+        sub.cancel();
+      } else if (log.contains('Script Error:')) {
+        if (GetIt.I.isRegistered<TelemetryService>()) {
+          GetIt.I<TelemetryService>().captureError(scriptId, log);
+        }
         if (!evalCompleter.isCompleted) evalCompleter.complete();
         sub.cancel();
       }
@@ -195,6 +206,7 @@ class ScriptRunnerService {
       if (GetIt.I.isRegistered<TelemetryService>()) {
         GetIt.I<TelemetryService>().captureEngineCrash(
           "Timeout/Infinite Loop in JS Engine", null,
+          scriptId: scriptId,
         );
       }
       _logController.add(
@@ -316,39 +328,42 @@ class ScriptRunnerService {
 
         engine.registerGlobalFunction('renderWidget', (jsonPayload) {
           try {
+            print("--- [DART PRINT] renderWidget callback started! ---");
             logger.info("[JS binding] renderWidget called. Payload type: ${jsonPayload.runtimeType}");
-            if (currentScriptId == null) {
-              logger.warning(
-                "[JS binding] renderWidget called without active scriptId context",
-              );
-              return "error_no_context";
-            }
+            
+            final activeId = currentScriptId ?? 'manual_run';
             final family = currentWidgetFamily;
+            print("--- [DART PRINT] activeId: $activeId, family: $family ---");
             logger.info("[JS binding] Using active widget family: $family");
 
             dynamic payloadToSend = jsonPayload;
             if (jsonPayload is! String) {
               try {
                 payloadToSend = jsonEncode(jsonPayload);
+                print("--- [DART PRINT] Encoded object payload to string ---");
                 logger.info("[JS binding] Encoded object payload to string (Length: ${payloadToSend.length})");
               } catch (e) {
+                print("--- [DART PRINT] Failed to serialize renderWidget payload: $e ---");
                 logger.severe("[JS binding] Failed to serialize renderWidget payload: $e");
                 return "error_invalid_payload";
               }
             } else {
+              print("--- [DART PRINT] Payload is already a String (Length: ${jsonPayload.length}) ---");
               logger.info("[JS binding] Payload is already a String (Length: ${jsonPayload.length})");
             }
 
+            print("--- [DART PRINT] Sending message to mainSendPort: type=sys_render, scriptId=$activeId ---");
             mainSendPort.send({
               'type': 'sys_render',
               'payload': payloadToSend,
               'family': family,
-              'scriptId': currentScriptId,
+              'scriptId': activeId,
             });
+            print("--- [DART PRINT] Message sent successfully! ---");
             logger.info("[JS binding] Message sent to mainSendPort");
             return "queued_for_render";
           } catch (e, stack) {
-            print("ERROR IN renderWidget: $e\n$stack");
+            print("--- [DART PRINT] ERROR IN renderWidget: $e\n$stack ---");
             logger.severe("ERROR IN renderWidget: $e\n$stack");
             return "error_exception";
           }
@@ -562,6 +577,9 @@ class ScriptRunnerService {
 
           currentScriptId = message['scriptId']; // Capture context
           try {
+            if (currentScriptId != null) {
+              engine.evaluate('var __current_script_id = "$currentScriptId";');
+            }
             // Wrap script in an IIFE so `const/let` declarations don't pollute the global scope 
             // and cause duplicate variable errors on subsequent runs.
             final wrappedScript = '''
@@ -600,6 +618,9 @@ class ScriptRunnerService {
           final oldScriptId = currentScriptId;
           currentScriptId = responseScriptId;
           try {
+            if (currentScriptId != null) {
+              engine.evaluate('var __current_script_id = "$currentScriptId";');
+            }
             engine.evaluate('__resolve_async_task($requestId, $escapedJson);');
           } catch (e) {
             logger.severe("Error resolving async promise: $e");

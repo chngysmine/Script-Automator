@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/utils/debouncer.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
@@ -34,6 +36,9 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   int _scriptCount = 0;
   int _widgetCount = 0;
+  int _weatherCount = 0;
+  int _productivityCount = 0;
+  int _publishedCount = 0;
   int _totalRuns = 0;
 
   String _displayName = '';
@@ -64,11 +69,26 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _loadStats() async {
     final result = await GetIt.I<ScriptRepository>().getScripts();
     result.fold(
-      (failure) {},
+      (failure) => {},
       (scripts) => setState(() {
         _scriptCount = scripts.length;
         _widgetCount = scripts
             .where((s) => s.content.contains('renderWidget'))
+            .length;
+        _weatherCount = scripts
+            .where((s) =>
+                s.name.toLowerCase().contains('weather') ||
+                s.content.toLowerCase().contains('weather'))
+            .length;
+        _productivityCount = scripts
+            .where((s) =>
+                s.name.toLowerCase().contains('task') ||
+                s.name.toLowerCase().contains('todo') ||
+                s.name.toLowerCase().contains('productivity') ||
+                s.name.toLowerCase().contains('timer') ||
+                s.content.toLowerCase().contains('task') ||
+                s.content.toLowerCase().contains('todo') ||
+                s.content.toLowerCase().contains('timer'))
             .length;
       }),
     );
@@ -88,11 +108,26 @@ class _ProfilePageState extends State<ProfilePage> {
       userEmail = GetIt.I<AuthService>().email;
     }
 
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    int publishedCount = 0;
+    if (uid != null && uid != 'guest') {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('gallery_published')
+            .where('author_uid', isEqualTo: uid)
+            .get();
+        publishedCount = snap.docs.length;
+      } catch (e) {
+        debugPrint('Failed to fetch published scripts count: $e');
+      }
+    }
+
     if (mounted) {
       setState(() {
         _displayName = name;
         _bio = b;
         _totalRuns = totalRuns;
+        _publishedCount = publishedCount;
         _avatarPath = ap;
         _email = userEmail;
       });
@@ -148,7 +183,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ).animate(delay: 300.ms).fadeIn().slideX(begin: 0.05),
                 const SizedBox(height: 28),
                 _buildSectionTitle("Collections"),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 _buildCollectionsGrid(
                   context,
                 ).animate(delay: 400.ms).fadeIn().slideY(begin: 0.05),
@@ -200,8 +235,8 @@ class _ProfilePageState extends State<ProfilePage> {
           const SizedBox(width: 12),
           Expanded(
             child: ProfileStatCard(
-              value: _widgetCount.toString(),
-              label: "Widgets\nDeployed",
+              value: _publishedCount.toString(),
+              label: "Published\nWidgets",
               color: LiquidTheme.cyan,
             ),
           ),
@@ -472,7 +507,7 @@ class _ProfilePageState extends State<ProfilePage> {
           _BadgeData(
             Icons.widgets_rounded,
             "Widget Lord",
-            "10 widgets deployed",
+            "10 widgets created",
             LiquidTheme.primary,
             unlocked: status['widget_lord'] ?? false,
           ),
@@ -651,17 +686,15 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildCollectionsGrid(BuildContext context) {
     final collections = [
-      ("Weather Scripts", Icons.cloud_rounded, _widgetCount, LiquidTheme.cyan),
+      ("Weather Scripts", Icons.cloud_rounded, _weatherCount, LiquidTheme.cyan),
       (
         "Productivity",
         Icons.task_alt_rounded,
-        _scriptCount > 0
-            ? (_scriptCount - _widgetCount).clamp(0, _scriptCount)
-            : 0,
+        _productivityCount,
         LiquidTheme.primary,
       ),
       (
-        "Deployed Widgets",
+        "Widget Scripts",
         Icons.widgets_rounded,
         _widgetCount,
         const Color(0xFF10B981),
@@ -677,6 +710,7 @@ class _ProfilePageState extends State<ProfilePage> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: GridView.count(
+        padding: EdgeInsets.zero,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         crossAxisCount: 2,
@@ -695,11 +729,11 @@ class _ProfilePageState extends State<ProfilePage> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    c.$4.withValues(alpha: 0.12),
-                    c.$4.withValues(alpha: 0.04),
+                    c.$4.withValues(alpha: 0.15),
+                    c.$4.withValues(alpha: 0.05),
                   ],
                 ),
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: c.$4.withValues(alpha: 0.2)),
               ),
               child: Column(

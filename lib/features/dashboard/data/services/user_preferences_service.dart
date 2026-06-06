@@ -1,4 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import 'package:hive_ce/hive.dart';
 
 /// Persistent key-value store for user preferences (profile, settings).
@@ -20,6 +22,17 @@ class UserPreferencesService {
     }
 
     _box = await Hive.openLazyBox<String>(currentBoxName);
+
+    // Sync the global theme notifier to match the newly loaded box's preference
+    if (GetIt.I.isRegistered<ValueNotifier<ThemeMode>>()) {
+      final isDarkVal = await _box!.get('dark_mode');
+      if (isDarkVal == null || isDarkVal.isEmpty) {
+        GetIt.I<ValueNotifier<ThemeMode>>().value = ThemeMode.system;
+      } else {
+        GetIt.I<ValueNotifier<ThemeMode>>().value =
+            isDarkVal == 'true' ? ThemeMode.dark : ThemeMode.light;
+      }
+    }
   }
 
   Future<String> get(String key, {String defaultValue = ''}) async {
@@ -40,6 +53,11 @@ class UserPreferencesService {
     return path.isEmpty ? null : path;
   }
   Future<bool> get isDarkMode async => (await get('dark_mode')) == 'true';
+  Future<bool?> get isDarkModeRaw async {
+    final val = await get('dark_mode');
+    if (val.isEmpty) return null;
+    return val == 'true';
+  }
   Future<bool> get notificationsEnabled async => (await get('notifications', defaultValue: 'true')) == 'true';
   
   // Convenience setters
