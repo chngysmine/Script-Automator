@@ -60,3 +60,8 @@ android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 lib/firebase_options.dart
 firebase.json
+
+# Private signing secrets
+**/android/key.properties
+**/android/upload-keystore.jks
+

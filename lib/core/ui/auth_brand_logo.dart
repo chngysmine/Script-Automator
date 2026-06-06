@@ -51,15 +51,6 @@ class _AuthBrandLogoState extends State<AuthBrandLogo>
               height: widget.size,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(widget.size * 0.28),
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF818CF8), // Indigo 400
-                    LiquidTheme.primary,
-                    LiquidTheme.secondary,
-                  ],
-                ),
                 boxShadow: [
                   BoxShadow(
                     color: LiquidTheme.primary.withValues(alpha: glowIntensity),
@@ -75,25 +66,13 @@ class _AuthBrandLogoState extends State<AuthBrandLogo>
                   ),
                 ],
               ),
-              child: Center(
-                child: ShaderMask(
-                  shaderCallback: (bounds) {
-                    return const LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.white, Color(0xCCFFFFFF)],
-                    ).createShader(bounds);
-                  },
-                  blendMode: BlendMode.srcIn,
-                  child: Text(
-                    'SA',
-                    style: TextStyle(
-                      fontSize: widget.size * 0.36,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -1.5,
-                      height: 1.0,
-                    ),
-                  ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(widget.size * 0.28),
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  width: widget.size,
+                  height: widget.size,
+                  fit: BoxFit.cover,
                 ),
               ),
             ),
