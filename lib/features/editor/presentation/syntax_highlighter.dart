@@ -83,7 +83,6 @@ class SyntaxHighlighter {
   SyntaxHighlighter({required this.baseStyle})
     : commentStyle = baseStyle.copyWith(
         color: const Color(0xFF5C6370), // One Dark: Gray
-        fontStyle: FontStyle.italic,
       ),
       stringStyle = baseStyle.copyWith(
         color: const Color(0xFF98C379), // One Dark: Green
@@ -93,14 +92,12 @@ class SyntaxHighlighter {
       ),
       keywordStyle = baseStyle.copyWith(
         color: const Color(0xFFC678DD), // One Dark: Purple
-        fontWeight: FontWeight.w600,
       );
 
   /// Creates a [SyntaxHighlighter] using the **One Light** color palette (light mode).
   SyntaxHighlighter.light({required this.baseStyle})
     : commentStyle = baseStyle.copyWith(
         color: const Color(0xFFA0A1A7), // One Light: Gray
-        fontStyle: FontStyle.italic,
       ),
       stringStyle = baseStyle.copyWith(
         color: const Color(0xFF50A14F), // One Light: Green
@@ -110,7 +107,6 @@ class SyntaxHighlighter {
       ),
       keywordStyle = baseStyle.copyWith(
         color: const Color(0xFFA626A4), // One Light: Purple
-        fontWeight: FontWeight.w600,
       );
 
   /// Creates a brightness-aware [SyntaxHighlighter].

@@ -27,6 +27,7 @@ import 'package:script_automator/features/widget_renderer/domain/entities/widget
 import 'package:script_automator/features/widget_renderer/presentation/widgets/sasup_renderer.dart';
 import 'package:script_automator/features/widget_renderer/domain/services/headless_widget_rendering_service.dart';
 import 'package:script_automator/features/editor/domain/editor_history.dart';
+import 'package:script_automator/features/editor/presentation/widgets/unsaved_changes_dialog.dart';
 import 'package:script_automator/features/dashboard/data/services/user_stats_service.dart';
 import 'package:script_automator/features/docs/presentation/pages/api_docs_page.dart';
 import 'package:script_automator/features/docs/presentation/pages/widget_schema_page.dart';
@@ -58,6 +59,12 @@ class _EditorPageState extends State<EditorPage>
   bool _isUndoRedoAction = false;
   
   bool _isLoadingContent = false;
+  String? _initialText;
+
+  bool get _hasUnsavedChanges {
+    if (_initialText == null) return false;
+    return _inputController.text != _initialText;
+  }
 
   // Phase 4 Integration: Real Engine
   final ScriptRunnerService _runnerService = GetIt.I<ScriptRunnerService>();
@@ -74,12 +81,6 @@ class _EditorPageState extends State<EditorPage>
   void initState() {
     super.initState();
     _controller = CodeForgeController();
-    _textFieldScrollController.addListener(() {
-      if (_textFieldScrollController.offset != 0) {
-        _textFieldScrollController.jumpTo(0);
-      }
-    });
-
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -141,9 +142,11 @@ class _EditorPageState extends State<EditorPage>
 
   void _initializeEditorWithText(String text) {
     if (!mounted) return;
-    _inputController.text = text;
-    _controller.setText(_inputController.text);
-    _history.record(_inputController.text, 0);
+    final normalized = text.replaceAll('\r\n', '\n');
+    _initialText = normalized;
+    _inputController.text = normalized;
+    _controller.setText(normalized);
+    _history.record(normalized, 0);
 
     // Only attach Auto-Save Logic AFTER initial load to prevent overwriting
     _inputController.addListener(_handleTextInput);
@@ -161,25 +164,14 @@ class _EditorPageState extends State<EditorPage>
       if (textChanged) {
         _controller.setText(_inputController.text);
         _history.record(_inputController.text, _inputController.selection.baseOffset);
-        _onTextChanged(); // Trigger Debounce Save
       }
       _controller.selection = _inputController.selection;
       setState(() {}); // Trigger rebuild for syntax highlighting/selection update
     }
   }
 
-  // --- Auto Save ---
-  Timer? _debounceTimer;
   final ScriptRepository _repository = GetIt.I<ScriptRepository>();
   bool _isSaving = false;
-
-  void _onTextChanged() {
-    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
-    _debounceTimer = Timer(
-      const Duration(seconds: 1, milliseconds: 500),
-      _saveScript,
-    );
-  }
 
   Future<void> _saveScript() async {
     if (widget.script == null) {
@@ -218,29 +210,36 @@ class _EditorPageState extends State<EditorPage>
     }
 
     if (mounted) {
-      setState(() => _isSaving = false);
+      setState(() {
+        _isSaving = false;
+        _initialText = _inputController.text;
+      });
     }
+  }
+
+  Future<bool> _handleBackPress() async {
+    if (!_hasUnsavedChanges) {
+      return true; // Allow pop
+    }
+
+    final result = await showDialog<UnsavedChangesResult>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const UnsavedChangesDialog(),
+    );
+
+    if (result == UnsavedChangesResult.save) {
+      await _saveScript();
+      return true; // Allow pop
+    } else if (result == UnsavedChangesResult.discard) {
+      return true; // Allow pop
+    }
+
+    return false; // Do not pop
   }
 
   @override
   void dispose() {
-    _debounceTimer?.cancel();
-    if (widget.script != null && _controller.text != widget.script!.content) {
-      // Create a fire-and-forget save that doesn't rely on State
-      final newSettings = Map<String, dynamic>.from(widget.script!.settings);
-      newSettings['is_modified_from_gallery'] = true;
-
-      final finalScript = Script(
-        id: widget.script!.id,
-        name: widget.script!.name,
-        content: _controller.text,
-        createdAt: widget.script!.createdAt,
-        updatedAt: DateTime.now(),
-        settings: newSettings,
-      );
-      _repository.saveScript(finalScript);
-    }
-
     _inputController.removeListener(_handleTextInput);
     _controller.dispose();
     _inputController.dispose();
@@ -616,16 +615,40 @@ class _EditorPageState extends State<EditorPage>
     final editorBg = isDark
         ? LiquidTheme.darkBackground
         : const Color(0xFFF1F5F9); // Slate 100 — matches app gradient
+
+    final double dpr = mediaQuery.devicePixelRatio;
+    final double textScaleFactor = mediaQuery.textScaler.scale(1.0);
+    final double scaledFontSize = 13.5 * textScaleFactor;
+    final double snappedHeightFactor = getSnappedHeightFactor(scaledFontSize, 1.6, dpr);
+
     final editorTextStyle = kEditorTextStyle.copyWith(
       color: isDark
           ? const Color(0xFFCBD5E1) // Slate 300
           : const Color(0xFF334155), // Slate 700
+      height: snappedHeightFactor,
     );
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      resizeToAvoidBottomInset: false,
-      body: Stack(
+    final snappedStrutStyle = StrutStyle(
+      fontFamily: editorTextStyle.fontFamily,
+      fontSize: 13.5,
+      height: snappedHeightFactor,
+      leading: 0,
+      forceStrutHeight: true,
+    );
+
+    return PopScope(
+      canPop: !_hasUnsavedChanges,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _handleBackPress();
+        if (!shouldPop) return;
+        if (!context.mounted) return;
+        Navigator.of(context).pop();
+      },
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        resizeToAvoidBottomInset: false,
+        body: Stack(
         children: [
           // 1. Background
           Container(
@@ -663,7 +686,12 @@ class _EditorPageState extends State<EditorPage>
                 EditorAppBar(
                   scriptName: widget.script?.name ?? "Untitled",
                   isSaving: _isSaving,
-                  onBack: () => Navigator.pop(context),
+                  onBack: () async {
+                    final shouldPop = await _handleBackPress();
+                    if (!shouldPop) return;
+                    if (!context.mounted) return;
+                    Navigator.of(context).pop();
+                  },
                   onPlay: _runScript,
                   onDocsTap: () => _showDocsSheet(context),
                   onPublish: widget.script == null ? null : () async {
@@ -674,10 +702,16 @@ class _EditorPageState extends State<EditorPage>
                         settings: widget.script!.settings,
                       ),
                     );
-                    if (success == true && context.mounted) {
+                    if (success == true) {
+                      if (!context.mounted) return;
                       PublishScriptSheet.showSuccessDialog(context);
                     }
                   },
+                  onUndo: _handleUndo,
+                  onRedo: _handleRedo,
+                  canUndo: _history.canUndo,
+                  canRedo: _history.canRedo,
+                  onSave: _saveScript,
                 ),
                 Expanded(
                   child: FadeTransition(
@@ -755,13 +789,13 @@ class _EditorPageState extends State<EditorPage>
                                                       constraints.maxHeight,
                                                   textStyle:
                                                       editorTextStyle,
-                                                  strutStyle: kEditorStrutStyle,
+                                                  strutStyle: snappedStrutStyle,
                                                   textScaler: MediaQuery.textScalerOf(context),
                                                   gutterWidth: 44.0,
                                                   codePaddingLeft: 8.0,
                                                   isDark: isDark,
                                                   maxLineWidth:
-                                                      availableWidth - 60.0,
+                                                      availableWidth - 60.0 - 3.0,
                                                   highlighter:
                                                       SyntaxHighlighter.adaptive(
                                                         baseStyle: editorTextStyle,
@@ -793,11 +827,11 @@ class _EditorPageState extends State<EditorPage>
                                                       color:
                                                           Colors.transparent,
                                                     ),
-                                                strutStyle: kEditorStrutStyle,
+                                                strutStyle: snappedStrutStyle,
                                                 cursorColor: const Color(
                                                   0xFF0284C7,
                                                 ),
-                                                cursorHeight: 16,
+                                                cursorHeight: 13.5 * snappedHeightFactor,
                                                 cursorWidth: 1.5,
                                                 decoration: const InputDecoration(
                                                   border: InputBorder.none,
@@ -895,7 +929,7 @@ class _EditorPageState extends State<EditorPage>
             ),
         ],
       ),
-    );
+    ),);
   }
 
   void _handleUndo() {
@@ -910,7 +944,7 @@ class _EditorPageState extends State<EditorPage>
     _controller.setText(snapshot.text);
     _isUndoRedoAction = false;
     
-    // _controller.setText already triggers CustomPaint rebuild via Listenable
+    setState(() {});
   }
 
   void _handleRedo() {
@@ -925,7 +959,7 @@ class _EditorPageState extends State<EditorPage>
     _controller.setText(snapshot.text);
     _isUndoRedoAction = false;
     
-    // _controller.setText already triggers CustomPaint rebuild via Listenable
+    setState(() {});
   }
 
   void _snapToEdge(Offset currentPosition, double screenWidth, double screenHeight, double bottomPadding) {
@@ -1142,11 +1176,10 @@ class _EditorPageState extends State<EditorPage>
       );
       _controller.setText(generatedCode);
       _history.record(generatedCode, generatedCode.length);
-      _onTextChanged();
+      setState(() {});
       // _controller.setText already triggers CustomPaint rebuild via Listenable
       HapticFeedback.mediumImpact();
     }
   }
 
 }
-
