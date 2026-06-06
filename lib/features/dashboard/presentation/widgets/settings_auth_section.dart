@@ -280,12 +280,132 @@ Future<void> _linkProvider(
     await linkFn();
     final uid = GetIt.I<AuthService>().currentUser?.uid;
     if (uid != null) {
-      await GetIt.I<FirestoreSyncService>().pushLocalToCloud(uid);
+      try {
+        await GetIt.I<FirestoreSyncService>().pushLocalToCloud(uid);
+      } on SyncConflictException catch (e) {
+        if (context.mounted) {
+          await _showSyncConflictDialog(context, uid, e, onLinked);
+        }
+        return;
+      }
     }
     onLinked?.call();
-    // Removed Snackbar
   } catch (e) {
     debugPrint("Failed: $e");
+  }
+}
+
+Future<void> _showSyncConflictDialog(
+  BuildContext context,
+  String uid,
+  SyncConflictException exception,
+  VoidCallback? onLinked,
+) async {
+  final result = await showDialog<String>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) {
+      final colors = Theme.of(dialogContext).extension<LiquidColors>()!;
+      return AlertDialog(
+        backgroundColor: colors.sheetBackground,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          "Sync Conflict",
+          style: TextStyle(color: colors.textTitle, fontWeight: FontWeight.w800),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Drafts with the same names already exist on your Cloud account:",
+              style: TextStyle(color: colors.textBody),
+            ),
+            const SizedBox(height: 10),
+            ...exception.conflictingNames.map((name) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange.shade600),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: TextStyle(
+                            color: colors.textBody,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'JetBrainsMono',
+                            fontSize: 13,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+            const SizedBox(height: 16),
+            Text(
+              "How would you like to resolve these conflicts?",
+              style: TextStyle(color: colors.textBody),
+            ),
+          ],
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, 'merge'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: LiquidTheme.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text("Keep Both (Merge & Rename)"),
+                ),
+                const SizedBox(height: 6),
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(dialogContext, 'overwrite'),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: colors.cardBorder),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text("Overwrite Cloud with Local", style: TextStyle(color: colors.textBody)),
+                ),
+                const SizedBox(height: 6),
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(dialogContext, 'discard'),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.redAccent),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text("Discard Local Drafts", style: TextStyle(color: Colors.redAccent)),
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (result == null) return;
+
+  try {
+    final syncService = GetIt.I<FirestoreSyncService>();
+    if (result == 'merge') {
+      await syncService.pushLocalToCloud(uid, forceMerge: true);
+    } else if (result == 'overwrite') {
+      await syncService.pushLocalToCloud(uid, forceOverwrite: true);
+    } else if (result == 'discard') {
+      await syncService.pushLocalToCloud(uid, forceDiscard: true);
+      await syncService.pullCloudToLocal(uid);
+    }
+    onLinked?.call();
+  } catch (e) {
+    debugPrint("Failed to resolve sync conflict: $e");
   }
 }
 

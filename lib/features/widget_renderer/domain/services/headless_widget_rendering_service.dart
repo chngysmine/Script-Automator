@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 import 'dart:io';
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
@@ -51,15 +52,23 @@ class HeadlessWidgetRenderingService {
   ///
   /// This is the **fallback** mode for complex UIs that can't be expressed
   /// as native SwiftUI/Glance components. Use [renderNativeJson] when possible.
-  Future<String> renderAndSave(WidgetNode node, String scriptId) async {
+  Future<String> renderAndSave(WidgetNode node, String scriptId, {String family = 'medium'}) async {
     try {
       debugPrint(
-        "HeadlessService: Starting renderAndSave (Texture Capture)...",
+        "HeadlessService: Starting renderAndSave (Texture Capture) for family $family...",
       );
+
+      // Determine size based on family
+      Size size = const Size(329, 155); // Default medium
+      if (family == 'small') {
+        size = const Size(155, 155);
+      } else if (family == 'large') {
+        size = const Size(329, 345);
+      }
 
       // Force ignore flex on the absolute root node when rendering internally
       final flutterWidget = _buildWidgetTree(node, isRoot: true);
-      final image = await _captureWidgetOffScreen(flutterWidget);
+      final image = await _captureWidgetOffScreen(flutterWidget, size);
 
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw Exception("Failed to encode image");
@@ -71,26 +80,36 @@ class HeadlessWidgetRenderingService {
       final pngFile = File('${directory.path}/sasup_ui_$scriptId.png');
       await pngFile.writeAsBytes(buffer, flush: true);
 
-      // Wrap as image node JSON for widget to render
+      // 1. Save original WidgetNode JSON for Flutter in-app preview and iOS compatibility
+      final originalFile = File('${directory.path}/sasup_ui_$scriptId.json');
+      final originalRootMap = {'family': family, 'scriptId': scriptId, 'root': node.toJson()};
+      final sanitizedOriginalMap = _sanitizeForJson(originalRootMap);
+      final originalJsonPayload = jsonEncode(sanitizedOriginalMap);
+      await originalFile.writeAsString(originalJsonPayload, flush: true);
+
+      final originalDefaultFile = File('${directory.path}/sasup_ui.json');
+      await originalDefaultFile.writeAsString(originalJsonPayload, flush: true);
+
+      // 2. Wrap as image node JSON for Android Glance widget to render
       final imageNode = WidgetNode(
         type: WidgetType.image,
         content: 'file://${pngFile.path}',
         modifiers: const SASUPModifiers(),
       );
 
-      final jsonFile = File('${directory.path}/sasup_ui_$scriptId.json');
-      final rootMap = {'scriptId': scriptId, 'root': imageNode.toJson()};
-      final sanitizedMap = _sanitizeForJson(rootMap);
-      final jsonPayload = jsonEncode(sanitizedMap);
+      final glanceFile = File('${directory.path}/sasup_ui_${scriptId}_glance.json');
+      final glanceRootMap = {'family': family, 'scriptId': scriptId, 'root': imageNode.toJson()};
+      final sanitizedGlanceMap = _sanitizeForJson(glanceRootMap);
+      final glanceJsonPayload = jsonEncode(sanitizedGlanceMap);
 
-      await jsonFile.writeAsString(jsonPayload, flush: true);
+      await glanceFile.writeAsString(glanceJsonPayload, flush: true);
 
-      final defaultFile = File('${directory.path}/sasup_ui.json');
-      await defaultFile.writeAsString(jsonPayload, flush: true);
+      final defaultGlanceFile = File('${directory.path}/sasup_ui_glance.json');
+      await defaultGlanceFile.writeAsString(glanceJsonPayload, flush: true);
 
       await _triggerWidgetReload();
 
-      return 'file://${jsonFile.path}';
+      return 'file://${originalFile.path}';
     } catch (e, stack) {
       debugPrint("Headless Render Error: $e\n$stack");
       throw Exception("Headless Render Failed: $e");
@@ -106,13 +125,19 @@ class HeadlessWidgetRenderingService {
       final jsonFile = File('${directory.path}/sasup_ui_$scriptId.json');
       if (await jsonFile.exists()) await jsonFile.delete();
 
+      final glanceFile = File('${directory.path}/sasup_ui_${scriptId}_glance.json');
+      if (await glanceFile.exists()) await glanceFile.delete();
+
       final pngFile = File('${directory.path}/sasup_ui_$scriptId.png');
       if (await pngFile.exists()) await pngFile.delete();
 
-      // Aggressively delete the fallback sasup_ui.json as well to prevent
+      // Aggressively delete the fallback sasup_ui.json and sasup_ui_glance.json as well to prevent
       // unconfigured widgets from showing stale data.
       final fallbackJson = File('${directory.path}/sasup_ui.json');
       if (await fallbackJson.exists()) await fallbackJson.delete();
+
+      final fallbackGlanceJson = File('${directory.path}/sasup_ui_glance.json');
+      if (await fallbackGlanceJson.exists()) await fallbackGlanceJson.delete();
 
       await _triggerWidgetReload();
 
@@ -210,26 +235,24 @@ class HeadlessWidgetRenderingService {
 
   // --- Internal Rendering Logic ---
 
-  Future<ui.Image> _captureWidgetOffScreen(Widget widget) async {
-    // Advanced Technique: Create a RenderView and Pipeline manually
+  Future<ui.Image> _captureWidgetOffScreen(Widget widget, Size size) async {
     final RenderRepaintBoundary repaintBoundary = RenderRepaintBoundary();
 
-    // Safety Check: Background Isolates often lack a View.
     if (ui.PlatformDispatcher.instance.views.isEmpty) {
       throw Exception(
         "Cannot render widget off-screen: No active Flutter View available in this Isolate.",
       );
     }
 
-    // Double check if we are in a headless context without surface
-    // If so, we might need to skip or use a virtual view if Flutter allows (Impeller)
-    // For now, fail gracefully.
+    final double pixelRatio = ui.PlatformDispatcher.instance.views.isNotEmpty
+        ? ui.PlatformDispatcher.instance.views.first.devicePixelRatio
+        : 3.0;
 
     final RenderView renderView = RenderView(
       configuration: ViewConfiguration(
-        devicePixelRatio: 2.0,
-        logicalConstraints: BoxConstraints.tight(const Size(800, 800)),
-        physicalConstraints: BoxConstraints.tight(const Size(1600, 1600)),
+        devicePixelRatio: pixelRatio,
+        logicalConstraints: BoxConstraints.tight(size),
+        physicalConstraints: BoxConstraints.tight(size * pixelRatio),
       ),
       view: ui.PlatformDispatcher.instance.views.first,
       child: RenderPositionedBox(
@@ -244,23 +267,90 @@ class HeadlessWidgetRenderingService {
     pipelineOwner.rootNode = renderView;
     renderView.prepareInitialFrame();
 
+    final darkTheme = ThemeData.dark().copyWith(
+      textTheme: ThemeData.dark().textTheme.apply(
+        fontFamily: 'Inter',
+      ),
+    );
+
+    // Wrap with MediaQuery & transparent Material surface to ensure correct layout parameters
+    // and styles propagate correctly to all Material children (e.g. text styles, colors, etc.)
     final RenderObjectToWidgetElement<RenderBox> rootElement =
         RenderObjectToWidgetAdapter<RenderBox>(
           container: repaintBoundary,
           child: Directionality(
             textDirection: TextDirection.ltr,
-            child: Theme(data: ThemeData.light(), child: widget),
+            child: MediaQuery(
+              data: MediaQueryData(
+                size: size,
+                devicePixelRatio: pixelRatio,
+                textScaler: const TextScaler.linear(1.0),
+              ),
+              child: Theme(
+                data: darkTheme,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: widget,
+                ),
+              ),
+            ),
           ),
         ).attachToRenderTree(buildOwner);
 
+    // Initial build so elements are constructed and image providers can be queried
+    buildOwner.buildScope(rootElement);
+
+    // Pre-resolve and await all image providers in the tree before layout/paint.
+    // This solves the issue where asynchronous images are not loaded in time.
+    final List<ImageProvider> imageProviders = [];
+    _findImageProviders(widget, imageProviders);
+    if (imageProviders.isNotEmpty) {
+      final ImageConfiguration config = ImageConfiguration(
+        devicePixelRatio: pixelRatio,
+        size: size,
+      );
+      await Future.wait(imageProviders.map((provider) {
+        final completer = Completer<void>();
+        final stream = provider.resolve(config);
+        late ImageStreamListener listener;
+        listener = ImageStreamListener(
+          (ImageInfo image, bool synchronousCall) {
+            if (!completer.isCompleted) completer.complete();
+            stream.removeListener(listener);
+          },
+          onError: (dynamic exception, StackTrace? stackTrace) {
+            debugPrint("HeadlessService: Image Precache Error: $exception");
+            if (!completer.isCompleted) completer.complete();
+            stream.removeListener(listener);
+          },
+        );
+        stream.addListener(listener);
+        return completer.future;
+      }));
+    }
+
+    // Pass 1: Build & Paint to initialize the widget tree, trigger text layout,
+    // and register custom fonts (e.g. 'Inter' and 'MaterialIcons') with the paragraph builder.
     buildOwner.buildScope(rootElement);
     buildOwner.finalizeTree();
-
     pipelineOwner.flushLayout();
     pipelineOwner.flushCompositingBits();
     pipelineOwner.flushPaint();
 
-    final ui.Image image = await repaintBoundary.toImage(pixelRatio: 2.0);
+    // Signal engine about font changes to ensure custom fonts are loaded in the text layouter
+    PaintingBinding.instance.handleSystemMessage({'type': 'fontsChange'});
+
+    // Allow engine's async font loading and texture updates a brief moment to process
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    // Pass 2: Re-run build, layout, and paint after all font resources and textures are warm.
+    buildOwner.buildScope(rootElement);
+    buildOwner.finalizeTree();
+    pipelineOwner.flushLayout();
+    pipelineOwner.flushCompositingBits();
+    pipelineOwner.flushPaint();
+
+    final ui.Image image = await repaintBoundary.toImage(pixelRatio: pixelRatio);
     return image;
   }
 
@@ -413,33 +503,49 @@ class HeadlessWidgetRenderingService {
 
     // Background & Decor
     if (mods.background != null || mods.cornerRadius != null) {
-      BoxDecoration decoration;
-
       final bg = mods.background;
-      if (bg != null && bg.startsWith("linear-gradient")) {
+      final borderRadius = mods.cornerRadius != null
+          ? BorderRadius.circular(mods.cornerRadius!)
+          : BorderRadius.zero;
+
+      if (bg == 'glass') {
+        w = ClipRRect(
+          borderRadius: borderRadius,
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(25),
+                borderRadius: borderRadius,
+                border: Border.all(
+                  color: Colors.white.withAlpha(38),
+                  width: 1.0,
+                ),
+              ),
+              child: w,
+            ),
+          ),
+        );
+      } else if (bg != null && bg.startsWith("linear-gradient")) {
         // Parse Gradient: linear-gradient(deg, #Col1, #Col2)
         // Simplistic parser for MVP: ignores degree, takes first 2 colors
         final colors = _extractColors(bg);
-        decoration = BoxDecoration(
+        final decoration = BoxDecoration(
           gradient: LinearGradient(
             colors: colors.isNotEmpty ? colors : [Colors.purple, Colors.blue],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: mods.cornerRadius != null
-              ? BorderRadius.circular(mods.cornerRadius!)
-              : null,
+          borderRadius: borderRadius,
         );
+        w = Container(decoration: decoration, child: w);
       } else {
-        decoration = BoxDecoration(
+        final decoration = BoxDecoration(
           color: _parseColor(mods.background),
-          borderRadius: mods.cornerRadius != null
-              ? BorderRadius.circular(mods.cornerRadius!)
-              : null,
+          borderRadius: borderRadius,
         );
+        w = Container(decoration: decoration, child: w);
       }
-
-      w = Container(decoration: decoration, child: w);
     }
 
     // Expand/Flex in Column/Row
@@ -466,6 +572,8 @@ class HeadlessWidgetRenderingService {
     }
     // Simple Names
     switch (colorStr.toLowerCase()) {
+      case 'glass':
+        return Colors.transparent;
       case 'white':
         return Colors.white;
       case 'black':
@@ -625,5 +733,43 @@ class HeadlessWidgetRenderingService {
     ); // Modified to support 3-8 chars
     final matches = regex.allMatches(input);
     return matches.map((m) => _parseColor(m.group(0))).toList();
+  }
+
+  void _findImageProviders(Widget widget, List<ImageProvider> providers) {
+    if (widget is Image) {
+      providers.add(widget.image);
+    } else if (widget is Container) {
+      final dec = widget.decoration;
+      if (dec is BoxDecoration && dec.image != null) {
+        providers.add(dec.image!.image);
+      }
+      if (widget.child != null) {
+        _findImageProviders(widget.child!, providers);
+      }
+    } else if (widget is SingleChildRenderObjectWidget) {
+      if (widget.child != null) {
+        _findImageProviders(widget.child!, providers);
+      }
+    } else if (widget is MultiChildRenderObjectWidget) {
+      for (var child in widget.children) {
+        _findImageProviders(child, providers);
+      }
+    } else if (widget is ProxyWidget) {
+      _findImageProviders(widget.child, providers);
+    } else if (widget is PreferredSize) {
+      _findImageProviders(widget.child, providers);
+    } else if (widget is DefaultTextStyle) {
+      _findImageProviders(widget.child, providers);
+    } else if (widget is Theme) {
+      _findImageProviders(widget.child, providers);
+    } else if (widget is Directionality) {
+      _findImageProviders(widget.child, providers);
+    } else if (widget is Material) {
+      if (widget.child != null) {
+        _findImageProviders(widget.child!, providers);
+      }
+    } else if (widget is MediaQuery) {
+      _findImageProviders(widget.child, providers);
+    }
   }
 }

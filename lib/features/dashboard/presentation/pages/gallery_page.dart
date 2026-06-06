@@ -2,7 +2,7 @@ import 'dart:ui';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:script_automator/features/dashboard/presentation/widgets/install_progress_dialog.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/import_progress_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:script_automator/core/theme/liquid_theme.dart';
@@ -19,6 +19,7 @@ import 'package:script_automator/core/ui/glass_sliver_header.dart';
 import 'package:script_automator/core/security/script_integrity_checker.dart';
 import 'package:script_automator/core/services/app_config_service.dart';
 import 'package:script_automator/core/ui/styled_dropdown.dart';
+import 'package:script_automator/core/ui/liquid_circular_loader.dart';
 
 class GalleryPage extends StatefulWidget {
   const GalleryPage({super.key});
@@ -63,12 +64,11 @@ class _GalleryPageState extends State<GalleryPage> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<LiquidColors>()!;
+
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _templatesFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        final isLoading = snapshot.connectionState == ConnectionState.waiting;
         if (snapshot.hasError) {
           return Center(
             child: Text(
@@ -131,7 +131,7 @@ class _GalleryPageState extends State<GalleryPage> {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Text(
-                          "Script Store",
+                          "Gallery",
                           style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.w900,
@@ -289,96 +289,108 @@ class _GalleryPageState extends State<GalleryPage> {
               ),
             ),
 
-            // 1. Featured Section (hide if searching)
-            if (featured.isNotEmpty && _searchQuery.isEmpty) ...[
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                  child: Text(
-                    "Editor's Choice",
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: colors.textTitle,
-                      letterSpacing: -0.5,
-                    ),
+            if (isLoading)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 80),
+                    child: LiquidCircularLoader(size: 44),
                   ),
                 ),
-              ),
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 240,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: featured.length,
-                    itemBuilder: (context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 16.0),
-                        child: SizedBox(
-                          width: 320,
-                          child: _buildBentoCardFromMap(
-                            featured[index],
-                            BentoSize.large,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ],
-
-            // 2. Main Feed
-            ...[
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 40, 24, 16),
-                  child: Text(
-                    "New Releases",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: colors.textTitle,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                ),
-              ),
-              if (others.isEmpty)
+              )
+            else ...[
+              // 1. Featured Section (hide if searching)
+              if (featured.isNotEmpty && _searchQuery.isEmpty) ...[
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.all(40.0),
-                    child: Center(
-                      child: Text(
-                        "No scripts found matching $_searchQuery",
-                        style: TextStyle(
-                          color: colors.textCaption.withValues(alpha: 0.8),
-                        ),
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                    child: Text(
+                      "Editor's Choice",
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: colors.textTitle,
+                        letterSpacing: -0.5,
                       ),
                     ),
                   ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  sliver: SliverGrid(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                          childAspectRatio: 0.85,
-                        ),
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      return _buildBentoCardFromMap(
-                        others[index],
-                        BentoSize.small,
-                      );
-                    }, childCount: others.length),
+                ),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 240,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: featured.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 16.0),
+                          child: SizedBox(
+                            width: 320,
+                            child: _buildBentoCardFromMap(
+                              featured[index],
+                              BentoSize.large,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
-              const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+              ],
+
+              // 2. Main Feed
+              ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 40, 24, 16),
+                    child: Text(
+                      "New Releases",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: colors.textTitle,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ),
+                ),
+                if (others.isEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(40.0),
+                      child: Center(
+                        child: Text(
+                          "No scripts found matching $_searchQuery",
+                          style: TextStyle(
+                            color: colors.textCaption.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    sliver: SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 0.85,
+                          ),
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        return _buildBentoCardFromMap(
+                          others[index],
+                          BentoSize.small,
+                        );
+                      }, childCount: others.length),
+                    ),
+                  ),
+                const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+              ],
             ],
           ],
         );
@@ -847,7 +859,7 @@ class _GalleryPageState extends State<GalleryPage> {
                       if (content.isEmpty && url.isNotEmpty) {
                         _processUrlImport(url);
                       } else {
-                        _installScript(context, item);
+                        _importTemplate(context, item);
                       }
                     },
                     child: Ink(
@@ -867,7 +879,7 @@ class _GalleryPageState extends State<GalleryPage> {
                             Icon(Icons.download_rounded, color: Colors.white),
                             SizedBox(width: 8),
                             Text(
-                              "Install Script",
+                              "Import Template",
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,
@@ -1300,9 +1312,9 @@ class _GalleryPageState extends State<GalleryPage> {
     if (!url.startsWith('https://')) {
       showDialog(
         context: context,
-        builder: (context) => InstallProgressDialog(
+        builder: (context) => ImportProgressDialog(
           scriptName: 'Import from URL',
-          installTask: (updateProgress) async {
+          importTask: (updateProgress) async {
             throw Exception('Only HTTPS URLs are allowed for security.');
           },
         ),
@@ -1319,14 +1331,14 @@ class _GalleryPageState extends State<GalleryPage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (dialogCtx) => InstallProgressDialog(
+      builder: (dialogCtx) => ImportProgressDialog(
         scriptName: name,
-        installTask: (updateProgress) async {
-          updateProgress('Downloading remote script...');
+        importTask: (updateProgress) async {
+          updateProgress('Downloading remote template...');
           final gitService = GitService();
           final content = await gitService.downloadScript(url);
 
-          updateProgress('Registering widget local storage...');
+          updateProgress('Registering template local storage...');
           final script = Script(
             id: 'gallery_${name.toLowerCase().replaceAll(' ', '_')}',
             name: name,
@@ -1347,21 +1359,21 @@ class _GalleryPageState extends State<GalleryPage> {
     );
   }
 
-  Future<void> _installScript(
+  Future<void> _importTemplate(
     BuildContext context,
     Map<String, dynamic> item,
   ) async {
     final name = item['name'] ?? 'Untitled';
 
-    // Block installs during maintenance mode
+    // Block imports during maintenance mode
     if (GetIt.I.isRegistered<AppConfigService>() &&
         GetIt.I<AppConfigService>().maintenanceMode) {
       showDialog(
         context: context,
-        builder: (context) => InstallProgressDialog(
+        builder: (context) => ImportProgressDialog(
           scriptName: name,
-          installTask: (updateProgress) async {
-            throw Exception('Gallery is in maintenance mode. Installations are disabled.');
+          importTask: (updateProgress) async {
+            throw Exception('Gallery is in maintenance mode. Imports are disabled.');
           },
         ),
       );
@@ -1371,16 +1383,16 @@ class _GalleryPageState extends State<GalleryPage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (dialogCtx) => InstallProgressDialog(
+      builder: (dialogCtx) => ImportProgressDialog(
         scriptName: name,
-        installTask: (updateProgress) async {
+        importTask: (updateProgress) async {
           final existingContent = item['content'] ?? '';
           final scriptUrl = item['scriptUrl'] ?? '';
 
           String finalContent = existingContent;
 
           if (finalContent.isEmpty && scriptUrl.isNotEmpty) {
-            updateProgress('Connecting to store storage...');
+            updateProgress('Connecting to template storage...');
             final response = await http
                 .get(Uri.parse(scriptUrl))
                 .timeout(const Duration(seconds: 15));
@@ -1393,20 +1405,20 @@ class _GalleryPageState extends State<GalleryPage> {
 
           if (finalContent.isEmpty) {
             finalContent =
-                '// $name\n// Installed from Gallery\n\n// Script content not available offline.';
+                '// $name\n// Imported from Gallery\n\n// Template content not available offline.';
           }
 
           // SHA-256 integrity check for remotely downloaded scripts
           final expectedHash = item['sha256'] as String?;
           final hasRemoteSource = scriptUrl.isNotEmpty && finalContent != existingContent;
           if (hasRemoteSource) {
-            updateProgress('Verifying script integrity...');
+            updateProgress('Verifying template integrity...');
             if (!ScriptIntegrityChecker.verify(finalContent, expectedHash)) {
-              throw Exception('Script integrity check failed (SHA-256 mismatch). possible tampering detected.');
+              throw Exception('Template integrity check failed (SHA-256 mismatch). possible tampering detected.');
             }
           }
 
-          updateProgress('Registering widget local storage...');
+          updateProgress('Registering template local storage...');
           final galleryId =
               item['id'] ?? name.toLowerCase().replaceAll(' ', '_');
           final galleryVersion = item['version'] ?? '1.0.0';

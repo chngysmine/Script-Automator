@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -11,6 +12,7 @@ import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:script_automator/features/dashboard/data/services/user_preferences_service.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/edit_profile_sheet.dart';
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
+import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/script_management/data/datasources/script_local_data_source.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/settings_widgets.dart';
@@ -332,6 +334,282 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _showAndroidWidgetConfigSheet() async {
+    const channel = MethodChannel('com.js.scriptAutomator/widget');
+    
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: LiquidTheme.cyan),
+      ),
+    );
+
+    List<int> widgetIds = [];
+    Map<String, String> associations = {};
+    try {
+      final List<dynamic>? ids = await channel.invokeMethod<List<dynamic>>('getAndroidWidgetIds');
+      if (ids != null) {
+        widgetIds = ids.cast<int>();
+      }
+      final Map<dynamic, dynamic>? assoc = await channel.invokeMethod<Map<dynamic, dynamic>>('getWidgetAssociations');
+      if (assoc != null) {
+        assoc.forEach((key, val) {
+          associations[key.toString()] = val.toString();
+        });
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch widget data: $e");
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context); // Dismiss loading dialog
+
+    final repo = GetIt.I<ScriptRepository>();
+    final scriptsResult = await repo.getScripts();
+    final scripts = scriptsResult.fold((_) => <Script>[], (list) => list);
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final colors = Theme.of(context).extension<LiquidColors>()!;
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+              child: Container(
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  24,
+                  24,
+                  MediaQuery.of(context).viewInsets.bottom + 40,
+                ),
+                decoration: BoxDecoration(
+                  color: colors.sheetBackground.withValues(alpha: 0.85),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(30),
+                    topRight: Radius.circular(30),
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: colors.textCaption.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      "Home Widgets",
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: colors.textTitle,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Configure which script runs and displays output on each home screen widget.",
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: colors.textCaption,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    if (widgetIds.isEmpty) ...[
+                      Center(
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: colors.cardBackground.withValues(alpha: 0.5),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.widgets_outlined,
+                                size: 48,
+                                color: colors.textCaption.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              "No Active Widgets Found",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: colors.textTitle,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: Text(
+                                "To add a widget:\n1. Long-press your phone's home screen.\n2. Select 'Widgets' and search for 'Script Automator'.\n3. Add a widget and return here to configure it.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: colors.textCaption,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      Flexible(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: widgetIds.length,
+                          separatorBuilder: (context, index) => const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final wId = widgetIds[index];
+                            final currentScriptId = associations["widget_$wId"];
+
+                            return Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: colors.cardBackground,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: colors.cardBorder,
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: LiquidTheme.cyan.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(
+                                      Icons.widgets_rounded,
+                                      color: LiquidTheme.cyan,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          "Widget #$wId",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: colors.textTitle,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                        Text(
+                                          currentScriptId == null
+                                              ? "Showing last run script"
+                                              : "Running selected script",
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: colors.textCaption,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Theme(
+                                    data: Theme.of(context).copyWith(
+                                      canvasColor: colors.sheetBackground,
+                                    ),
+                                    child: DropdownButtonHideUnderline(
+                                      child: DropdownButton<String?>(
+                                        value: currentScriptId,
+                                        icon: Icon(
+                                          Icons.keyboard_arrow_down_rounded,
+                                          color: colors.textCaption,
+                                        ),
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: colors.textTitle,
+                                        ),
+                                        onChanged: (newScriptId) async {
+                                          try {
+                                            await channel.invokeMethod(
+                                              'associateWidgetWithScript',
+                                              {
+                                                'widgetId': wId,
+                                                'scriptId': newScriptId,
+                                              },
+                                            );
+                                            setModalState(() {
+                                              if (newScriptId == null) {
+                                                associations.remove("widget_$wId");
+                                              } else {
+                                                associations["widget_$wId"] = newScriptId;
+                                              }
+                                            });
+                                          } catch (e) {
+                                            debugPrint("Failed to associate widget: $e");
+                                          }
+                                        },
+                                        items: [
+                                          DropdownMenuItem<String?>(
+                                            value: null,
+                                            child: Text(
+                                              "Last Run",
+                                              style: TextStyle(
+                                                color: colors.textCaption,
+                                              ),
+                                            ),
+                                          ),
+                                          ...scripts.map(
+                                            (s) => DropdownMenuItem<String?>(
+                                              value: s.id,
+                                              child: Text(s.name),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<LiquidColors>()!;
@@ -413,6 +691,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   onTap: _showClearCacheDialog,
                   iconColor: const Color(0xFFF59E0B),
                 ),
+                if (Platform.isAndroid)
+                  SettingsActionItem(
+                    icon: Icons.widgets_rounded,
+                    title: "Configure Home Widgets",
+                    onTap: _showAndroidWidgetConfigSheet,
+                    iconColor: const Color(0xFF10B981),
+                  ),
               ]).animate(delay: 150.ms).fadeIn().slideY(begin: 0.1),
 
               const SizedBox(height: 32),

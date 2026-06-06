@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
@@ -10,10 +9,11 @@ import 'package:script_automator/features/dashboard/domain/repositories/gallery_
 import 'package:script_automator/features/dashboard/presentation/widgets/glass_header_actions.dart';
 import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
 import 'package:get_it/get_it.dart';
-import 'package:http/http.dart' as http;
 import 'package:script_automator/core/security/script_integrity_checker.dart';
+import 'package:script_automator/core/ui/liquid_circular_loader.dart';
 import 'package:script_automator/core/services/app_config_service.dart';
-import 'package:script_automator/features/dashboard/presentation/widgets/install_progress_dialog.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/import_progress_dialog.dart';
+import 'package:script_automator/features/dashboard/presentation/widgets/template_preview_dialog.dart';
 
 /// Explore/Discovery page that fetches scripts from the community gallery.
 ///
@@ -323,9 +323,9 @@ class _ExplorePageState extends State<ExplorePage> {
   Widget _buildContent(LiquidColors colors) {
     if (_isLoading) {
       return const Padding(
-        padding: EdgeInsets.all(60),
+        padding: EdgeInsets.symmetric(vertical: 80),
         child: Center(
-          child: CircularProgressIndicator(color: LiquidTheme.primary),
+          child: LiquidCircularLoader(size: 44),
         ),
       );
     }
@@ -576,21 +576,21 @@ class _ExplorePageState extends State<ExplorePage> {
               ),
             ),
             const SizedBox(width: 8),
-            _buildInstallButton(s),
+            _buildGetButton(s),
           ],
         ),
       );
     }).toList();
   }
 
-  Widget _buildInstallButton(Map<String, dynamic> s) {
+  Widget _buildGetButton(Map<String, dynamic> s) {
     final gid = s['id'] ?? s['name']?.toLowerCase().replaceAll(' ', '_') ?? '';
     final gver = s['version'] ?? '1.0.0';
     final installedVer = _installedVersions[gid];
 
     if (installedVer == null) {
       return GestureDetector(
-        onTap: () => _installFromGallery(s),
+        onTap: () => _previewAndImportFromGallery(s),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
@@ -607,7 +607,7 @@ class _ExplorePageState extends State<ExplorePage> {
             ],
           ),
           child: const Text(
-            "Install",
+            "Get",
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
@@ -618,7 +618,7 @@ class _ExplorePageState extends State<ExplorePage> {
       );
     } else if (installedVer != gver) {
       return GestureDetector(
-        onTap: () => _installFromGallery(s),
+        onTap: () => _previewAndImportFromGallery(s),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
@@ -663,7 +663,7 @@ class _ExplorePageState extends State<ExplorePage> {
             ),
             const SizedBox(width: 4),
             Text(
-              "Installed",
+              "Added",
               style: TextStyle(
                 color: isDark ? Colors.white70 : Colors.black54,
                 fontWeight: FontWeight.bold,
@@ -676,21 +676,19 @@ class _ExplorePageState extends State<ExplorePage> {
     }
   }
 
-  /// Installs a script from the gallery with lazy content loading.
-  /// If `content` is already embedded (offline fallback), uses it directly.
-  /// Otherwise, downloads from `scriptUrl` first.
-  Future<void> _installFromGallery(Map<String, dynamic> scriptData) async {
+  /// Opens template preview dialog. From there, user triggers import dialog.
+  Future<void> _previewAndImportFromGallery(Map<String, dynamic> scriptData) async {
     final name = scriptData['name'] ?? 'Untitled';
 
-    // Block installs during maintenance mode
+    // Block imports during maintenance mode
     if (GetIt.I.isRegistered<AppConfigService>() &&
         GetIt.I<AppConfigService>().maintenanceMode) {
       showDialog(
         context: context,
-        builder: (context) => InstallProgressDialog(
+        builder: (context) => ImportProgressDialog(
           scriptName: name,
-          installTask: (updateProgress) async {
-            throw Exception('Gallery is in maintenance mode. Installations are disabled.');
+          importTask: (updateProgress) async {
+            throw Exception('Gallery is in maintenance mode. Imports are disabled.');
           },
         ),
       );
@@ -699,51 +697,42 @@ class _ExplorePageState extends State<ExplorePage> {
 
     showDialog(
       context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (dialogCtx) => TemplatePreviewDialog(
+        scriptData: scriptData,
+        onImportTriggered: (data, code) {
+          _triggerImportTask(data, code);
+        },
+      ),
+    );
+  }
+
+  void _triggerImportTask(Map<String, dynamic> scriptData, String content) {
+    final name = scriptData['name'] ?? 'Untitled';
+    showDialog(
+      context: context,
       barrierDismissible: false,
-      builder: (dialogCtx) => InstallProgressDialog(
+      builder: (dialogCtx) => ImportProgressDialog(
         scriptName: name,
-        installTask: (updateProgress) async {
-          final existingContent = scriptData['content'] ?? '';
+        importTask: (updateProgress) async {
           final scriptUrl = scriptData['scriptUrl'] ?? '';
-
-          String finalContent = existingContent;
-
-          if (finalContent.isEmpty && scriptUrl.isNotEmpty) {
-            updateProgress('Connecting to store storage...');
-            final response = await http
-                .get(Uri.parse(scriptUrl))
-                .timeout(const Duration(seconds: 15));
-            if (response.statusCode == 200) {
-              finalContent = utf8.decode(response.bodyBytes);
-            } else {
-              throw Exception('Server returned HTTP ${response.statusCode}');
-            }
-          }
-
-          if (finalContent.isEmpty) {
-            finalContent =
-                '// $name\n// Installed from Gallery\n\n// Script content not available offline.';
-          }
-
-          // SHA-256 integrity check
           final expectedHash = scriptData['sha256'] as String?;
-          final hasRemoteSource = scriptUrl.isNotEmpty && finalContent != existingContent;
-          if (hasRemoteSource) {
-            updateProgress('Verifying script integrity...');
-            if (!ScriptIntegrityChecker.verify(finalContent, expectedHash)) {
-              throw Exception('Script integrity check failed (SHA-256 mismatch). possible tampering detected.');
+
+          if (scriptUrl.isNotEmpty) {
+            updateProgress('Verifying template integrity...');
+            if (!ScriptIntegrityChecker.verify(content, expectedHash)) {
+              throw Exception('Template integrity check failed (SHA-256 mismatch). possible tampering detected.');
             }
           }
 
-          updateProgress('Registering widget local storage...');
-          final galleryId =
-              scriptData['id'] ?? name.toLowerCase().replaceAll(' ', '_');
+          updateProgress('Registering template local storage...');
+          final galleryId = scriptData['id'] ?? name.toLowerCase().replaceAll(' ', '_');
           final galleryVersion = scriptData['version'] ?? '1.0.0';
 
           final script = Script(
             id: 'gallery_${name.toLowerCase().replaceAll(' ', '_')}',
             name: name,
-            content: finalContent,
+            content: content,
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
             settings: {
@@ -753,7 +742,7 @@ class _ExplorePageState extends State<ExplorePage> {
             },
           );
           await GetIt.I<ScriptRepository>().saveScript(script);
-          
+
           // Refresh versions listing in state
           await _loadInstalledVersions();
         },

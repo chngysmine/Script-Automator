@@ -4,24 +4,24 @@ import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
-class InstallProgressDialog extends StatefulWidget {
+class ImportProgressDialog extends StatefulWidget {
   final String scriptName;
   final Future<void> Function(
     void Function(String progressMessage) updateProgress,
-  ) installTask;
+  ) importTask;
 
-  const InstallProgressDialog({
+  const ImportProgressDialog({
     super.key,
     required this.scriptName,
-    required this.installTask,
+    required this.importTask,
   });
 
   @override
-  State<InstallProgressDialog> createState() => _InstallProgressDialogState();
+  State<ImportProgressDialog> createState() => _ImportProgressDialogState();
 }
 
-class _InstallProgressDialogState extends State<InstallProgressDialog> {
-  String _message = 'Preparing installation...';
+class _ImportProgressDialogState extends State<ImportProgressDialog> {
+  String _message = 'Preparing import...';
   bool _isLoading = true;
   bool _isSuccess = false;
   String? _errorMessage;
@@ -29,12 +29,12 @@ class _InstallProgressDialogState extends State<InstallProgressDialog> {
   @override
   void initState() {
     super.initState();
-    _runInstall();
+    _runImport();
   }
 
-  Future<void> _runInstall() async {
+  Future<void> _runImport() async {
     try {
-      await widget.installTask((msg) {
+      await widget.importTask((msg) {
         if (mounted) {
           setState(() {
             _message = msg;
@@ -45,7 +45,7 @@ class _InstallProgressDialogState extends State<InstallProgressDialog> {
         setState(() {
           _isLoading = false;
           _isSuccess = true;
-          _message = '"${widget.scriptName}" installed successfully and is ready to run!';
+          _message = '"${widget.scriptName}" imported successfully and is ready to review in your editor!';
         });
       }
     } catch (e) {
@@ -54,7 +54,7 @@ class _InstallProgressDialogState extends State<InstallProgressDialog> {
           _isLoading = false;
           _isSuccess = false;
           _errorMessage = e.toString().replaceAll('Exception:', '').trim();
-          _message = 'Failed to install "${widget.scriptName}".';
+          _message = 'Failed to import "${widget.scriptName}".';
         });
       }
     }
@@ -137,8 +137,8 @@ class _InstallProgressDialogState extends State<InstallProgressDialog> {
                 // Title
                 Text(
                   _isLoading
-                      ? 'Installing Widget'
-                      : (_isSuccess ? 'Installation Complete' : 'Installation Failed'),
+                      ? 'Importing Template'
+                      : (_isSuccess ? 'Import Complete' : 'Import Failed'),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 20,

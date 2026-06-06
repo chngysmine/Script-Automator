@@ -106,27 +106,37 @@ struct ColorParser {
     static func parse(_ value: String?) -> Color {
         guard let val = value?.trimmingCharacters(in: .whitespacesAndNewlines) else { return .clear }
         
+        if val.lowercased() == "transparent" {
+            return .clear
+        }
+        
         if val.hasPrefix("#") {
-            let cleanHex = String(val.dropFirst())
+            var cleanHex = String(val.dropFirst())
+            
+            // Expand short hex (3 or 4 digits)
+            if cleanHex.count == 3 || cleanHex.count == 4 {
+                cleanHex = cleanHex.map { "\($0)\($0)" }.joined()
+            }
+            
             let scanner = Scanner(string: cleanHex)
             var rgbValue: UInt64 = 0
             scanner.scanHexInt64(&rgbValue)
             
             if cleanHex.count == 8 {
-                let a = (rgbValue & 0xFF000000) >> 24
-                let r = (rgbValue & 0x00FF0000) >> 16
-                let g = (rgbValue & 0x0000FF00) >> 8
-                let b = rgbValue & 0x000000FF
+                let r = (rgbValue & 0xFF000000) >> 24
+                let g = (rgbValue & 0x00FF0000) >> 16
+                let b = (rgbValue & 0x0000FF00) >> 8
+                let a = rgbValue & 0x000000FF
                 return Color(
-                    red: Double(r) / 0xFF,
-                    green: Double(g) / 0xFF,
-                    blue: Double(b) / 0xFF
-                ).opacity(Double(a) / 0xFF)
+                    red: Double(r) / 255.0,
+                    green: Double(g) / 255.0,
+                    blue: Double(b) / 255.0
+                ).opacity(Double(a) / 255.0)
             } else {
                 let r = (rgbValue & 0xFF0000) >> 16
                 let g = (rgbValue & 0x00FF00) >> 8
                 let b = rgbValue & 0x0000FF
-                return Color(red: Double(r) / 0xFF, green: Double(g) / 0xFF, blue: Double(b) / 0xFF)
+                return Color(red: Double(r) / 255.0, green: Double(g) / 255.0, blue: Double(b) / 255.0)
             }
         } else if val.hasPrefix("rgba") {
             let cleaned = val.replacingOccurrences(of: "rgba(", with: "")

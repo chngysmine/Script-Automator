@@ -10,6 +10,20 @@ import 'package:script_automator/features/dashboard/data/services/user_stats_ser
 import 'package:script_automator/core/sync/sync_retry_queue.dart';
 import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
 
+class SyncConflictException implements Exception {
+  final List<String> conflictingNames;
+  final List<Script> localScripts;
+  final List<Map<String, dynamic>> cloudScriptsData;
+  SyncConflictException({
+    required this.conflictingNames,
+    required this.localScripts,
+    required this.cloudScriptsData,
+  });
+
+  @override
+  String toString() => "SyncConflictException: Conflicting scripts: $conflictingNames";
+}
+
 /// Bidirectional sync engine between local Hive storage and Cloud Firestore.
 ///
 /// Sync strategy: **last-write-wins** based on [updatedAt] timestamp.
@@ -29,7 +43,17 @@ class FirestoreSyncService {
   // ────────────────────── Script Sync ──────────────────────
 
   /// Pushes all local scripts to Firestore. Used after Guest→Account linking.
-  Future<void> pushLocalToCloud(String uid) async {
+  Future<void> pushLocalToCloud(
+    String uid, {
+    bool forceOverwrite = false,
+    bool forceDiscard = false,
+    bool forceMerge = false,
+  }) async {
+    if (forceDiscard) {
+      debugPrint('[Sync] Discarding local scripts in favor of Cloud.');
+      return;
+    }
+
     try {
       final repo = GetIt.I<ScriptRepository>();
       final result = await repo.getScriptsWithContent();
@@ -39,18 +63,63 @@ class FirestoreSyncService {
           debugPrint('[Sync] Failed to read local scripts: $failure');
         },
         (scripts) async {
-          final batch = _firestore.batch();
+          if (scripts.isEmpty) return;
+
           final collection = _firestore.collection('users').doc(uid).collection('scripts');
 
+          if (!forceOverwrite && !forceMerge) {
+            // Check for cloud scripts first
+            final cloudSnapshot = await collection.get();
+            if (cloudSnapshot.docs.isNotEmpty) {
+              final cloudDocs = cloudSnapshot.docs.map((doc) => doc.data()).toList();
+              final cloudIds = cloudSnapshot.docs.map((doc) => doc.id).toSet();
+
+              final conflictingNames = <String>[];
+              for (final localScript in scripts) {
+                if (cloudIds.contains(localScript.id)) {
+                  conflictingNames.add(localScript.name);
+                }
+              }
+
+              if (conflictingNames.isNotEmpty) {
+                throw SyncConflictException(
+                  conflictingNames: conflictingNames,
+                  localScripts: scripts,
+                  cloudScriptsData: cloudDocs,
+                );
+              }
+            }
+          }
+
+          final batch = _firestore.batch();
           for (final script in scripts) {
-            final docRef = collection.doc(script.id);
-            batch.set(docRef, _scriptToMap(script), SetOptions(merge: true));
+            var finalScript = script;
+            if (forceMerge) {
+              final docRef = collection.doc(script.id);
+              final docSnap = await docRef.get();
+              if (docSnap.exists) {
+                // Rename local conflict
+                finalScript = Script(
+                  id: '${script.id}_local_${DateTime.now().millisecondsSinceEpoch}',
+                  name: '${script.name} (Local Draft)',
+                  content: script.content,
+                  createdAt: script.createdAt,
+                  updatedAt: script.updatedAt,
+                  settings: {...script.settings, 'is_conflict_copy': true, 'original_id': script.id},
+                );
+                await repo.saveScript(finalScript);
+              }
+            }
+            final docRef = collection.doc(finalScript.id);
+            batch.set(docRef, _scriptToMap(finalScript), SetOptions(merge: true));
           }
 
           await batch.commit();
           debugPrint('[Sync] Pushed ${scripts.length} scripts to cloud.');
         },
       );
+    } on SyncConflictException {
+      rethrow;
     } catch (e) {
       debugPrint('[Sync] Push failed: $e');
     }

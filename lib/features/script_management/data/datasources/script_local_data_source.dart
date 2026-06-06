@@ -88,15 +88,35 @@ class ScriptLocalDataSourceImpl implements ScriptLocalDataSource {
       final key = await _encryptionService.getEncryptionKey();
       final cipher = HiveAesCipher(key);
 
-      _metadataBox = await Hive.openLazyBox<ScriptModel>(
-        'scripts_metadata_v2_$uid',
-        encryptionCipher: cipher,
-      );
+      try {
+        _metadataBox = await Hive.openLazyBox<ScriptModel>(
+          'scripts_metadata_v2_$uid',
+          encryptionCipher: cipher,
+        );
+      } catch (e) {
+        // ignore: avoid_print
+        print("ScriptLocalDataSource: failed to open metadata box, deleting and retrying: $e");
+        await Hive.deleteBoxFromDisk('scripts_metadata_v2_$uid');
+        _metadataBox = await Hive.openLazyBox<ScriptModel>(
+          'scripts_metadata_v2_$uid',
+          encryptionCipher: cipher,
+        );
+      }
 
-      _contentBox = await Hive.openLazyBox<String>(
-        'scripts_content_v2_$uid',
-        encryptionCipher: cipher,
-      );
+      try {
+        _contentBox = await Hive.openLazyBox<String>(
+          'scripts_content_v2_$uid',
+          encryptionCipher: cipher,
+        );
+      } catch (e) {
+        // ignore: avoid_print
+        print("ScriptLocalDataSource: failed to open content box, deleting and retrying: $e");
+        await Hive.deleteBoxFromDisk('scripts_content_v2_$uid');
+        _contentBox = await Hive.openLazyBox<String>(
+          'scripts_content_v2_$uid',
+          encryptionCipher: cipher,
+        );
+      }
     } catch (e) {
       throw CacheException("Failed to initialize secure storage: $e");
     }

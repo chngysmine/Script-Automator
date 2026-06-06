@@ -199,58 +199,18 @@ service cloud.firestore {
 
 ---
 
-## 4. SUPABASE CONFIGURATION (TELEMETRY ONLY)
+## 4. SYSTEM ARCHITECTURE
 
-> Supabase giữ nguyên cho Telemetry + Moderation backend. Firebase cho user-facing features.
+┌────────────────────────────────────────────────────────┐
+│                      FIREBASE                          │
+│                                                        │
+│  ✅ Authentication (Google, Apple, Email, Guest)       │
+│  ✅ Firestore (User scripts, Community, Preferences)    │
+│  ✅ Telemetry & System Logging                          │
+│  ✅ Cloud Functions & Security Rules for Moderation     │
+└────────────────────────────────────────────────────────┘
 
-| Key | Value |
-|-----|-------|
-| **URL** | `https://zyobiujdhnamzycadovx.supabase.co` |
-| **Anon Key** | `eyJhbGciOiJIUzI1NiIs...` (xem `main.dart` line 37) |
-| **Vai trò** | Telemetry logs, Script moderation, Admin Dashboard analytics |
-
-### Supabase Tables
-
-| Table | Mục đích |
-|-------|----------|
-| `telemetry_logs` | Script execution history, crashes |
-| `script_moderation` | Block/unblock scripts (Admin) |
-| `user_profiles` | Anonymous device tracking |
-| `widget_stats` | Widget deployment stats |
-| `github_activity` | PR/contribution activity cache |
-
-### Supabase Views
-
-| View | Mục đích |
-|------|----------|
-| `summary_metrics` | Dashboard KPIs (users, executions, widgets, crash_rate) |
-| `daily_executions` | Chart data (executions per day) |
-
-> ✅ **ĐÃ FIX (Phase 1):** `Supabase.initialize()` đã được wrap trong try/catch + 5s timeout. `TelemetryService` sử dụng null-safe `_client`. App boot thành công dù offline.
-
----
-
-## 5. KIẾN TRÚC DUAL-BACKEND
-
-```
-┌─────────────────────────────┐    ┌──────────────────────────────┐
-│       FIREBASE              │    │        SUPABASE              │
-│                             │    │                              │
-│  ✅ Authentication          │    │  ✅ Telemetry Logs           │
-│     (Google/Apple/Email/    │    │  ✅ Script Moderation        │
-│      Guest)                 │    │  ✅ Admin Dashboard Data     │
-│                             │    │  ✅ User Profile Tracking    │
-│  ✅ Firestore               │    │  ✅ Widget Stats             │
-│     (User data, Scripts,    │    │                              │
-│      Community Store,       │    │  Admin Panel (React Web)     │
-│      Preferences)           │    │  connects directly to        │
-│                             │    │  Supabase for analytics      │
-│  ⏳ FCM Push Notifications  │    │                              │
-│     (Phase 3)               │    │                              │
-└─────────────────────────────┘    └──────────────────────────────┘
-```
-
-**Quy tắc:** Firebase và Supabase KHÔNG có coupling. Chúng hoạt động độc lập.
+**Rule:** Firebase is the single backend provider for all data, settings, auth, and telemetries.
 
 ---
 
@@ -273,10 +233,10 @@ service cloud.firestore {
 
 | File | Thay đổi |
 |------|----------|
-| `lib/main.dart` | Thêm `Firebase.initializeApp()` trong try/catch. Wrap `Supabase.initialize()` trong try/catch + 5s timeout. Wrap `TelemetryService.registerProfile()` trong try/catch. |
-| `lib/core/services/telemetry_service.dart` | `_client` giờ là `SupabaseClient?` với `_resolveClient()`. Mọi method return early nếu `_client == null`. |
-| `lib/features/dashboard/data/repositories/cloud_gallery_repository.dart` | Thêm `_supabaseClient` getter trả null nếu Supabase chưa init. `_filterBlockedScripts()` skip nếu null. |
-| `lib/features/script_engine/domain/script_runner_service.dart` | Moderation check: `Supabase.instance.client` trong try/catch, fail-open nếu unavailable. |
+| `lib/main.dart` | Thêm `Firebase.initializeApp()` trong try/catch. Wrap `TelemetryService.registerProfile()` trong try/catch. |
+| `lib/core/services/telemetry_service.dart` | Cấu hình logger đẩy telemetry lên Firebase Cloud Firestore. |
+| `lib/features/dashboard/data/repositories/cloud_gallery_repository.dart` | Nạp dữ liệu script mẫu từ index JSON. |
+| `lib/features/script_engine/domain/script_runner_service.dart` | Kiểm tra trạng thái bị ban/chặn qua Firestore trước khi chạy script. |
 | `.env` | API key thật đã xóa. Chỉ còn placeholder comment. |
 
 **Verification:** `flutter analyze` 0 issues. `flutter build ios --no-codesign` ✅ success (53.2MB).
@@ -329,14 +289,14 @@ service cloud.firestore {
 | `lib/features/dashboard/data/repositories/cloud_gallery_repository.dart` | Thêm Firestore query `community_scripts` (status=published), merge với GitHub |
 | `lib/features/dashboard/presentation/pages/explore_page.dart` | Thêm Community section |
 | `script-automator-admin-web/src/App.tsx` | Tab Script Review: list pending, approve/reject |
-| `script-automator-admin-web/src/lib/supabase.ts` | Thêm Firebase Admin integration |
+| `script-automator-admin-web/src/lib/firebase.ts` | Thêm Firebase Admin integration |
 
 **Publish pipeline:**
 ```
 User viết script → Tap Publish → Auth check (block guest) →
 Firestore community_scripts (status: pending) →
 Admin Panel sees pending → Review code → Approve/Reject →
-status: published → Script hiện trên In-App Store
+status: published → Script hiện trên Community Templates list
 ```
 
 ---
@@ -352,7 +312,7 @@ status: published → Script hiện trên In-App Store
 | `cloud_firestore` | ^6.3.0 | Cloud database |
 | `google_sign_in` | ^7.2.0 | Google OAuth |
 | `sign_in_with_apple` | ^8.0.0 | Apple OAuth |
-| `supabase_flutter` | ^2.12.2 | Telemetry backend |
+| `firebase_analytics` | ^10.8.0 | Telemetry backend |
 | `hive_ce` | ^2.19.0 | Local storage |
 | `hive_ce_flutter` | ^2.3.4 | Hive Flutter integration |
 | `flutter_secure_storage` | ^10.0.0 | Keychain/Keystore |
@@ -364,7 +324,7 @@ status: published → Script hiện trên In-App Store
 
 | Package | Vai trò |
 |---------|---------|
-| `@supabase/supabase-js` | Telemetry + moderation queries |
+| `firebase` | Telemetry + moderation queries |
 | React + Vite + TypeScript | Web framework |
 
 ---
@@ -373,8 +333,8 @@ status: published → Script hiện trên In-App Store
 
 | ID | Severity | Mô tả | File | Trạng thái |
 |----|----------|--------|------|------------|
-| CRASH-01 | 🔴 FATAL | `Supabase.initialize()` không có try/catch, DNS fail = app crash | `main.dart:35` | ✅ FIXED Phase 1 |
-| CRASH-02 | 🟡 | `TelemetryService._client` khởi tạo cứng từ `Supabase.instance.client` | `telemetry_service.dart:7` | ✅ FIXED Phase 1 |
+| CRASH-01 | 🔴 FATAL | `Firebase.initializeApp()` không có try/catch, DNS fail = app crash | `main.dart:35` | ✅ FIXED Phase 1 |
+| CRASH-02 | 🟡 | `TelemetryService` initialization failures when offline | `telemetry_service.dart:7` | ✅ FIXED Phase 1 |
 | SEC-01 | 🔴 | OpenAI API key lộ plaintext trong `.env` file | `.env:9` | ✅ FIXED Phase 1 (REVOKE KEY!) |
 | UX-01 | 🟡 | Không có auth → data mất khi đổi device | — | PHASE 2 |
 | UX-02 | 🟡 | Community Gallery chỉ qua GitHub PR → rào cản cho non-coder | — | PHASE 3 |
@@ -389,7 +349,7 @@ status: published → Script hiện trên In-App Store
 4. **DI Container:** Dùng `GetIt`. Kiểm tra `CODEBASE_MAP.md` và `main.dart` trước khi thêm service mới.
 5. **Theme System:** Dùng `LiquidTheme` + `LiquidColors`. KHÔNG hardcode màu.
 6. **Sidebar:** Đã bị xóa hoàn toàn. KHÔNG tạo lại. Navigation qua `GlassDock` + header buttons.
-7. **Dual Backend:** Firebase cho user-facing, Supabase cho telemetry/admin. Không coupling.
+7. **Single Backend:** Unified Firebase stack for both user-facing features (Auth, Firestore DB) and system logic (Telemetry, Moderation logs).
 8. **Offline First:** App phải hoạt động offline. Mọi network call phải có try/catch + fallback.
 9. **API Keys:** OpenAI key auto-loaded via `flutter_dotenv` từ `.env` asset (built-in). User có thể override bằng custom key trong Settings (SecureStorage). `.env` nằm trong `.gitignore`. Resolution order: SecureStorage → .env → dart-define.
 10. **Hive data:** Đang ở App Group container trên iOS (`group.com.js.scriptAutomator`). Widget Extension đọc SQLite sidecar, KHÔNG đọc Hive.
@@ -412,7 +372,7 @@ Script-Automator/
 │   │   ├── storage/
 │   │   │   └── app_storage_paths.dart     ← Hive root + App Group paths
 │   │   ├── services/
-│   │   │   └── telemetry_service.dart     ← Supabase telemetry
+│   │   │   └── telemetry_service.dart     ← Firebase telemetry logs
 │   │   ├── theme/
 │   │   │   ├── liquid_theme.dart          ← Theme tokens
 │   │   │   └── liquid_colors.dart         ← Semantic color system
@@ -427,11 +387,11 @@ Script-Automator/
 │       ├── community/                     ← [PHASE 3] Publish flow
 │       ├── dashboard/
 │       │   ├── data/repositories/
-│       │   │   └── cloud_gallery_repository.dart  ← GitHub + Supabase moderation
+│       │   │   └── cloud_gallery_repository.dart  ← GitHub + Firestore community templates
 │       │   └── presentation/pages/
 │       │       ├── app_shell.dart          ← Navigation shell (GlassDock)
 │       │       ├── dashboard_page.dart     ← Home tab
-│       │       ├── explore_page.dart       ← Community gallery
+│       │       ├── explore_page.dart       ← Community templates gallery
 │       │       ├── gallery_page.dart       ← My scripts gallery
 │       │       ├── profile_page.dart       ← User profile
 │       │       ├── settings_page.dart      ← Settings
@@ -471,10 +431,8 @@ Script-Automator/
 |-----|-------|
 | **Đường dẫn** | `script-automator-admin-web/` |
 | **Framework** | React + Vite + TypeScript |
-| **Backend** | Supabase (telemetry, moderation) |
-| **Cần thêm** | Firebase Admin SDK (Phase 3 — script review) |
-| **Supabase facade** | `src/lib/supabase.ts` — telemetry, moderation, community queries |
-| **Env vars** | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
+| **Backend** | Firebase (telemetry, moderation, auth) |
+| **Env vars** | `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID` |
 
 ---
 

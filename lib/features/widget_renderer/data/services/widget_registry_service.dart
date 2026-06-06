@@ -45,6 +45,10 @@ class WidgetRegistryService {
             )
           ''');
         },
+        onOpen: (db) async {
+          await db.execute('PRAGMA journal_mode=WAL;');
+          debugPrint("WidgetRegistryDB: WAL mode enabled");
+        },
       );
       debugPrint("WidgetRegistryDB initialized at: $dbPath");
     } catch (e) {

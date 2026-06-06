@@ -28,14 +28,35 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
 import com.google.gson.JsonObject
+import com.google.gson.JsonArray
+
+private fun JsonObject.getObj(key: String): JsonObject? {
+    return if (has(key) && !get(key).isJsonNull) getAsJsonObject(key) else null
+}
+
+private fun JsonObject.getArr(key: String): JsonArray? {
+    return if (has(key) && !get(key).isJsonNull) getAsJsonArray(key) else null
+}
+
+private fun JsonObject.getStr(key: String): String? {
+    return if (has(key) && !get(key).isJsonNull) get(key).asString else null
+}
+
+private fun JsonObject.getFloat(key: String): Float? {
+    return if (has(key) && !get(key).isJsonNull) get(key).asFloat else null
+}
+
+private fun JsonObject.getInt(key: String): Int? {
+    return if (has(key) && !get(key).isJsonNull) get(key).asInt else null
+}
 
 object GlanceJsonParser {
 
     @Composable
-    fun RenderNode(node: JsonObject, isRoot: Boolean = false) {
-        val type = node.get("type").asString
-        val modifiers = if (node.has("modifiers")) node.getAsJsonObject("modifiers") else JsonObject()
-        var glanceModifier = parseModifiers(modifiers)
+    fun RenderNode(node: JsonObject, isRoot: Boolean = false, modifier: GlanceModifier = GlanceModifier) {
+        val type = node.getStr("type") ?: "container"
+        val modifiers = node.getObj("modifiers") ?: JsonObject()
+        var glanceModifier = modifier.then(parseModifiers(modifiers))
         
         if (isRoot) {
             glanceModifier = glanceModifier.fillMaxSize()
@@ -43,21 +64,21 @@ object GlanceJsonParser {
 
         when (type) {
             "column" -> {
-                val horizontalAlign = parseHorizontalAlignment(modifiers.get("alignment")?.asString)
+                val horizontalAlign = parseHorizontalAlignment(modifiers.getStr("alignment"))
                 Column(
                     modifier = glanceModifier,
                     horizontalAlignment = horizontalAlign
                 ) {
-                    RenderChildren(node)
+                    RenderColumnChildren(node)
                 }
             }
             "row" -> {
-                val verticalAlign = parseVerticalAlignment(modifiers.get("alignment")?.asString)
+                val verticalAlign = parseVerticalAlignment(modifiers.getStr("alignment"))
                  Row(
                     modifier = glanceModifier,
                     verticalAlignment = verticalAlign
                 ) {
-                    RenderChildren(node)
+                    RenderRowChildren(node)
                 }
             }
             "stack" -> {
@@ -65,24 +86,30 @@ object GlanceJsonParser {
                     modifier = glanceModifier,
                     contentAlignment = Alignment.Center
                 ) {
-                    RenderChildren(node)
+                    val children = node.getArr("children")
+                    children?.forEach { child ->
+                        if (child.isJsonObject) {
+                            RenderNode(child.asJsonObject, false, GlanceModifier)
+                        }
+                    }
                 }
             }
             "text" -> {
-                val content = node.get("content").asString
+                val content = node.getStr("content") ?: ""
                 val style = parseTextStyle(modifiers)
                 Text(
                     text = content, 
                     modifier = glanceModifier, 
                     style = style,
-                    maxLines = if (modifiers.has("maxLines")) modifiers.get("maxLines").asInt else 1
+                    maxLines = modifiers.getInt("maxLines") ?: 1
                 )
             }
             "icon" -> {
-                val content = node.get("content").asString
+                val content = node.getStr("content") ?: ""
                 val iconRes = mapSfSymbolToAndroid(content)
-                val tint = if (modifiers.has("color")) {
-                    ColorProvider(Color(android.graphics.Color.parseColor(modifiers.get("color").asString)))
+                val tintColorStr = modifiers.getStr("color")
+                val tint = if (tintColorStr != null) {
+                    ColorProvider(ColorParser.parse(tintColorStr))
                 } else {
                     ColorProvider(Color.White)
                 }
@@ -90,12 +117,12 @@ object GlanceJsonParser {
                 Image(
                     provider = ImageProvider(iconRes),
                     contentDescription = null,
-                    modifier = glanceModifier.size((modifiers.get("fontSize")?.asFloat ?: 24f).dp),
+                    modifier = glanceModifier.size((modifiers.getFloat("fontSize") ?: 24f).dp),
                     colorFilter = ColorFilter.tint(tint)
                 )
             }
             "image" -> {
-                val uriString = node.get("content").asString
+                val uriString = node.getStr("content") ?: ""
                 if (uriString.startsWith("file://")) {
                     val path = uriString.removePrefix("file://")
                     // Safely downsample the image to prevent IPC TransactionTooLargeException
@@ -117,34 +144,20 @@ object GlanceJsonParser {
                 Spacer(modifier = glanceModifier)
             }
             "container" -> {
-                var contentAlignment = Alignment.Center
-                if (modifiers.has("alignment")) {
-                    val align = modifiers.get("alignment").asString
-                    contentAlignment = when (align) {
-                        "topStart" -> Alignment.TopStart
-                        "topCenter" -> Alignment.TopCenter
-                        "topEnd" -> Alignment.TopEnd
-                        "centerStart" -> Alignment.CenterStart
-                        "center" -> Alignment.Center
-                        "centerEnd" -> Alignment.CenterEnd
-                        "bottomStart" -> Alignment.BottomStart
-                        "bottomCenter" -> Alignment.BottomCenter
-                        "bottomEnd" -> Alignment.BottomEnd
-                        else -> Alignment.Center
-                    }
-                }
-
-                androidx.glance.layout.Box(
+                val horizontalAlign = parseHorizontalAlignment(modifiers.getStr("alignment"))
+                val verticalAlign = parseVerticalAlignment(modifiers.getStr("alignment"))
+                Column(
                     modifier = glanceModifier,
-                    contentAlignment = contentAlignment
+                    horizontalAlignment = horizontalAlign,
+                    verticalAlignment = verticalAlign
                 ) {
-                    RenderChildren(node)
+                    RenderColumnChildren(node)
                 }
             }
             "button" -> {
-                val actionId = node.get("actionId")?.asString
-                val scriptId = if (node.has("scriptId")) node.get("scriptId").asString else null
-                val label = if (node.has("label")) node.get("label").asString else node.get("content")?.asString ?: ""
+                val actionId = node.getStr("actionId")
+                val scriptId = node.getStr("scriptId")
+                val label = node.getStr("label") ?: node.getStr("content") ?: ""
 
                 if (!actionId.isNullOrBlank()) {
                     val params = actionParametersOf(
@@ -154,14 +167,20 @@ object GlanceJsonParser {
                     Text(
                         text = label,
                         modifier = glanceModifier.clickable(actionRunCallback<ScriptRunnerActionCallback>(parameters = params)),
-                        style = parseTextStyle(modifiers)
+                        style = parseTextStyle(modifiers),
+                        maxLines = 1
                     )
                 } else {
                     androidx.glance.layout.Box(
                         modifier = glanceModifier,
                         contentAlignment = Alignment.Center
                     ) {
-                        RenderChildren(node)
+                        val children = node.getArr("children")
+                        children?.forEach { child ->
+                            if (child.isJsonObject) {
+                                RenderNode(child.asJsonObject, false, GlanceModifier)
+                            }
+                        }
                     }
                 }
             }
@@ -169,11 +188,99 @@ object GlanceJsonParser {
     }
 
     @Composable
-    private fun RenderChildren(node: JsonObject) {
-        if (node.has("children")) {
-            val children = node.getAsJsonArray("children")
-            children.forEach { child ->
-                RenderNode(child.asJsonObject, false)
+    private fun ColumnScope.RenderColumnChildren(node: JsonObject) {
+        val children = node.getArr("children") ?: return
+        val modifiers = node.getObj("modifiers") ?: JsonObject()
+        val spacing = modifiers.getFloat("spacing") ?: 0f
+        val alignment = modifiers.getStr("alignment")
+
+        val isSpaceBetween = alignment == "spaceBetween"
+        val isSpaceEvenly = alignment == "spaceEvenly" || alignment == "spaceAround"
+
+        children.forEachIndexed { index, child ->
+            if (child.isJsonObject) {
+                val childObj = child.asJsonObject
+                val childType = childObj.getStr("type") ?: "container"
+                val childModifiers = childObj.getObj("modifiers") ?: JsonObject()
+                val hasFlex = childModifiers.getInt("flex") == 1
+
+                if (isSpaceEvenly && index == 0) {
+                    Spacer(modifier = GlanceModifier.defaultWeight())
+                }
+
+                if (childType == "spacer") {
+                    Spacer(modifier = GlanceModifier.defaultWeight())
+                } else {
+                    val childModifier = if (hasFlex) GlanceModifier.defaultWeight() else GlanceModifier
+                    RenderNode(childObj, isRoot = false, modifier = childModifier)
+                }
+
+                if (index < children.size() - 1) {
+                    if (isSpaceBetween || isSpaceEvenly) {
+                        Spacer(modifier = GlanceModifier.defaultWeight())
+                    } else if (spacing > 0 && childType != "spacer") {
+                        val nextChild = children.get(index + 1)
+                        if (nextChild != null && nextChild.isJsonObject) {
+                            val nextChildType = nextChild.asJsonObject.getStr("type") ?: "container"
+                            if (nextChildType != "spacer") {
+                                Spacer(modifier = GlanceModifier.height(spacing.dp))
+                            }
+                        }
+                    }
+                }
+
+                if (isSpaceEvenly && index == children.size() - 1) {
+                    Spacer(modifier = GlanceModifier.defaultWeight())
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun RowScope.RenderRowChildren(node: JsonObject) {
+        val children = node.getArr("children") ?: return
+        val modifiers = node.getObj("modifiers") ?: JsonObject()
+        val spacing = modifiers.getFloat("spacing") ?: 0f
+        val alignment = modifiers.getStr("alignment")
+
+        val isSpaceBetween = alignment == "spaceBetween"
+        val isSpaceEvenly = alignment == "spaceEvenly" || alignment == "spaceAround"
+
+        children.forEachIndexed { index, child ->
+            if (child.isJsonObject) {
+                val childObj = child.asJsonObject
+                val childType = childObj.getStr("type") ?: "container"
+                val childModifiers = childObj.getObj("modifiers") ?: JsonObject()
+                val hasFlex = childModifiers.getInt("flex") == 1
+
+                if (isSpaceEvenly && index == 0) {
+                    Spacer(modifier = GlanceModifier.defaultWeight())
+                }
+
+                if (childType == "spacer") {
+                    Spacer(modifier = GlanceModifier.defaultWeight())
+                } else {
+                    val childModifier = if (hasFlex) GlanceModifier.defaultWeight() else GlanceModifier
+                    RenderNode(childObj, isRoot = false, modifier = childModifier)
+                }
+
+                if (index < children.size() - 1) {
+                    if (isSpaceBetween || isSpaceEvenly) {
+                        Spacer(modifier = GlanceModifier.defaultWeight())
+                    } else if (spacing > 0 && childType != "spacer") {
+                        val nextChild = children.get(index + 1)
+                        if (nextChild != null && nextChild.isJsonObject) {
+                            val nextChildType = nextChild.asJsonObject.getStr("type") ?: "container"
+                            if (nextChildType != "spacer") {
+                                Spacer(modifier = GlanceModifier.width(spacing.dp))
+                            }
+                        }
+                    }
+                }
+
+                if (isSpaceEvenly && index == children.size() - 1) {
+                    Spacer(modifier = GlanceModifier.defaultWeight())
+                }
             }
         }
     }
@@ -182,59 +289,56 @@ object GlanceJsonParser {
         var modifier: GlanceModifier = GlanceModifier
 
         // Padding
-        if (modifiers.has("padding")) {
-            val padding = modifiers.getAsJsonObject("padding")
-            modifier = if (padding.has("value")) {
-                 val all = padding.get("value").asFloat
-                 modifier.padding(all.dp)
+        val padding = modifiers.getObj("padding")
+        if (padding != null) {
+            val value = padding.getFloat("value")
+            modifier = if (value != null) {
+                 modifier.padding(value.dp)
             } else {
-                val l = padding.get("left")?.asFloat ?: 0f
-                val t = padding.get("top")?.asFloat ?: 0f
-                val r = padding.get("right")?.asFloat ?: 0f
-                val b = padding.get("bottom")?.asFloat ?: 0f
+                val l = padding.getFloat("left") ?: 0f
+                val t = padding.getFloat("top") ?: 0f
+                val r = padding.getFloat("right") ?: 0f
+                val b = padding.getFloat("bottom") ?: 0f
                 modifier.padding(l.dp, t.dp, r.dp, b.dp)
             }
         }
 
         // Size
-        if (modifiers.has("width")) {
-             modifier = modifier.width(modifiers.get("width").asFloat.dp)
+        val width = modifiers.getFloat("width")
+        if (width != null) {
+             modifier = modifier.width(width.dp)
         }
         
-        if (modifiers.has("height")) {
-             modifier = modifier.height(modifiers.get("height").asFloat.dp)
-        }
-        
-        if (modifiers.has("flex") && modifiers.get("flex").asInt == 1) {
-            // modifier = modifier.defaultWeight() // defaultWeight requires RowScope/ColumnScope in Glance 1.1.0
+        val height = modifiers.getFloat("height")
+        if (height != null) {
+             modifier = modifier.height(height.dp)
         }
 
         // Background
-        if (modifiers.has("background")) {
-            val bg = modifiers.get("background").asString
+        val bg = modifiers.getStr("background")
+        if (bg != null) {
             if (bg == "glass") {
                 modifier = modifier.background(Color(0x22FFFFFF)) // Subtle glass on Android
             } else if (bg.startsWith("linear-gradient")) {
                 val firstHex = findFirstHexColor(bg)
                 if (firstHex != null) {
-                    modifier = modifier.background(Color(android.graphics.Color.parseColor(firstHex)))
+                    modifier = modifier.background(ColorParser.parse(firstHex))
                 }
             } else {
-                try {
-                    modifier = modifier.background(Color(android.graphics.Color.parseColor(bg)))
-                } catch (e: Exception) { }
+                modifier = modifier.background(ColorParser.parse(bg))
             }
         }
         
         // Corner Radius
-        if (modifiers.has("cornerRadius")) {
-            modifier = modifier.cornerRadius(modifiers.get("cornerRadius").asFloat.dp)
+        val cornerRadius = modifiers.getFloat("cornerRadius")
+        if (cornerRadius != null) {
+            modifier = modifier.cornerRadius(cornerRadius.dp)
         }
         
         // Action (Click)
-        if (modifiers.has("onClick")) {
-            val actionType = modifiers.get("onClick").asString
-            if (actionType == "app") {
+        val onClick = modifiers.getStr("onClick")
+        if (onClick != null) {
+            if (onClick == "app") {
                 val intent = Intent().apply {
                     component = ComponentName("com.js.scriptAutomator", "com.js.scriptAutomator.MainActivity")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -254,30 +358,47 @@ object GlanceJsonParser {
     }
 
     private fun parseTextStyle(modifiers: JsonObject): TextStyle {
+        val font = modifiers.getStr("font")
         var style = TextStyle(
-            fontSize = (modifiers.get("fontSize")?.asFloat ?: 14f).sp,
-            fontWeight = if (modifiers.get("font")?.asString == "bold" || modifiers.get("font")?.asString == "semibold") {
+            fontSize = (modifiers.getFloat("fontSize") ?: 14f).sp,
+            fontWeight = if (font == "bold" || font == "semibold") {
                 FontWeight.Bold
             } else {
                 FontWeight.Normal
             }
         )
-        if (modifiers.has("color")) {
-            val hex = modifiers.get("color").asString
-            style = style.copy(color = ColorProvider(Color(android.graphics.Color.parseColor(hex))))
+        val color = modifiers.getStr("color")
+        if (color != null) {
+            style = style.copy(color = ColorProvider(ColorParser.parse(color)))
         }
         return style
     }
 
     private fun mapSfSymbolToAndroid(symbol: String): Int {
-        return when (symbol) {
-            "moon.stars.fill" -> android.R.drawable.ic_menu_today // Placeholder for lunar
-            "sun.max.fill" -> android.R.drawable.ic_menu_day
-            "cloud.fill" -> android.R.drawable.ic_menu_gallery
-            "location.fill" -> android.R.drawable.ic_menu_mylocation
-            "drop.fill" -> android.R.drawable.ic_menu_edit
-            "wind" -> android.R.drawable.ic_menu_send
-            "thermometer.medium" -> android.R.drawable.ic_menu_info_details
+        val name = symbol.lowercase()
+        return when {
+            name.contains("sun") -> android.R.drawable.btn_star_big_on
+            name.contains("moon") -> android.R.drawable.star_off
+            name.contains("cloud") -> android.R.drawable.ic_menu_gallery
+            name.contains("rain") || name.contains("drop") -> android.R.drawable.ic_menu_edit
+            name.contains("wind") -> android.R.drawable.ic_menu_send
+            name.contains("thermometer") -> android.R.drawable.ic_menu_info_details
+            name.contains("location") -> android.R.drawable.ic_menu_mylocation
+            name.contains("gear") || name.contains("settings") -> android.R.drawable.ic_menu_preferences
+            name.contains("trash") || name.contains("delete") -> android.R.drawable.ic_menu_delete
+            name.contains("clock") || name.contains("alarm") || name.contains("timer") -> android.R.drawable.ic_menu_today
+            name.contains("play") -> android.R.drawable.ic_media_play
+            name.contains("pause") -> android.R.drawable.ic_media_pause
+            name.contains("stop") -> android.R.drawable.ic_menu_close_clear_cancel
+            name.contains("phone") -> android.R.drawable.ic_menu_call
+            name.contains("envelope") || name.contains("mail") -> android.R.drawable.sym_action_email
+            name.contains("map") -> android.R.drawable.ic_dialog_map
+            name.contains("info") -> android.R.drawable.ic_dialog_info
+            name.contains("warn") || name.contains("alert") || name.contains("exclamation") -> android.R.drawable.ic_dialog_alert
+            name.contains("share") -> android.R.drawable.ic_menu_share
+            name.contains("camera") -> android.R.drawable.ic_menu_camera
+            name.contains("search") -> android.R.drawable.ic_menu_search
+            name.contains("compass") -> android.R.drawable.ic_menu_compass
             else -> android.R.drawable.ic_menu_help
         }
     }
@@ -338,5 +459,80 @@ object GlanceJsonParser {
             }
         }
         return inSampleSize
+    }
+
+
+    object ColorParser {
+        fun parse(colorStr: String?): Color {
+            if (colorStr == null) return Color.Transparent
+            val trimmed = colorStr.trim()
+            if (trimmed.isEmpty()) return Color.Transparent
+            
+            if (trimmed.equals("transparent", ignoreCase = true)) {
+                return Color.Transparent
+            }
+            
+            if (trimmed.startsWith("#")) {
+                val cleanHex = trimmed.removePrefix("#")
+                try {
+                    return when (cleanHex.length) {
+                        3 -> { // #RGB -> #RRGGBB
+                            val r = cleanHex.substring(0, 1).repeat(2)
+                            val g = cleanHex.substring(1, 2).repeat(2)
+                            val b = cleanHex.substring(2, 3).repeat(2)
+                            Color(android.graphics.Color.parseColor("#$r$g$b"))
+                        }
+                        4 -> { // #RGBA -> #AARRGGBB
+                            val r = cleanHex.substring(0, 1).repeat(2)
+                            val g = cleanHex.substring(1, 2).repeat(2)
+                            val b = cleanHex.substring(2, 3).repeat(2)
+                            val a = cleanHex.substring(3, 4).repeat(2)
+                            val colorInt = java.lang.Long.parseLong("$a$r$g$b", 16).toInt()
+                            Color(colorInt)
+                        }
+                        6 -> { // #RRGGBB
+                            Color(android.graphics.Color.parseColor("#$cleanHex"))
+                        }
+                        8 -> { // CSS hex #RRGGBBAA -> Android expects #AARRGGBB
+                            val r = cleanHex.substring(0, 2)
+                            val g = cleanHex.substring(2, 4)
+                            val b = cleanHex.substring(4, 6)
+                            val a = cleanHex.substring(6, 8)
+                            val colorInt = java.lang.Long.parseLong("$a$r$g$b", 16).toInt()
+                            Color(colorInt)
+                        }
+                        else -> {
+                            Color(android.graphics.Color.parseColor(trimmed))
+                        }
+                    }
+                } catch (e: Exception) {
+                    return Color.Transparent
+                }
+            } else if (trimmed.startsWith("rgba") || trimmed.startsWith("rgb")) {
+                try {
+                    val cleaned = trimmed.replace("rgba(", "")
+                        .replace("rgb(", "")
+                        .replace(")", "")
+                        .replace(" ", "")
+                    val parts = cleaned.split(",")
+                    if (parts.size >= 3) {
+                        val r = parts[0].toInt()
+                        val g = parts[1].toInt()
+                        val b = parts[2].toInt()
+                        val a = if (parts.size == 4) parts[3].toFloat() else 1f
+                        return Color(red = r / 255f, green = g / 255f, blue = b / 255f, alpha = a)
+                    }
+                } catch (e: Exception) {
+                    return Color.Transparent
+                }
+            }
+            
+            // Try parsing by name (red, blue, etc.)
+            try {
+                return Color(android.graphics.Color.parseColor(trimmed))
+            } catch (e: Exception) {
+                return Color.Transparent
+            }
+        }
     }
 }

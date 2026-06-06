@@ -19,30 +19,7 @@ import WidgetKit
 
     // Widget Refresh Channel
     let controller : FlutterViewController = window?.rootViewController as! FlutterViewController
-    let widgetChannel = FlutterMethodChannel(name: "com.js.scriptAutomator/widget",
-                                              binaryMessenger: controller.binaryMessenger)
-    widgetChannel.setMethodCallHandler({
-      (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
-      if call.method == "reloadTimelines" {
-         if #available(iOS 14.0, *) {
-             WidgetCenter.shared.reloadAllTimelines()
-             print("Native: Widget Timelines Reloaded")
-         }
-         result(nil)
-      } else if call.method == "getAppGroupPath" {
-         guard let groupId = call.arguments as? String else {
-             result(FlutterError(code: "INVALID_ARG", message: "Group ID must be a string", details: nil))
-             return
-         }
-         if let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupId) {
-             result(url.path)
-         } else {
-             result(nil)
-         }
-      } else {
-        result(FlutterMethodNotImplemented)
-      }
-    })
+    registerWidgetChannel(on: controller.binaryMessenger)
 
 
     GeneratedPluginRegistrant.register(with: self)
@@ -80,6 +57,8 @@ import WidgetKit
              return
           }
           GeneratedPluginRegistrant.register(with: engine)
+          self.registerWidgetChannel(on: engine.binaryMessenger)
+
           
           // 4. Setup MethodChannel Bridge
           let channel = FlutterMethodChannel(
@@ -127,5 +106,32 @@ import WidgetKit
       } catch {
           print("Could not schedule app refresh: \(error)")
       }
+  }
+  
+  private func registerWidgetChannel(on messenger: FlutterBinaryMessenger) {
+      let widgetChannel = FlutterMethodChannel(name: "com.js.scriptAutomator/widget",
+                                                binaryMessenger: messenger)
+      widgetChannel.setMethodCallHandler({
+        (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
+        if call.method == "reloadTimelines" {
+           if #available(iOS 14.0, *) {
+               WidgetCenter.shared.reloadAllTimelines()
+               print("Native: Widget Timelines Reloaded")
+           }
+           result(nil)
+        } else if call.method == "getAppGroupPath" {
+           guard let groupId = call.arguments as? String else {
+               result(FlutterError(code: "INVALID_ARG", message: "Group ID must be a string", details: nil))
+               return
+           }
+           if let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupId) {
+               result(url.path)
+           } else {
+               result(nil)
+           }
+        } else {
+          result(FlutterMethodNotImplemented)
+        }
+      })
   }
 }

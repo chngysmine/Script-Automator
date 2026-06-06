@@ -33,7 +33,10 @@ class ScriptDatabase {
         // Open in Read-Only mode for safety in Extension
         if sqlite3_open_v2(dbURL.path, &db, SQLITE_OPEN_READONLY, nil) != SQLITE_OK {
             print("ScriptDatabase: Error opening database")
-            db = nil
+            if db != nil {
+                sqlite3_close(db)
+                db = nil
+            }
         }
     }
 
@@ -45,6 +48,10 @@ class ScriptDatabase {
 
     func getAllScripts() -> [ScriptMetadata] {
         ensureDatabaseOpen()
+        guard let db = db else {
+            print("ScriptDatabase: Database not open, returning empty list")
+            return []
+        }
         var scripts: [ScriptMetadata] = []
         let queryStatementString = "SELECT id, name, updated_at FROM scripts ORDER BY updated_at DESC;"
         var queryStatement: OpaquePointer?
@@ -72,6 +79,10 @@ class ScriptDatabase {
     
     func getScript(id: String) -> ScriptMetadata? {
         ensureDatabaseOpen()
+        guard let db = db else {
+            print("ScriptDatabase: Database not open, returning nil")
+            return nil
+        }
         let queryStatementString = "SELECT id, name, updated_at FROM scripts WHERE id = ?;"
         var queryStatement: OpaquePointer?
         

@@ -19,20 +19,33 @@ class EncryptionService {
   /// Retrieves the existing key or generates a new one.
   /// Returns a list of integers suitable for Hive encryption (32 bytes).
   Future<List<int>> getEncryptionKey() async {
-    final base64Key = await AppSecureStorage.readMigratingLegacy(
-      _storage,
-      _keyAlias,
-    );
+    try {
+      final base64Key = await AppSecureStorage.readMigratingLegacy(
+        _storage,
+        _keyAlias,
+      );
 
-    if (base64Key != null) {
-      return base64Decode(base64Key);
+      if (base64Key != null) {
+        return base64Decode(base64Key);
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print('EncryptionService: secure storage read failed, regenerating key: $e');
+      try {
+        await _storage.delete(key: _keyAlias);
+      } catch (_) {}
     }
 
     // 2. Generate new 32-byte key
     final newKey = _generateRandomKey();
 
     // 3. Save to secure storage
-    await _storage.write(key: _keyAlias, value: base64Encode(newKey));
+    try {
+      await _storage.write(key: _keyAlias, value: base64Encode(newKey));
+    } catch (e) {
+      // ignore: avoid_print
+      print('EncryptionService: secure storage write failed: $e');
+    }
 
     return newKey;
   }

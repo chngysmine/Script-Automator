@@ -13,6 +13,7 @@ import 'package:script_automator/features/script_engine/domain/system_api_polyfi
 import 'package:script_automator/features/script_management/data/datasources/script_local_data_source.dart';
 import 'package:flutter/services.dart';
 import '../../widget_renderer/domain/services/headless_widget_rendering_service.dart';
+import '../../widget_renderer/domain/entities/widget_node.dart';
 import '../../script_management/data/services/virtual_file_system_service.dart';
 import '../../dashboard/domain/services/notification_service.dart';
 import '../../dashboard/data/services/user_stats_service.dart';
@@ -140,30 +141,35 @@ class ScriptRunnerService {
   /// [signalQuickJsInterruptFromProcess].
   Future<void> runScript(String script, String scriptId) async {
     // Phase 4: Runtime Moderation Interceptor — FAIL-CLOSED with cache
-    try {
-      final moderationDoc = await FirebaseFirestore.instance
-          .collection('script_moderation')
-          .doc(scriptId)
-          .get()
-          .timeout(const Duration(seconds: 3));
-      final isBlocked = moderationDoc.exists && moderationDoc.data()?['is_blocked'] == true;
-      _moderationCache[scriptId] = isBlocked;
-      if (isBlocked) {
-        debugPrint("[SECURITY] Execution blocked: $scriptId is suppressed by Admin.");
-        return;
+    // Only check moderation for gallery/public scripts (IDs starting with gallery_)
+    // and skip checks for 'manual_run' or local private user scripts.
+    final isGalleryScript = scriptId.startsWith('gallery_');
+    if (scriptId != 'manual_run' && isGalleryScript) {
+      try {
+        final moderationDoc = await FirebaseFirestore.instance
+            .collection('script_moderation')
+            .doc(scriptId)
+            .get()
+            .timeout(const Duration(seconds: 3));
+        final isBlocked = moderationDoc.exists && moderationDoc.data()?['is_blocked'] == true;
+        _moderationCache[scriptId] = isBlocked;
+        if (isBlocked) {
+          debugPrint("[SECURITY] Execution blocked: $scriptId is suppressed by Admin.");
+          return;
+        }
+      } catch (e) {
+        // Fail-closed: check cache, block if unknown
+        final cachedStatus = _moderationCache[scriptId];
+        if (cachedStatus == null) {
+          debugPrint("[SECURITY] Moderation check failed & no cache — blocking $scriptId");
+          return;
+        }
+        if (cachedStatus) {
+          debugPrint("[SECURITY] Execution blocked (cached): $scriptId");
+          return;
+        }
+        debugPrint("[SECURITY] Moderation check failed — using cached ALLOW for $scriptId");
       }
-    } catch (e) {
-      // Fail-closed: check cache, block if unknown
-      final cachedStatus = _moderationCache[scriptId];
-      if (cachedStatus == null) {
-        debugPrint("[SECURITY] Moderation check failed & no cache — blocking $scriptId");
-        return;
-      }
-      if (cachedStatus) {
-        debugPrint("[SECURITY] Execution blocked (cached): $scriptId");
-        return;
-      }
-      debugPrint("[SECURITY] Moderation check failed — using cached ALLOW for $scriptId");
     }
 
     if (_engineIsolate == null) await initialize();
@@ -818,12 +824,21 @@ class ScriptRunnerService {
 
       if (scriptId == null) throw Exception("Missing scriptId for render");
 
-      _logController.add("[Main Isolate] Calling headlessService.renderNativeJson...");
+      _logController.add("[Main Isolate] Rendering widget...");
       final headlessService = GetIt.I<HeadlessWidgetRenderingService>();
 
-      // Use Native JSON Passthrough (preferred) instead of PNG rasterization
-      final path = await headlessService.renderNativeJson(jsonString, scriptId, family ?? 'medium');
-      _logController.add("[System] Rendered Widget (Native JSON) to: $path");
+      String path;
+      if (Platform.isAndroid) {
+        _logController.add("[Main Isolate] Parsing WidgetNode from JSON...");
+        final widgetNode = WidgetNode.fromJson(jsonDecode(jsonString));
+        _logController.add("[Main Isolate] Calling headlessService.renderAndSave (PNG) with family ${family ?? 'medium'}...");
+        path = await headlessService.renderAndSave(widgetNode, scriptId, family: family ?? 'medium');
+        _logController.add("[System] Rendered Widget (PNG Rasterization) to: $path");
+      } else {
+        _logController.add("[Main Isolate] Calling headlessService.renderNativeJson...");
+        path = await headlessService.renderNativeJson(jsonString, scriptId, family ?? 'medium');
+        _logController.add("[System] Rendered Widget (Native JSON) to: $path");
+      }
       
       _pushNotification(
         NotificationType.widgetDeploy,

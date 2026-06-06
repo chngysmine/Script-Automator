@@ -9,6 +9,8 @@ import 'package:script_automator/features/editor/presentation/syntax_highlighter
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
 import 'dart:convert';
 import 'package:get_it/get_it.dart';
+import 'package:flutter/services.dart';
+
 import 'package:script_automator/features/widget_renderer/presentation/widgets/sasup_renderer.dart';
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_node.dart';
 import 'package:script_automator/features/widget_renderer/domain/services/headless_widget_rendering_service.dart';
@@ -405,6 +407,7 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
 
   Widget _buildPreviewTab() {
     final colors = Theme.of(context).extension<LiquidColors>()!;
+    Widget? previewWidget;
 
     if (_previewNode != null) {
       final family = _previewFamily ?? 'medium';
@@ -416,36 +419,57 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
         aspectRatio = 329 / 345;
       }
 
-      return Center(
+      previewWidget = AspectRatio(
+        aspectRatio: aspectRatio,
         child: Container(
-          margin: EdgeInsets.symmetric(
-            horizontal: LiquidTheme.pageHorizontalPadding,
-            vertical: 16,
-          ),
-          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 500),
-          child: AspectRatio(
-            aspectRatio: aspectRatio,
-            child: Container(
-              decoration: BoxDecoration(
-                color: colors.cardBackground,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: colors.cardBorder,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+          decoration: BoxDecoration(
+            color: colors.cardBackground,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: colors.cardBorder,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: SasupRenderer(
-                  node: _previewNode!,
-                  family: family,
-                ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: SasupRenderer(
+              node: _previewNode!,
+              family: family,
+            ),
+          ),
+        ),
+      );
+    } else if (_previewImagePath != null) {
+      previewWidget = AspectRatio(
+        aspectRatio: 375 / 667,  // iPhone SE ratio
+        child: Container(
+          decoration: BoxDecoration(
+            color: colors.cardBackground,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: colors.cardBorder,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: FittedBox(
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
+              child: Image.file(
+                File(_previewImagePath!),
               ),
             ),
           ),
@@ -453,73 +477,283 @@ class _ScriptPreviewSheetState extends State<ScriptPreviewSheet>
       );
     }
 
-    if (_previewImagePath != null) {
+    if (previewWidget == null) {
+      // No preview — show placeholder
       return Center(
-        child: AspectRatio(
-          aspectRatio: 375 / 667,  // iPhone SE ratio
-          child: Container(
-            margin: EdgeInsets.symmetric(
-              horizontal: LiquidTheme.pageHorizontalPadding,
-              vertical: 8,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.image_not_supported_outlined,
+              size: 56,
+              color: colors.textCaption.withValues(alpha: 0.3),
             ),
-            decoration: BoxDecoration(
-              color: colors.cardBackground,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: colors.cardBorder,
+            const SizedBox(height: 12),
+            Text(
+              "No preview available",
+              style: TextStyle(
+                color: colors.textBody,
+                fontSize: LiquidTheme.fontBody,
+                fontWeight: FontWeight.w600,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 20,
-                  offset: const Offset(0, 4),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Run the script to generate a widget preview",
+              style: TextStyle(
+                color: colors.textCaption.withValues(alpha: 0.7),
+                fontSize: LiquidTheme.fontCaption,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        children: [
+          Center(
+            child: Container(
+              margin: EdgeInsets.symmetric(
+                horizontal: LiquidTheme.pageHorizontalPadding,
+              ),
+              constraints: const BoxConstraints(maxWidth: 400, maxHeight: 260),
+              child: previewWidget,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: LiquidTheme.pageHorizontalPadding),
+            child: Column(
+              children: [
+                Text(
+                  "Home Screen Widget",
+                  style: TextStyle(
+                    color: colors.textTitle,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  Platform.isIOS
+                      ? "Add this Bento widget to your iOS home screen layout."
+                      : "Pin this Bento widget directly to your launcher home screen.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: colors.textCaption,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                GestureDetector(
+                  onTap: () => _handlePinWidget(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: colors.chipBackground,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: colors.cardBorder),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.add_to_home_screen_rounded, color: LiquidTheme.primary, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Pin to Home Screen",
+                          style: TextStyle(
+                            color: colors.textTitle,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: FittedBox(
-                fit: BoxFit.contain,
-                alignment: Alignment.center,
-                child: Image.file(
-                  File(_previewImagePath!),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    // No preview — show placeholder
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.image_not_supported_outlined,
-            size: 56,
-            color: colors.textCaption.withValues(alpha: 0.3),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            "No preview available",
-            style: TextStyle(
-              color: colors.textBody,
-              fontSize: LiquidTheme.fontBody,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            "Run the script to generate a widget preview",
-            style: TextStyle(
-              color: colors.textCaption.withValues(alpha: 0.7),
-              fontSize: LiquidTheme.fontCaption,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _handlePinWidget(BuildContext context) async {
+    if (Platform.isIOS) {
+      showDialog(
+        context: context,
+        barrierColor: Colors.black.withValues(alpha: 0.8),
+        builder: (ctx) => _iOSInstructionsDialog(ctx),
+      );
+    } else if (Platform.isAndroid) {
+      try {
+        const channel = MethodChannel('com.js.scriptAutomator/widget');
+        final success = await channel.invokeMethod<bool>(
+          'pinWidget',
+          {'scriptId': widget.script.id},
+        );
+        if (success == true) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Follow launcher prompts to place widget"),
+                backgroundColor: LiquidTheme.primary,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Failed to pin widget: ${e.toString()}"),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Widget _iOSInstructionsDialog(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.sheetBackground,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: colors.cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 40,
+              offset: const Offset(0, 15),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: LiquidTheme.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.touch_app_rounded, color: LiquidTheme.primary, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    "iOS Widget Setup Guide",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: colors.textTitle,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Icon(Icons.close_rounded, color: colors.textCaption, size: 20),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              "Follow these quick steps to add and link this widget on your home screen:",
+              style: TextStyle(
+                color: colors.textBody,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildStepRow(context, "1", "Add the Widget to Home Screen", "Go to your Home Screen, long-press the background to enter jiggle mode, tap '+' in the top-left, search for 'Script Automator', and select this widget template size."),
+            const SizedBox(height: 12),
+            _buildStepRow(context, "2", "Enter Widget Edit Mode", "Long-press the newly added Script Automator widget on your home screen and choose 'Edit Widget'."),
+            const SizedBox(height: 12),
+            _buildStepRow(context, "3", "Select script: \"${widget.script.name}\"", "Tap the 'Script' parameter option inside the configuration card, and select this script from the dynamic suggestions list."),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: LiquidTheme.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: const Text(
+                "Got it!",
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepRow(BuildContext context, String number, String title, String description) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: LiquidTheme.primary.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            number,
+            style: const TextStyle(
+              color: LiquidTheme.primary,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: colors.textTitle,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: TextStyle(
+                  color: colors.textCaption,
+                  fontSize: 12,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
