@@ -118,6 +118,31 @@ class UserStatsService {
     return result;
   }
 
+  /// Returns the entire raw activity map from local Hive box.
+  Future<Map<int, int>> getAllActivity() async {
+    await init();
+    final result = <int, int>{};
+    if (_activityBox != null) {
+      for (final key in _activityBox!.keys) {
+        if (key is int) {
+          result[key] = _activityBox!.get(key) ?? 0;
+        }
+      }
+    }
+    return result;
+  }
+
+  /// Merges a cloud daily activity map into the local Hive box (retains max count per day).
+  Future<void> importDailyActivity(Map<int, int> cloudActivity) async {
+    await init();
+    for (final entry in cloudActivity.entries) {
+      final localVal = _activityBox?.get(entry.key) ?? 0;
+      if (entry.value > localVal) {
+        await _activityBox?.put(entry.key, entry.value);
+      }
+    }
+  }
+
   int _todayKey() => _dateToKey(DateTime.now());
   int _dateToKey(DateTime d) => d.year * 10000 + d.month * 100 + d.day;
 

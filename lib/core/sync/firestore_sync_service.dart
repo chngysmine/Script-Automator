@@ -318,10 +318,14 @@ class FirestoreSyncService {
       // Push stats if available
       if (GetIt.I.isRegistered<UserStatsService>()) {
         final stats = GetIt.I<UserStatsService>();
-        await profileDoc.update({
+        final dailyActivityMap = await stats.getAllActivity();
+        final firestoreActivityMap = dailyActivityMap.map((key, value) => MapEntry(key.toString(), value));
+
+        await profileDoc.set({
           'totalRuns': await stats.get('total_runs'),
           'streakDays': await stats.get('streak_days'),
-        });
+          'dailyActivity': firestoreActivityMap,
+        }, SetOptions(merge: true));
       }
 
       debugPrint('[Sync] Profile pushed for $uid');
@@ -411,6 +415,24 @@ class FirestoreSyncService {
           final localStreak = await stats.get('streak_days');
           if (cloudStreak > localStreak) {
             await stats.set('streak_days', cloudStreak);
+          }
+        }
+        if (data['dailyActivity'] != null) {
+          try {
+            final rawMap = data['dailyActivity'] as Map<dynamic, dynamic>;
+            final cloudActivity = <int, int>{};
+            rawMap.forEach((key, val) {
+              final parsedKey = int.tryParse(key.toString());
+              final parsedVal = int.tryParse(val.toString());
+              if (parsedKey != null && parsedVal != null) {
+                cloudActivity[parsedKey] = parsedVal;
+              }
+            });
+            if (cloudActivity.isNotEmpty) {
+              await stats.importDailyActivity(cloudActivity);
+            }
+          } catch (e) {
+            debugPrint('[Sync] Failed to parse daily activity: $e');
           }
         }
       }

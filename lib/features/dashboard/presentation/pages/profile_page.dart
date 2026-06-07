@@ -46,6 +46,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String? _avatarPath;
   String? _email;
   StreamSubscription<void>? _scriptSub;
+  StreamSubscription<User?>? _authSub;
   final _debouncer = Debouncer(milliseconds: 300);
 
   @override
@@ -57,44 +58,66 @@ class _ProfilePageState extends State<ProfilePage> {
         if (mounted) _loadStats();
       });
     });
+
+    if (GetIt.I.isRegistered<AuthService>()) {
+      _authSub = GetIt.I<AuthService>().authStateChanges.listen((user) async {
+        // Re-initialize preference box for the new user account UID
+        await GetIt.I<UserPreferencesService>().init();
+        if (mounted) {
+          _loadStats();
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _scriptSub?.cancel();
+    _authSub?.cancel();
     _debouncer.dispose();
     super.dispose();
   }
 
   Future<void> _loadStats() async {
+    // Phase 1: Load local database scripts (very fast, no network blocking)
     final result = await GetIt.I<ScriptRepository>().getScripts();
     result.fold(
       (failure) => {},
-      (scripts) => setState(() {
-        _scriptCount = scripts.length;
-        _widgetCount = scripts
-            .where((s) => s.content.contains('renderWidget'))
-            .length;
-        _weatherCount = scripts
-            .where((s) =>
-                s.name.toLowerCase().contains('weather') ||
-                s.content.toLowerCase().contains('weather'))
-            .length;
-        _productivityCount = scripts
-            .where((s) =>
-                s.name.toLowerCase().contains('task') ||
-                s.name.toLowerCase().contains('todo') ||
-                s.name.toLowerCase().contains('productivity') ||
-                s.name.toLowerCase().contains('timer') ||
-                s.content.toLowerCase().contains('task') ||
-                s.content.toLowerCase().contains('todo') ||
-                s.content.toLowerCase().contains('timer'))
-            .length;
-      }),
+      (scripts) {
+        if (mounted) {
+          setState(() {
+            _scriptCount = scripts.length;
+            _widgetCount = scripts
+                .where((s) => s.content.contains('renderWidget'))
+                .length;
+            _weatherCount = scripts
+                .where((s) =>
+                    s.name.toLowerCase().contains('weather') ||
+                    s.content.toLowerCase().contains('weather'))
+                .length;
+            _productivityCount = scripts
+                .where((s) =>
+                    s.name.toLowerCase().contains('task') ||
+                    s.name.toLowerCase().contains('todo') ||
+                    s.name.toLowerCase().contains('productivity') ||
+                    s.name.toLowerCase().contains('timer') ||
+                    s.content.toLowerCase().contains('task') ||
+                    s.content.toLowerCase().contains('todo') ||
+                    s.content.toLowerCase().contains('timer'))
+                .length;
+          });
+        }
+      },
     );
 
     final prefs = GetIt.I<UserPreferencesService>();
-    final name = await prefs.displayName;
+    String name = await prefs.displayName;
+    if ((name == 'My Workspace' || name.isEmpty) && GetIt.I.isRegistered<AuthService>()) {
+      final authName = GetIt.I<AuthService>().displayName;
+      if (authName != 'Guest') {
+        name = authName;
+      }
+    }
     final b = await prefs.bio;
     final ap = await prefs.avatarPath;
 
@@ -108,29 +131,33 @@ class _ProfilePageState extends State<ProfilePage> {
       userEmail = GetIt.I<AuthService>().email;
     }
 
+    // Immediately render critical profile information to UI
+    if (mounted) {
+      setState(() {
+        _displayName = name;
+        _bio = b;
+        _totalRuns = totalRuns;
+        _avatarPath = ap;
+        _email = userEmail;
+      });
+    }
+
+    // Phase 2: Fetch Firestore data in the background (slower network call)
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    int publishedCount = 0;
     if (uid != null && uid != 'guest') {
       try {
         final snap = await FirebaseFirestore.instance
             .collection('gallery_published')
             .where('author_uid', isEqualTo: uid)
             .get();
-        publishedCount = snap.docs.length;
+        if (mounted) {
+          setState(() {
+            _publishedCount = snap.docs.length;
+          });
+        }
       } catch (e) {
         debugPrint('Failed to fetch published scripts count: $e');
       }
-    }
-
-    if (mounted) {
-      setState(() {
-        _displayName = name;
-        _bio = b;
-        _totalRuns = totalRuns;
-        _publishedCount = publishedCount;
-        _avatarPath = ap;
-        _email = userEmail;
-      });
     }
   }
 
