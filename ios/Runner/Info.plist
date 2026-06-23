@@ -65,5 +65,9 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Script Automator requires access to the camera to allow your scripts to capture photos and display them on widgets.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Script Automator requires access to the photo library to allow you to choose background images for widgets.</string>
 </dict>
 </plist>

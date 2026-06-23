@@ -70,9 +70,14 @@ class HeadlessWidgetRenderingService {
       final flutterWidget = _buildWidgetTree(node, isRoot: true);
       final image = await _captureWidgetOffScreen(flutterWidget, size);
 
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) throw Exception("Failed to encode image");
-      final buffer = byteData.buffer.asUint8List();
+      final Uint8List buffer;
+      try {
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData == null) throw Exception("Failed to encode image");
+        buffer = byteData.buffer.asUint8List();
+      } finally {
+        image.dispose(); // CRITICAL GPU memory leak fix
+      }
 
       final directory = await getSharedDirectory();
       await _cleanupOldCache(directory);
@@ -297,61 +302,72 @@ class HeadlessWidgetRenderingService {
           ),
         ).attachToRenderTree(buildOwner);
 
-    // Initial build so elements are constructed and image providers can be queried
-    buildOwner.buildScope(rootElement);
+    try {
+      // Initial build so elements are constructed and image providers can be queried
+      buildOwner.buildScope(rootElement);
 
-    // Pre-resolve and await all image providers in the tree before layout/paint.
-    // This solves the issue where asynchronous images are not loaded in time.
-    final List<ImageProvider> imageProviders = [];
-    _findImageProviders(widget, imageProviders);
-    if (imageProviders.isNotEmpty) {
-      final ImageConfiguration config = ImageConfiguration(
-        devicePixelRatio: pixelRatio,
-        size: size,
-      );
-      await Future.wait(imageProviders.map((provider) {
-        final completer = Completer<void>();
-        final stream = provider.resolve(config);
-        late ImageStreamListener listener;
-        listener = ImageStreamListener(
-          (ImageInfo image, bool synchronousCall) {
-            if (!completer.isCompleted) completer.complete();
-            stream.removeListener(listener);
-          },
-          onError: (dynamic exception, StackTrace? stackTrace) {
-            debugPrint("HeadlessService: Image Precache Error: $exception");
-            if (!completer.isCompleted) completer.complete();
-            stream.removeListener(listener);
-          },
+      // Pre-resolve and await all image providers in the tree before layout/paint.
+      // This solves the issue where asynchronous images are not loaded in time.
+      final List<ImageProvider> imageProviders = [];
+      _findImageProviders(widget, imageProviders);
+      if (imageProviders.isNotEmpty) {
+        final ImageConfiguration config = ImageConfiguration(
+          devicePixelRatio: pixelRatio,
+          size: size,
         );
-        stream.addListener(listener);
-        return completer.future;
-      }));
+        await Future.wait(imageProviders.map((provider) {
+          final completer = Completer<void>();
+          final stream = provider.resolve(config);
+          late ImageStreamListener listener;
+          listener = ImageStreamListener(
+            (ImageInfo image, bool synchronousCall) {
+              if (!completer.isCompleted) completer.complete();
+              stream.removeListener(listener);
+            },
+            onError: (dynamic exception, StackTrace? stackTrace) {
+              debugPrint("HeadlessService: Image Precache Error: $exception");
+              if (!completer.isCompleted) completer.complete();
+              stream.removeListener(listener);
+            },
+          );
+          stream.addListener(listener);
+          return completer.future;
+        })).timeout(const Duration(seconds: 5), onTimeout: () {
+          debugPrint("HeadlessService: Image Precache Timed Out");
+          return [];
+        });
+      }
+
+      // Pass 1: Build & Paint to initialize the widget tree, trigger text layout,
+      // and register custom fonts (e.g. 'Inter' and 'MaterialIcons') with the paragraph builder.
+      buildOwner.buildScope(rootElement);
+      buildOwner.finalizeTree();
+      pipelineOwner.flushLayout();
+      pipelineOwner.flushCompositingBits();
+      pipelineOwner.flushPaint();
+
+      // Signal engine about font changes to ensure custom fonts are loaded in the text layouter
+      PaintingBinding.instance.handleSystemMessage({'type': 'fontsChange'});
+
+      // Allow engine's async font loading and texture updates a brief moment to process
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Pass 2: Re-run build, layout, and paint after all font resources and textures are warm.
+      buildOwner.buildScope(rootElement);
+      buildOwner.finalizeTree();
+      pipelineOwner.flushLayout();
+      pipelineOwner.flushCompositingBits();
+      pipelineOwner.flushPaint();
+
+      final ui.Image image = await repaintBoundary.toImage(pixelRatio: pixelRatio);
+      return image;
+    } finally {
+      // Unmount the elements to clean up State and trigger dispose of children (prevents RAM memory leaks)
+      buildOwner.buildScope(rootElement, () {
+        // ignore: invalid_use_of_visible_for_overriding_member
+        rootElement.unmount();
+      });
     }
-
-    // Pass 1: Build & Paint to initialize the widget tree, trigger text layout,
-    // and register custom fonts (e.g. 'Inter' and 'MaterialIcons') with the paragraph builder.
-    buildOwner.buildScope(rootElement);
-    buildOwner.finalizeTree();
-    pipelineOwner.flushLayout();
-    pipelineOwner.flushCompositingBits();
-    pipelineOwner.flushPaint();
-
-    // Signal engine about font changes to ensure custom fonts are loaded in the text layouter
-    PaintingBinding.instance.handleSystemMessage({'type': 'fontsChange'});
-
-    // Allow engine's async font loading and texture updates a brief moment to process
-    await Future.delayed(const Duration(milliseconds: 100));
-
-    // Pass 2: Re-run build, layout, and paint after all font resources and textures are warm.
-    buildOwner.buildScope(rootElement);
-    buildOwner.finalizeTree();
-    pipelineOwner.flushLayout();
-    pipelineOwner.flushCompositingBits();
-    pipelineOwner.flushPaint();
-
-    final ui.Image image = await repaintBoundary.toImage(pixelRatio: pixelRatio);
-    return image;
   }
 
   // --- Core Parser: Mirroring SASUP Logic ---
