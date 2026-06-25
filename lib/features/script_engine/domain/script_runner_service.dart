@@ -20,6 +20,8 @@ import '../../dashboard/data/services/user_stats_service.dart';
 
 import 'package:path_provider/path_provider.dart';
 import 'package:get_it/get_it.dart';
+import 'package:flutter/material.dart' show showDialog, GlobalKey, NavigatorState;
+import 'package:script_automator/features/docs/presentation/widgets/script_alert_dialog.dart';
 
 import 'package:script_automator/features/script_engine/domain/system_api_handler.dart';
 import 'package:script_automator/features/script_engine/native_bridge/script_engine_interrupt_ffi.dart';
@@ -546,13 +548,46 @@ class ScriptRunnerService {
            final requestStr = argsJson as String;
            final reqData = jsonDecode(requestStr);
            final reqId = reqData['__reqId'];
-           mainSendPort.send({
-             'type': 'sys_notification', 'requestId': reqId, 'payload': requestStr, 'scriptId': currentScriptId,
-           });
-           return "pending";
-        });
+            mainSendPort.send({
+              'type': 'sys_notification', 'requestId': reqId, 'payload': requestStr, 'scriptId': currentScriptId,
+            });
+            return "pending";
+         });
 
-        // --- HANDSHAKE: Initialization Complete ---
+         // Binding 9: Async Clipboard Bridge
+         engine.registerGlobalFunction('__native_clipboard_start', (argsJson) {
+            final requestStr = argsJson as String;
+            final reqData = jsonDecode(requestStr);
+            final reqId = reqData['__reqId'];
+            mainSendPort.send({
+              'type': 'sys_clipboard', 'requestId': reqId, 'payload': requestStr, 'scriptId': currentScriptId,
+            });
+            return "pending";
+         });
+
+         // Binding 10: Async Share Bridge
+         engine.registerGlobalFunction('__native_share_start', (argsJson) {
+            final requestStr = argsJson as String;
+            final reqData = jsonDecode(requestStr);
+            final reqId = reqData['__reqId'];
+            mainSendPort.send({
+              'type': 'sys_share', 'requestId': reqId, 'payload': requestStr, 'scriptId': currentScriptId,
+            });
+            return "pending";
+         });
+
+         // Binding 11: Async Alert Bridge
+         engine.registerGlobalFunction('__native_alert_start', (argsJson) {
+            final requestStr = argsJson as String;
+            final reqData = jsonDecode(requestStr);
+            final reqId = reqData['__reqId'];
+            mainSendPort.send({
+              'type': 'sys_alert', 'requestId': reqId, 'payload': requestStr, 'scriptId': currentScriptId,
+            });
+            return "pending";
+         });
+
+         // --- HANDSHAKE: Initialization Complete ---
         // We only send the port when we are actually ready to receive commands.
         mainSendPort.send(receivePort.sendPort);
         print("Isolate Handshake Sent - Engine Ready");
@@ -747,6 +782,12 @@ class ScriptRunnerService {
         _handleKeychainRequest(message);
       } else if (type == 'sys_notification') {
         _handleNotificationRequest(message);
+      } else if (type == 'sys_clipboard') {
+        _handleClipboardRequest(message);
+      } else if (type == 'sys_share') {
+        _handleShareRequest(message);
+      } else if (type == 'sys_alert') {
+        _handleAlertRequest(message);
       }
     }
   }
@@ -801,6 +842,67 @@ class ScriptRunnerService {
         _toEnginePort?.send({
             'command': 'response', 'requestId': requestId, 'response': result, 'scriptId': scriptId,
         });
+    }
+  }
+
+  void _handleClipboardRequest(Map<dynamic, dynamic> message) async {
+    final requestId = message['requestId'];
+    final payload = message['payload'];
+    final scriptId = message['scriptId'];
+    
+    if (_apiHandler != null) {
+        final String result = await _apiHandler!.handleClipboard(payload.toString());
+        _toEnginePort?.send({
+            'command': 'response', 'requestId': requestId, 'response': result, 'scriptId': scriptId,
+        });
+    }
+  }
+
+  void _handleShareRequest(Map<dynamic, dynamic> message) async {
+    final requestId = message['requestId'];
+    final payload = message['payload'];
+    final scriptId = message['scriptId'];
+    
+    if (_apiHandler != null) {
+        final String result = await _apiHandler!.handleShare(payload.toString());
+        _toEnginePort?.send({
+            'command': 'response', 'requestId': requestId, 'response': result, 'scriptId': scriptId,
+        });
+    }
+  }
+
+  void _handleAlertRequest(Map<dynamic, dynamic> message) async {
+    final requestId = message['requestId'];
+    final payload = message['payload'];
+    final scriptId = message['scriptId'];
+    
+    final data = jsonDecode(payload.toString());
+    final title = data['title'] ?? 'Alert';
+    final alertMsg = data['message'] ?? '';
+
+    final context = GetIt.I<GlobalKey<NavigatorState>>().currentContext;
+    if (context != null) {
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => ScriptAlertDialog(
+          title: title,
+          message: alertMsg,
+        ),
+      );
+      _toEnginePort?.send({
+        'command': 'response',
+        'requestId': requestId,
+        'response': jsonEncode({'success': true}),
+        'scriptId': scriptId,
+      });
+    } else {
+      _toEnginePort?.send({
+        'command': 'response',
+        'requestId': requestId,
+        'response': jsonEncode({'error': 'No build context available'}),
+        'scriptId': scriptId,
+      });
     }
   }
 

@@ -181,8 +181,67 @@ class SystemAPIPolyfills {
     };
   ''';
 
-  /// Polyfill to make Promise resolving work smoothly in headless engines
-  /// If the engine doesn't flush promises automatically, this helps tick the microtask queue.
+  /// Polyfill for Clipboard read/write - Asynchronous
+  static const String clipboardPolyfill = '''
+    var Clipboard = {
+      write: function(text) {
+        return new Promise(function(resolve, reject) {
+          var reqId = __nextTaskId++;
+          __pendingTasks[reqId] = { resolve: resolve, reject: reject };
+          __native_clipboard_start(JSON.stringify({ 
+              __reqId: reqId, 
+              action: 'write', 
+              text: text 
+          }));
+        });
+      },
+      read: function() {
+        return new Promise(function(resolve, reject) {
+          var reqId = __nextTaskId++;
+          __pendingTasks[reqId] = { resolve: resolve, reject: reject };
+          __native_clipboard_start(JSON.stringify({ 
+              __reqId: reqId, 
+              action: 'read' 
+          }));
+        });
+      }
+    };
+  ''';
+
+  /// Polyfill for Share - Asynchronous
+  static const String sharePolyfill = '''
+    var Share = {
+      share: function(options) {
+        return new Promise(function(resolve, reject) {
+          options = options || {};
+          var reqId = __nextTaskId++;
+          __pendingTasks[reqId] = { resolve: resolve, reject: reject };
+          __native_share_start(JSON.stringify({ 
+              __reqId: reqId, 
+              text: options.text || '', 
+              title: options.title || '' 
+          }));
+        });
+      }
+    };
+  ''';
+
+  /// Polyfill for Alert - Asynchronous
+  static const String alertPolyfill = '''
+    var Alert = {
+      show: function(title, message) {
+        return new Promise(function(resolve, reject) {
+          var reqId = __nextTaskId++;
+          __pendingTasks[reqId] = { resolve: resolve, reject: reject };
+          __native_alert_start(JSON.stringify({ 
+              __reqId: reqId, 
+              title: title || '', 
+              message: message || '' 
+          }));
+        });
+      }
+    };
+  ''';
 
   /// Returns all polyfills concatenated, ready for injection.
   static String get allPolyfills => [
@@ -192,5 +251,8 @@ class SystemAPIPolyfills {
         keychainPolyfill,
         notificationPolyfill,
         widgetPolyfill,
+        clipboardPolyfill,
+        sharePolyfill,
+        alertPolyfill,
       ].join('\n');
 }

@@ -45,7 +45,7 @@ class _GlassDockState extends State<GlassDock> {
           _buildDockItem(Icons.grid_view_rounded, 0, colors),
           _buildDockItem(Icons.search_rounded, 1, colors),
           _buildDockItem(Icons.add_rounded, 2, colors, isFab: true),
-          _buildDockItem(Icons.auto_awesome_rounded, 3, colors),
+          _buildDockItem(Icons.storefront_rounded, 3, colors),
           _buildDockItem(Icons.person_rounded, 4, colors),
         ],
       ),

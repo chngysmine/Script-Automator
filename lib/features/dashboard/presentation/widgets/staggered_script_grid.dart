@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/premium_bento_card.dart';
+import 'package:script_automator/core/theme/liquid_colors.dart';
+import 'package:script_automator/core/theme/liquid_theme.dart';
 
 /// A staggered Bento-style grid layout for displaying user scripts.
 ///
@@ -61,35 +63,65 @@ class _EmptyScriptsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<LiquidColors>()!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 80),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.code_rounded,
-              size: 64,
-              color: Colors.grey.withValues(alpha: 0.3),
+        padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: colors.cardBackground,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: colors.cardBorder,
+              width: 1.5,
             ),
-            const SizedBox(height: 16),
-            Text(
-              "No Scripts Yet",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: Colors.grey.withValues(alpha: 0.5),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: LiquidTheme.primary.withValues(alpha: isDark ? 0.08 : 0.06),
+                  border: Border.all(
+                    color: LiquidTheme.primary.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Icon(
+                  Icons.code_rounded,
+                  size: 40,
+                  color: LiquidTheme.primary.withValues(alpha: 0.7),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Tap + to create your first automation",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.withValues(alpha: 0.4),
+              const SizedBox(height: 24),
+              Text(
+                "Create Your First Script",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: colors.textTitle,
+                  letterSpacing: -0.5,
+                  fontFamily: 'Inter',
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              Text(
+                "Tap the + button in the navigation dock to spin up a new sandboxed automation script.",
+                style: TextStyle(
+                  fontSize: 13,
+                  color: colors.textCaption,
+                  height: 1.5,
+                  fontFamily: 'Inter',
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );

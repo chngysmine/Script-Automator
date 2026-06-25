@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
+import 'package:script_automator/core/theme/liquid_page_route.dart';
 import 'package:script_automator/core/ui/mesh_gradient_background.dart';
 import 'package:script_automator/features/docs/data/api_reference_data.dart';
+import 'package:script_automator/features/docs/presentation/widgets/sandbox_terminal_sheet.dart';
+import 'package:script_automator/features/editor/presentation/pages/editor_page.dart';
+import 'package:script_automator/features/script_management/domain/entities/script.dart';
+import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
 
 class ApiDocsPage extends StatefulWidget {
   const ApiDocsPage({super.key});
@@ -13,9 +19,13 @@ class ApiDocsPage extends StatefulWidget {
 
 class _ApiDocsPageState extends State<ApiDocsPage> {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
   String _query = '';
   String _selectedCategory = 'All';
   String? _expandedApi;
+  bool _showSearchIconInHeader = false;
+  bool _forceShowSearchBar = false;
 
   static const categories = [
     'All',
@@ -31,8 +41,30 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final offset = _scrollController.offset;
+    final shouldShow = offset > 50;
+    if (shouldShow != _showSearchIconInHeader) {
+      setState(() {
+        _showSearchIconInHeader = shouldShow;
+        if (!shouldShow) {
+          _forceShowSearchBar = false;
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -53,6 +85,7 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<LiquidColors>()!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final showSearchBar = !_showSearchIconInHeader || _forceShowSearchBar;
 
     return Scaffold(
       backgroundColor: isDark ? LiquidTheme.darkBackground : LiquidTheme.lightBackground,
@@ -66,14 +99,33 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
                 children: [
                   _buildHeader(context, colors),
                   const SizedBox(height: 16),
-                  _buildSearchBar(colors),
-                  const SizedBox(height: 16),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.fastOutSlowIn,
+                    height: showSearchBar ? 70.0 : 0.0,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: showSearchBar ? 1.0 : 0.0,
+                      curve: Curves.easeInOut,
+                      child: SingleChildScrollView(
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildSearchBar(colors),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                   _buildCategoryFilter(colors),
                   const SizedBox(height: 16),
                   Expanded(
                     child: _filteredEntries.isEmpty
                         ? _buildEmptyState(colors)
                         : ListView.separated(
+                            controller: _scrollController,
                             itemCount: _filteredEntries.length,
                             separatorBuilder: (_, _) => const SizedBox(height: 14),
                             itemBuilder: (context, index) => _buildEntryCard(_filteredEntries[index], colors, isDark),
@@ -90,52 +142,59 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
 
   Widget _buildHeader(BuildContext context, LiquidColors colors) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        SizedBox(
-          width: 52,
-          height: 52,
-          child: IconButton(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: Icon(Icons.arrow_back_ios_new_rounded, color: colors.textTitle, size: 20),
-            padding: EdgeInsets.zero,
-            style: IconButton.styleFrom(
-              backgroundColor: colors.headerActionBackground,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: colors.headerActionBorder),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 14),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: colors.headerActionBackground,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colors.headerActionBorder),
-          ),
-          child: const Icon(Icons.menu_book_rounded, color: LiquidTheme.primary, size: 28),
+        IconButton(
+          onPressed: () => Navigator.of(context).pop(),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: colors.textTitle, size: 20),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          splashRadius: 24,
         ),
         const SizedBox(width: 14),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'API Reference',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: colors.textTitle,
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Explore every built-in scripting API with examples.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colors.textBody),
-              ),
-            ],
+          child: Text(
+            'API Reference',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: colors.textTitle,
+                  fontWeight: FontWeight.w800,
+                ),
           ),
+        ),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: animation,
+                child: child,
+              ),
+            );
+          },
+          child: _showSearchIconInHeader
+              ? IconButton(
+                  key: ValueKey('header_search_icon_$_forceShowSearchBar'),
+                  onPressed: () {
+                    setState(() {
+                      _forceShowSearchBar = !_forceShowSearchBar;
+                      if (_forceShowSearchBar) {
+                        _searchFocusNode.requestFocus();
+                      } else {
+                        _searchFocusNode.unfocus();
+                      }
+                    });
+                  },
+                  icon: Icon(
+                    _forceShowSearchBar ? Icons.close_rounded : Icons.search_rounded,
+                    color: colors.textTitle,
+                    size: 22,
+                  ),
+                  constraints: const BoxConstraints(),
+                  padding: EdgeInsets.zero,
+                  splashRadius: 24,
+                )
+              : const SizedBox.shrink(key: ValueKey('header_search_icon_empty')),
         ),
       ],
     );
@@ -150,6 +209,7 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
       ),
       child: TextField(
         controller: _searchController,
+        focusNode: _searchFocusNode,
         onChanged: (value) => setState(() => _query = value),
         style: TextStyle(color: colors.textTitle),
         decoration: InputDecoration(
@@ -284,7 +344,7 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
                 child: Row(
                   children: [
                     Text(
-                      'Example',
+                      'Example Code',
                       style: TextStyle(color: colors.secondaryButtonText, fontWeight: FontWeight.w700),
                     ),
                     const Spacer(),
@@ -300,7 +360,75 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
               firstChild: const SizedBox.shrink(),
               secondChild: Padding(
                 padding: const EdgeInsets.only(top: 12),
-                child: _buildCodeBlock(entry.example, isDark),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildCodeBlock(entry.example, isDark),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _runInSandbox(context, entry),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              side: BorderSide(color: colors.glassBorder),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.play_arrow_rounded, color: LiquidTheme.primary, size: 18),
+                                const SizedBox(width: 6),
+                                Text(
+                                  "Run in Sandbox",
+                                  style: TextStyle(
+                                    color: colors.textTitle,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => _cloneToEditor(context, entry),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                gradient: isDark
+                                    ? LiquidTheme.primaryGradient
+                                    : LiquidTheme.brandDarkGradient,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              alignment: Alignment.center,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: const [
+                                  Icon(Icons.copy_rounded, color: Colors.white, size: 16),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    "Clone to Editor",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
               crossFadeState: expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
               duration: const Duration(milliseconds: 220),
@@ -311,42 +439,153 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
     );
   }
 
+  void _runInSandbox(BuildContext context, ApiEntry entry) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => SandboxTerminalSheet(
+        apiName: entry.name,
+        code: entry.example,
+      ),
+    );
+  }
+
+  void _cloneToEditor(BuildContext context, ApiEntry entry) async {
+    final repo = GetIt.I<ScriptRepository>();
+    final script = Script(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: entry.name,
+      content: entry.example,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    await repo.saveScript(script);
+
+    if (context.mounted) {
+      Navigator.push(
+        context,
+        LiquidPageRoute(page: EditorPage(script: script)),
+      );
+    }
+  }
+
   Widget _buildParams(List<ApiParam> params, LiquidColors colors) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Parameters',
-          style: TextStyle(color: colors.textTitle, fontWeight: FontWeight.w700),
+        Row(
+          children: [
+            const Icon(Icons.api_rounded, size: 16, color: LiquidTheme.primary),
+            const SizedBox(width: 6),
+            Text(
+              'Parameters',
+              style: TextStyle(
+                color: colors.textTitle,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
-        ...params.map(
-          (param) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: colors.chipBackground,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: colors.cardBorder),
-                  ),
-                  child: Text(
-                    param.name,
-                    style: TextStyle(color: colors.textTitle, fontFamily: 'monospace', fontSize: 12),
-                  ),
+        Container(
+          decoration: BoxDecoration(
+            color: colors.cardBackground.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: colors.cardBorder),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: List.generate(params.length, (index) {
+              final param = params[index];
+              return Padding(
+                padding: EdgeInsets.only(bottom: index == params.length - 1 ? 0 : 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        // Param Name Badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: colors.chipBackground,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: colors.cardBorder),
+                          ),
+                          child: Text(
+                            param.name,
+                            style: TextStyle(
+                              color: colors.textTitle,
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Param Type Badge
+                        Text(
+                          param.type,
+                          style: const TextStyle(
+                            color: LiquidTheme.primary,
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        // Required Badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: param.required
+                                ? const Color(0xFFEF4444).withValues(alpha: 0.1)
+                                : colors.textCaption.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: param.required
+                                  ? const Color(0xFFEF4444).withValues(alpha: 0.3)
+                                  : colors.textCaption.withValues(alpha: 0.3),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Text(
+                            param.required ? 'REQUIRED' : 'OPTIONAL',
+                            style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w900,
+                              color: param.required ? const Color(0xFFEF4444) : colors.textCaption,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Text(
+                        param.description,
+                        style: TextStyle(
+                          color: colors.textBody,
+                          fontSize: 12,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                    if (index < params.length - 1)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Divider(height: 1, color: colors.divider.withValues(alpha: 0.5)),
+                      ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${param.type}${param.required ? ' · required' : ''} · ${param.description}',
-                    style: TextStyle(color: colors.textBody, height: 1.35),
-                  ),
-                ),
-              ],
-            ),
+              );
+            }),
           ),
         ),
       ],
@@ -355,7 +594,6 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
 
   Widget _buildCodeBlock(String code, bool isDark) {
     final bg = isDark ? const Color(0xFF0B1220) : const Color(0xFFF1F5F9);
-    final textCol = isDark ? const Color(0xFFE5E7EB) : const Color(0xFF1E293B);
     final borderCol = isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2E8F0);
 
     return Container(
@@ -366,14 +604,9 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: borderCol),
       ),
-      child: SelectableText(
-        code,
-        style: TextStyle(
-          color: textCol,
-          fontFamily: 'monospace',
-          fontSize: 13,
-          height: 1.5,
-        ),
+      child: JSSyntaxHighlighter(
+        code: code,
+        isDark: isDark,
       ),
     );
   }
@@ -405,5 +638,102 @@ class _ApiDocsPageState extends State<ApiDocsPage> {
         ),
       ),
     );
+  }
+}
+
+// ==========================================
+// CUSTOM REGEX JAVASCRIPT SYNTAX HIGHLIGHTER
+// ==========================================
+class JSSyntaxHighlighter extends StatelessWidget {
+  final String code;
+  final bool isDark;
+
+  const JSSyntaxHighlighter({
+    super.key,
+    required this.code,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final spans = _highlight(code);
+    return SelectableText.rich(
+      TextSpan(
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 13,
+          height: 1.5,
+          color: isDark ? const Color(0xFFD4D4D4) : const Color(0xFF09090B),
+        ),
+        children: spans,
+      ),
+    );
+  }
+
+  List<TextSpan> _highlight(String text) {
+    final List<TextSpan> spans = [];
+
+    // Regex for comments, strings, keywords, built-ins, and numeric values
+    final regex = RegExp(
+      r'(//.*)|' // 1. Comments
+      r'("(?:\\.|[^"\\])*"|\x27(?:\\.|[^\x27\\])*\x27|`(?:\\.|[^`\\])*`)|' // 2. Strings
+      r'\b(const|let|var|await|async|function|class|return|if|else|try|catch|throw|new|import|export|from)\b|' // 3. Keywords
+      r'\b(console|Widget|Device|Keychain|Notification|Share|Clipboard|FileSystem|fetch)\b|' // 4. Built-in objects
+      r'\b(\d+)\b', // 5. Numbers
+    );
+
+    int lastIndex = 0;
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastIndex) {
+        spans.add(TextSpan(text: text.substring(lastIndex, match.start)));
+      }
+
+      final matchedText = match.group(0)!;
+      if (match.group(1) != null) {
+        // Comments - Muted Green
+        spans.add(TextSpan(
+          text: matchedText,
+          style: TextStyle(color: isDark ? const Color(0xFF6A9955) : const Color(0xFF008000)),
+        ));
+      } else if (match.group(2) != null) {
+        // Strings - Warm Terracotta / Dark Red
+        spans.add(TextSpan(
+          text: matchedText,
+          style: TextStyle(color: isDark ? const Color(0xFFCE9178) : const Color(0xFFA31515)),
+        ));
+      } else if (match.group(3) != null) {
+        // Keywords - Royal Blue
+        spans.add(TextSpan(
+          text: matchedText,
+          style: TextStyle(
+            color: isDark ? const Color(0xFF569CD6) : const Color(0xFF0000FF),
+            fontWeight: FontWeight.bold,
+          ),
+        ));
+      } else if (match.group(4) != null) {
+        // Built-ins - Teal
+        spans.add(TextSpan(
+          text: matchedText,
+          style: TextStyle(
+            color: isDark ? const Color(0xFF4EC9B0) : const Color(0xFF267F99),
+            fontWeight: FontWeight.w600,
+          ),
+        ));
+      } else if (match.group(5) != null) {
+        // Numbers - Sage Green / Forest Green
+        spans.add(TextSpan(
+          text: matchedText,
+          style: TextStyle(color: isDark ? const Color(0xFFB5CEA8) : const Color(0xFF098658)),
+        ));
+      }
+
+      lastIndex = match.end;
+    }
+
+    if (lastIndex < text.length) {
+      spans.add(TextSpan(text: text.substring(lastIndex)));
+    }
+
+    return spans;
   }
 }

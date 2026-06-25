@@ -13,8 +13,12 @@ class WidgetSchemaPage extends StatefulWidget {
 
 class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
   String _query = '';
   String? _expandedNode;
+  bool _showSearchIconInHeader = false;
+  bool _forceShowSearchBar = false;
 
   static const modifiersReference = [
     ('width', 'number', 'Fixed width in points.'),
@@ -36,8 +40,30 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final offset = _scrollController.offset;
+    final shouldShow = offset > 50;
+    if (shouldShow != _showSearchIconInHeader) {
+      setState(() {
+        _showSearchIconInHeader = shouldShow;
+        if (!shouldShow) {
+          _forceShowSearchBar = false;
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -60,6 +86,7 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<LiquidColors>()!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final showSearchBar = !_showSearchIconInHeader || _forceShowSearchBar;
 
     return Scaffold(
       backgroundColor: isDark ? LiquidTheme.darkBackground : LiquidTheme.lightBackground,
@@ -73,10 +100,29 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
                 children: [
                   _buildHeader(context, colors),
                   const SizedBox(height: 16),
-                  _buildSearchBar(colors),
-                  const SizedBox(height: 16),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.fastOutSlowIn,
+                    height: showSearchBar ? 70.0 : 0.0,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: showSearchBar ? 1.0 : 0.0,
+                      curve: Curves.easeInOut,
+                      child: SingleChildScrollView(
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildSearchBar(colors),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                   Expanded(
                     child: ListView(
+                      controller: _scrollController,
                       children: [
                         _buildQuickStart(colors, isDark),
                         const SizedBox(height: 18),
@@ -102,58 +148,59 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
 
   Widget _buildHeader(BuildContext context, LiquidColors colors) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        SizedBox(
-          width: 52,
-          height: 52,
-          child: IconButton(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: Icon(Icons.arrow_back_ios_new_rounded, color: colors.textTitle, size: 20),
-            padding: EdgeInsets.zero,
-            style: IconButton.styleFrom(
-              backgroundColor: colors.headerActionBackground,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: colors.headerActionBorder),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 14),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: colors.headerActionBackground,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colors.headerActionBorder),
-          ),
-          child: const Icon(
-            Icons.view_module_rounded,
-            color: LiquidTheme.primary,
-            size: 28,
-          ),
+        IconButton(
+          onPressed: () => Navigator.of(context).pop(),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: colors.textTitle, size: 20),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          splashRadius: 24,
         ),
         const SizedBox(width: 14),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Widget Schema',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: colors.textTitle,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Learn the SASUP JSON structure used to build native widgets.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: colors.textBody),
-              ),
-            ],
+          child: Text(
+            'Widget Schema',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: colors.textTitle,
+              fontWeight: FontWeight.w800,
+            ),
           ),
+        ),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: animation,
+                child: child,
+              ),
+            );
+          },
+          child: _showSearchIconInHeader
+              ? IconButton(
+                  key: ValueKey('header_search_icon_$_forceShowSearchBar'),
+                  onPressed: () {
+                    setState(() {
+                      _forceShowSearchBar = !_forceShowSearchBar;
+                      if (_forceShowSearchBar) {
+                        _searchFocusNode.requestFocus();
+                      } else {
+                        _searchFocusNode.unfocus();
+                      }
+                    });
+                  },
+                  icon: Icon(
+                    _forceShowSearchBar ? Icons.close_rounded : Icons.search_rounded,
+                    color: colors.textTitle,
+                    size: 22,
+                  ),
+                  constraints: const BoxConstraints(),
+                  padding: EdgeInsets.zero,
+                  splashRadius: 24,
+                )
+              : const SizedBox.shrink(key: ValueKey('header_search_icon_empty')),
         ),
       ],
     );
@@ -168,6 +215,7 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
       ),
       child: TextField(
         controller: _searchController,
+        focusNode: _searchFocusNode,
         onChanged: (value) => setState(() => _query = value),
         style: TextStyle(color: colors.textTitle),
         decoration: InputDecoration(
@@ -479,7 +527,6 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
 
   Widget _buildCodeBlock(String code, bool isDark) {
     final bg = isDark ? const Color(0xFF0B1220) : const Color(0xFFF1F5F9);
-    final textCol = isDark ? const Color(0xFFE5E7EB) : const Color(0xFF1E293B);
     final borderCol = isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2E8F0);
 
     return Container(
@@ -490,15 +537,100 @@ class _WidgetSchemaPageState extends State<WidgetSchemaPage> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: borderCol),
       ),
-      child: SelectableText(
-        code,
+      child: JSONSyntaxHighlighter(
+        code: code,
+        isDark: isDark,
+      ),
+    );
+  }
+}
+
+// ==========================================
+// CUSTOM REGEX JSON SYNTAX HIGHLIGHTER
+// ==========================================
+class JSONSyntaxHighlighter extends StatelessWidget {
+  final String code;
+  final bool isDark;
+
+  const JSONSyntaxHighlighter({
+    super.key,
+    required this.code,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final spans = _highlight(code);
+    return SelectableText.rich(
+      TextSpan(
         style: TextStyle(
-          color: textCol,
           fontFamily: 'monospace',
           fontSize: 13,
           height: 1.5,
+          color: isDark ? const Color(0xFFD4D4D4) : const Color(0xFF09090B),
         ),
+        children: spans,
       ),
     );
+  }
+
+  List<TextSpan> _highlight(String text) {
+    final List<TextSpan> spans = [];
+
+    // Regex for JSON keys (e.g., "type":), strings, numbers, booleans/null
+    final regex = RegExp(
+      r'("(?:\\.|[^"\\])*")\s*(?=:)|' // 1. JSON Keys
+      r'("(?:\\.|[^"\\])*")|' // 2. JSON Strings
+      r'\b(true|false|null)\b|' // 3. Booleans and Null
+      r'\b(\d+)\b', // 4. Numbers
+    );
+
+    int lastIndex = 0;
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastIndex) {
+        spans.add(TextSpan(text: text.substring(lastIndex, match.start)));
+      }
+
+      final matchedText = match.group(0)!;
+      if (match.group(1) != null) {
+        // Keys - Blue/Teal
+        spans.add(TextSpan(
+          text: matchedText,
+          style: TextStyle(
+            color: isDark ? const Color(0xFF9CDCFE) : const Color(0xFF0451A5),
+            fontWeight: FontWeight.bold,
+          ),
+        ));
+      } else if (match.group(2) != null) {
+        // Strings - Warm Terracotta / Dark Red
+        spans.add(TextSpan(
+          text: matchedText,
+          style: TextStyle(color: isDark ? const Color(0xFFCE9178) : const Color(0xFFA31515)),
+        ));
+      } else if (match.group(3) != null) {
+        // Booleans & Null - Royal Blue
+        spans.add(TextSpan(
+          text: matchedText,
+          style: TextStyle(
+            color: isDark ? const Color(0xFF569CD6) : const Color(0xFF0000FF),
+            fontWeight: FontWeight.w600,
+          ),
+        ));
+      } else if (match.group(4) != null) {
+        // Numbers - Sage Green / Forest Green
+        spans.add(TextSpan(
+          text: matchedText,
+          style: TextStyle(color: isDark ? const Color(0xFFB5CEA8) : const Color(0xFF098658)),
+        ));
+      }
+
+      lastIndex = match.end;
+    }
+
+    if (lastIndex < text.length) {
+      spans.add(TextSpan(text: text.substring(lastIndex)));
+    }
+
+    return spans;
   }
 }

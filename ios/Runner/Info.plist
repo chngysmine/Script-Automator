@@ -64,7 +64,19 @@
 				<string>com.googleusercontent.apps.873767716800-qtschojktmh5c4v6gea0761vj9do2eck</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.js.scriptAutomator</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>scriptautomator</string>
+			</array>
+		</dict>
 	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>Script Automator requires access to the camera to allow your scripts to capture photos and display them on widgets.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
+import 'dart:async';
 
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
@@ -40,6 +41,7 @@ class _PremiumBentoCardState extends State<PremiumBentoCard>
   String? _previewPath;
   WidgetNode? _previewNode;
   String? _previewFamily;
+  StreamSubscription<String>? _renderSubscription;
 
   @override
   void initState() {
@@ -55,6 +57,11 @@ class _PremiumBentoCardState extends State<PremiumBentoCard>
       ),
     );
     _loadPreviewData();
+    _renderSubscription = GetIt.I<HeadlessWidgetRenderingService>().onRenderEvent.listen((scriptId) {
+      if (scriptId == widget.script.id) {
+        _loadPreviewData();
+      }
+    });
   }
 
   Future<void> _loadPreviewData() async {
@@ -86,7 +93,16 @@ class _PremiumBentoCardState extends State<PremiumBentoCard>
   }
 
   @override
+  void didUpdateWidget(covariant PremiumBentoCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.script.id != widget.script.id || oldWidget.script.content != widget.script.content) {
+      _loadPreviewData();
+    }
+  }
+
+  @override
   void dispose() {
+    _renderSubscription?.cancel();
     _animController.dispose();
     super.dispose();
   }
@@ -126,12 +142,16 @@ class _PremiumBentoCardState extends State<PremiumBentoCard>
       onTapCancel: _handleTapCancel,
       child: ScaleTransition(
         scale: _scaleAnimation,
-        child: LiquidGlass(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: SizedBox(
-              height: isLarge ? 280 : 220,
-              child: Column(
+        child: Hero(
+          tag: 'script_card_${widget.script.id}',
+          child: Material(
+            color: Colors.transparent,
+            child: LiquidGlass(
+              child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: SizedBox(
+                height: isLarge ? 280 : 220,
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Visual Area: Widget preview or code snippet with gradient overlay
@@ -312,8 +332,10 @@ class _PremiumBentoCardState extends State<PremiumBentoCard>
               ),
             ),
           ),
+          ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

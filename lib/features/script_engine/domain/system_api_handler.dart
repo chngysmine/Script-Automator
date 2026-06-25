@@ -4,6 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:script_automator/core/security/app_secure_storage.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:script_automator/core/security/network_policy.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 /// Handles System API requests dispatched from the JS Engine Isolate.
 ///
@@ -28,17 +31,6 @@ class SystemAPIHandler {
     _secureStorage = AppSecureStorage.create();
   }
 
-  /// Blocked URL patterns for SSRF protection.
-  static final List<RegExp> _blockedPatterns = [
-    RegExp(r'^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)', caseSensitive: false),
-    RegExp(r'^https?://\[::1\]'),
-    RegExp(r'^https?://10\.'),
-    RegExp(r'^https?://172\.(1[6-9]|2\d|3[01])\.'),
-    RegExp(r'^https?://192\.168\.'),
-    RegExp(r'^https?://169\.254\.'),
-    RegExp(r'^https?://metadata\.google'),
-  ];
-
   Future<void> _initNotifications() async {
     if (_notificationsInitialized) return;
     const initializationSettingsIOS = DarwinInitializationSettings();
@@ -59,45 +51,6 @@ class SystemAPIHandler {
     _notificationsInitialized = true;
   }
 
-  /// Returns `true` if the [url] targets a private or loopback address.
-  bool _isBlockedUrl(String url) {
-    return _blockedPatterns.any((pattern) => pattern.hasMatch(url));
-  }
-
-  /// Executes an HTTP fetch request.
-  ///
-  /// [payload] must be a JSON string:
-  /// ```json
-  /// { "url": "...", "method": "GET", "headers": {...}, "body": "..." }
-  /// ```
-  ///
-  /// Returns a JSON string with `status`, `headers`, and `body` fields.
-  /// Returns `{ "error": "...", "status": 0 }` on failure.
-  bool _isPrivateIp(String ip) {
-    if (ip.startsWith('10.') ||
-        ip.startsWith('192.168.') ||
-        ip.startsWith('169.254.')) {
-      return true;
-    }
-    if (ip.startsWith('172.')) {
-      final parts = ip.split('.');
-      if (parts.length >= 2) {
-        final secondPart = int.tryParse(parts[1]);
-        if (secondPart != null && secondPart >= 16 && secondPart <= 31) {
-          return true;
-        }
-      }
-    }
-    if (ip == '::1' || ip == '0:0:0:0:0:0:0:1') return true;
-    final lowerIp = ip.toLowerCase();
-    if (lowerIp.startsWith('fc00:') ||
-        lowerIp.startsWith('fd00:') ||
-        lowerIp.startsWith('fe80:')) {
-      return true;
-    }
-    return false;
-  }
-
   /// Executes an HTTP fetch request.
   ///
   /// [payload] must be a JSON string:
@@ -116,22 +69,16 @@ class SystemAPIHandler {
           Map<String, String>.from(requestData['headers'] ?? {});
       final String? body = requestData['body'];
 
+      final validationError = await NetworkPolicy.validateUrl(url);
+      if (validationError != null) {
+        return jsonEncode({
+          'error': validationError,
+          'status': validationError.contains('unsupported scheme') ? 400 : 403,
+        });
+      }
+
       final uri = Uri.parse(url);
       final String scheme = uri.scheme.toLowerCase();
-
-      if (scheme != 'http' && scheme != 'https') {
-        return jsonEncode({
-          'error': 'Request blocked: unsupported scheme. Only http and https are allowed',
-          'status': 400,
-        });
-      }
-
-      if (_isBlockedUrl(url)) {
-        return jsonEncode({
-          'error': 'Request blocked: private/loopback addresses are not allowed',
-          'status': 403,
-        });
-      }
 
       String resolvedIp = uri.host;
       bool isHostIp = false;
@@ -144,34 +91,10 @@ class SystemAPIHandler {
         try {
           final resolvedHosts = await InternetAddress.lookup(uri.host)
               .timeout(const Duration(seconds: 5));
-          if (resolvedHosts.isEmpty) {
-            return jsonEncode({
-              'error': 'Request blocked: unable to resolve host securely',
-              'status': 403,
-            });
+          if (resolvedHosts.isNotEmpty) {
+            resolvedIp = resolvedHosts.first.address;
           }
-          final address = resolvedHosts.first;
-          resolvedIp = address.address;
-
-          if (address.isLoopback || address.isLinkLocal || _isPrivateIp(resolvedIp)) {
-            return jsonEncode({
-              'error': 'Request blocked: resolved address is private or loopback',
-              'status': 403,
-            });
-          }
-        } catch (_) {
-          return jsonEncode({
-            'error': 'Request blocked: unable to resolve host securely or DNS lookup timed out',
-            'status': 403,
-          });
-        }
-      } else {
-        if (_isPrivateIp(resolvedIp) || resolvedIp == '127.0.0.1' || resolvedIp == '::1') {
-          return jsonEncode({
-            'error': 'Request blocked: target IP is private or loopback',
-            'status': 403,
-          });
-        }
+        } catch (_) {}
       }
 
       // Pin the target host to IP for HTTP requests to prevent DNS Rebinding.
@@ -331,6 +254,45 @@ class SystemAPIHandler {
         body: body,
         notificationDetails: notificationDetails,
       );
+      return jsonEncode({'success': true});
+    } catch (e) {
+      return jsonEncode({'error': e.toString()});
+    }
+  }
+
+  /// Handles Clipboard read/write operations.
+  Future<String> handleClipboard(String payload) async {
+    try {
+      final data = jsonDecode(payload);
+      final String action = data['action'] ?? 'read';
+      final String? text = data['text'];
+
+      if (action == 'write') {
+        if (text == null) return jsonEncode({'error': 'Text is null'});
+        await Clipboard.setData(ClipboardData(text: text));
+        return jsonEncode({'success': true});
+      } else {
+        final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+        return jsonEncode({'value': clipboardData?.text});
+      }
+    } catch (e) {
+      return jsonEncode({'error': e.toString()});
+    }
+  }
+
+  /// Handles Share operations.
+  Future<String> handleShare(String payload) async {
+    try {
+      final data = jsonDecode(payload);
+      final String text = data['text'] ?? '';
+      final String? title = data['title'];
+
+      if (text.isEmpty) {
+        return jsonEncode({'error': 'Text must not be empty'});
+      }
+
+      // ignore: deprecated_member_use
+      await Share.share(text, subject: title);
       return jsonEncode({'success': true});
     } catch (e) {
       return jsonEncode({'error': e.toString()});

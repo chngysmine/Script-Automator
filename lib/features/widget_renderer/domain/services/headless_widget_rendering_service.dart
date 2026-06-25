@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
+import 'package:crypto/crypto.dart';
 
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_node.dart';
 import 'package:script_automator/features/widget_renderer/domain/entities/widget_type.dart';
@@ -13,6 +14,13 @@ import 'package:script_automator/features/widget_renderer/domain/entities/sasup_
 import 'package:script_automator/features/widget_renderer/domain/entities/sasup_padding.dart';
 
 class HeadlessWidgetRenderingService {
+  /// Local cache for computed render payload hashes to skip redundant renders
+  final Map<String, String> _lastRenderHash = {};
+
+  /// Stream controller to broadcast render events to listeners (e.g. Bento cards)
+  final StreamController<String> _renderEventController = StreamController<String>.broadcast();
+  Stream<String> get onRenderEvent => _renderEventController.stream;
+
   /// Saves the raw SASUP JSON directly to shared storage for native rendering.
   ///
   /// This is the **preferred** mode: iOS SwiftUI and Android Glance render the
@@ -22,6 +30,16 @@ class HeadlessWidgetRenderingService {
     try {
       debugPrint("HeadlessService: Native JSON Passthrough for $scriptId");
       final directory = await getSharedDirectory();
+      
+      final cacheKey = '${scriptId}_$family';
+      final hash = sha256.convert(utf8.encode(jsonString + family)).toString();
+      final jsonFile = File('${directory.path}/sasup_ui_$scriptId.json');
+      
+      if (_lastRenderHash[cacheKey] == hash && await jsonFile.exists()) {
+        debugPrint("HeadlessService: Skipping native JSON render — payload unchanged for $scriptId ($family)");
+        return 'file://${jsonFile.path}';
+      }
+      
       await _cleanupOldCache(directory);
 
       final jsonMap = jsonDecode(jsonString);
@@ -30,7 +48,6 @@ class HeadlessWidgetRenderingService {
       final jsonPayload = jsonEncode(sanitizedMap);
 
       // Save per-script JSON
-      final jsonFile = File('${directory.path}/sasup_ui_$scriptId.json');
       await jsonFile.writeAsString(jsonPayload, flush: true);
 
       // Also write to default filename for compatibility
@@ -39,7 +56,9 @@ class HeadlessWidgetRenderingService {
 
       await _triggerWidgetReload();
 
+      _lastRenderHash[cacheKey] = hash;
       debugPrint("HeadlessService: Native JSON saved to ${jsonFile.path}");
+      _renderEventController.add(scriptId);
       return 'file://${jsonFile.path}';
     } catch (e, stack) {
       debugPrint("Native JSON Render Error: $e\n$stack");
@@ -54,6 +73,19 @@ class HeadlessWidgetRenderingService {
   /// as native SwiftUI/Glance components. Use [renderNativeJson] when possible.
   Future<String> renderAndSave(WidgetNode node, String scriptId, {String family = 'medium'}) async {
     try {
+      final nodeJson = jsonEncode(node.toJson());
+      final cacheKey = '${scriptId}_${family}_png';
+      final hash = sha256.convert(utf8.encode(nodeJson + family)).toString();
+      final directory = await getSharedDirectory();
+      
+      final pngFile = File('${directory.path}/sasup_ui_$scriptId.png');
+      final originalFile = File('${directory.path}/sasup_ui_$scriptId.json');
+      
+      if (_lastRenderHash[cacheKey] == hash && await pngFile.exists() && await originalFile.exists()) {
+        debugPrint("HeadlessService: Skipping PNG render — payload unchanged for $scriptId ($family)");
+        return 'file://${originalFile.path}';
+      }
+
       debugPrint(
         "HeadlessService: Starting renderAndSave (Texture Capture) for family $family...",
       );
@@ -79,14 +111,11 @@ class HeadlessWidgetRenderingService {
         image.dispose(); // CRITICAL GPU memory leak fix
       }
 
-      final directory = await getSharedDirectory();
       await _cleanupOldCache(directory);
 
-      final pngFile = File('${directory.path}/sasup_ui_$scriptId.png');
       await pngFile.writeAsBytes(buffer, flush: true);
 
       // 1. Save original WidgetNode JSON for Flutter in-app preview and iOS compatibility
-      final originalFile = File('${directory.path}/sasup_ui_$scriptId.json');
       final originalRootMap = {'family': family, 'scriptId': scriptId, 'root': node.toJson()};
       final sanitizedOriginalMap = _sanitizeForJson(originalRootMap);
       final originalJsonPayload = jsonEncode(sanitizedOriginalMap);
@@ -114,6 +143,8 @@ class HeadlessWidgetRenderingService {
 
       await _triggerWidgetReload();
 
+      _lastRenderHash[cacheKey] = hash;
+      _renderEventController.add(scriptId);
       return 'file://${originalFile.path}';
     } catch (e, stack) {
       debugPrint("Headless Render Error: $e\n$stack");
@@ -367,6 +398,8 @@ class HeadlessWidgetRenderingService {
         // ignore: invalid_use_of_visible_for_overriding_member
         rootElement.unmount();
       });
+      pipelineOwner.rootNode = null;
+      buildOwner.finalizeTree();
     }
   }
 

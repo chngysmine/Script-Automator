@@ -15,7 +15,7 @@ import 'package:script_automator/features/dashboard/domain/services/notification
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:script_automator/core/services/app_config_service.dart';
-
+import 'package:script_automator/features/onboarding/presentation/pages/daily_landing_page.dart';
 
 /// Root navigation widget that reacts to Firebase auth state.
 ///
@@ -35,9 +35,35 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   String? _lastSeenUid;
   StreamSubscription<DocumentSnapshot>? _banSubscription;
+  bool? _showDailySplash;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkDailySplash();
+  }
+
+  Future<void> _checkDailySplash() async {
+    final shouldShow = await shouldShowDailySplash();
+    if (mounted) {
+      setState(() => _showDailySplash = shouldShow);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Phase 0: Daily splash check (before any auth)
+    if (_showDailySplash == null) {
+      return const _AuthLoadingScreen();
+    }
+    if (_showDailySplash!) {
+      return DailyLandingPage(
+        onContinue: () {
+          setState(() => _showDailySplash = false);
+        },
+      );
+    }
+
     final authService = GetIt.I<AuthService>();
 
     return StreamBuilder<User?>(
@@ -62,6 +88,7 @@ class _AuthGateState extends State<AuthGate> {
 
         // User exists → go to main app + trigger background sync once
         _triggerBackgroundSync(snapshot.data!);
+
         return const AppShell();
       },
     );

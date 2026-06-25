@@ -15,6 +15,8 @@ import 'package:script_automator/features/dashboard/presentation/widgets/glass_h
 import 'package:script_automator/features/dashboard/domain/services/notification_service.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/script_preview_sheet.dart';
 
+import 'package:script_automator/core/ui/shimmer.dart';
+
 /// The main dashboard view containing the user's scripts and header.
 /// Now embedded within [AppShell], stripped of its own Scaffold/Drawer/Dock.
 class LiquidDashboardPage extends StatefulWidget {
@@ -66,6 +68,32 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
         _scripts = scripts;
         _isLoading = false;
       }),
+    );
+  }
+
+  Widget _buildShimmerGrid() {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 14,
+        mainAxisSpacing: 14,
+        childAspectRatio: 0.78,
+      ),
+      itemCount: 4,
+      itemBuilder: (context, index) {
+        return Shimmer(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white10),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -161,12 +189,7 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
           sliver: SliverToBoxAdapter(
             child: _isLoading
-                ? const Center(
-                    heightFactor: 5,
-                    child: CircularProgressIndicator(
-                      color: LiquidTheme.primary,
-                    ),
-                  )
+                ? _buildShimmerGrid()
                 : AnimationLimiter(
                     child: StaggeredScriptGrid(
                       scripts: _scripts,

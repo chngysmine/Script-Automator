@@ -79,6 +79,11 @@ void main() async {
 }
 
 Future<void> _setupDI() async {
+  // Phase 0: Navigator Key (for background alerts)
+  if (!GetIt.I.isRegistered<GlobalKey<NavigatorState>>()) {
+    GetIt.I.registerSingleton<GlobalKey<NavigatorState>>(GlobalKey<NavigatorState>());
+  }
+
   // Phase 0: Telemetry Engine (Always First)
   if (!GetIt.I.isRegistered<TelemetryService>()) {
     GetIt.I.registerSingleton<TelemetryService>(TelemetryService());
@@ -252,6 +257,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     if (!GetIt.I.isRegistered<ValueNotifier<ThemeMode>>()) {
       return MaterialApp(
+        navigatorKey: GetIt.I.isRegistered<GlobalKey<NavigatorState>>()
+            ? GetIt.I<GlobalKey<NavigatorState>>()
+            : null,
         title: 'Script Automator',
         theme: LiquidTheme.lightTheme,
         darkTheme: LiquidTheme.darkTheme,
@@ -265,6 +273,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       valueListenable: GetIt.I<ValueNotifier<ThemeMode>>(),
       builder: (context, themeMode, _) {
         return MaterialApp(
+          navigatorKey: GetIt.I.isRegistered<GlobalKey<NavigatorState>>()
+              ? GetIt.I<GlobalKey<NavigatorState>>()
+              : null,
           title: 'Script Automator',
           theme: LiquidTheme.lightTheme,
           darkTheme: LiquidTheme.darkTheme,

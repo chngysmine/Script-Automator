@@ -14,6 +14,8 @@ import 'package:get_it/get_it.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/script_management/domain/repositories/script_repository.dart';
 import 'package:script_automator/features/editor/presentation/pages/editor_page.dart';
+import 'package:script_automator/features/dashboard/data/services/user_preferences_service.dart';
+import 'package:script_automator/features/onboarding/presentation/widgets/new_user_onboarding_dialog.dart';
 
 /// The global navigation shell for the application.
 ///
@@ -38,6 +40,37 @@ class AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     _navIndex = widget.initialIndex;
+    _checkNewUserOnboarding();
+  }
+
+  Future<void> _checkNewUserOnboarding() async {
+    final prefs = GetIt.I<UserPreferencesService>();
+    final completed = await prefs.get('onboarding_completed');
+    if (completed != 'true') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          showGeneralDialog(
+            context: context,
+            barrierDismissible: false,
+            barrierLabel: 'Onboarding',
+            barrierColor: Colors.black.withValues(alpha: 0.5),
+            transitionDuration: const Duration(milliseconds: 350),
+            pageBuilder: (context, anim1, anim2) {
+              return NewUserOnboardingDialog(
+                onDismiss: () => Navigator.of(context).pop(),
+              );
+            },
+            transitionBuilder: (context, anim1, anim2, child) {
+              final curve = CurvedAnimation(parent: anim1, curve: Curves.easeOutBack);
+              return ScaleTransition(
+                scale: curve,
+                child: FadeTransition(opacity: anim1, child: child),
+              );
+            },
+          );
+        }
+      });
+    }
   }
 
   /// Navigates to a specific tab index from anywhere in the shell.

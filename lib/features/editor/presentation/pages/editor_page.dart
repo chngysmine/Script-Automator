@@ -636,6 +636,8 @@ class _EditorPageState extends State<EditorPage>
       forceStrutHeight: true,
     );
 
+    final scriptId = widget.script?.id ?? 'new_script';
+
     return PopScope(
       canPop: !_hasUnsavedChanges,
       onPopInvokedWithResult: (didPop, result) async {
@@ -645,289 +647,292 @@ class _EditorPageState extends State<EditorPage>
         if (!context.mounted) return;
         Navigator.of(context).pop();
       },
-      child: Scaffold(
-        extendBodyBehindAppBar: true,
-        resizeToAvoidBottomInset: false,
-        body: Stack(
-        children: [
-          // 1. Background
-          Container(
-            color: editorBg,
-          ),
-          Positioned(
-            top: -100,
-            right: -50,
-            child: _buildOrb(
-              300,
-              LiquidTheme.primary.withValues(alpha: isDark ? 0.1 : 0.06),
+      child: Hero(
+        tag: 'script_card_$scriptId',
+        child: Scaffold(
+          extendBodyBehindAppBar: true,
+          resizeToAvoidBottomInset: false,
+          body: Stack(
+          children: [
+            // 1. Background
+            Container(
+              color: editorBg,
             ),
-          ),
-          Positioned(
-            bottom: 100,
-            left: -50,
-            child: _buildOrb(
-              250,
-              LiquidTheme.cyan.withValues(alpha: isDark ? 0.08 : 0.05),
+            Positioned(
+              top: -100,
+              right: -50,
+              child: _buildOrb(
+                300,
+                LiquidTheme.primary.withValues(alpha: isDark ? 0.1 : 0.06),
+              ),
             ),
-          ),
+            Positioned(
+              bottom: 100,
+              left: -50,
+              child: _buildOrb(
+                250,
+                LiquidTheme.cyan.withValues(alpha: isDark ? 0.08 : 0.05),
+              ),
+            ),
 
-          // Moderate Blur for professional clean look
-          BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-            child: Container(
-              color: editorBg.withValues(alpha: 0.6),
+            // Moderate Blur for professional clean look
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+              child: Container(
+                color: editorBg.withValues(alpha: 0.6),
+              ),
             ),
-          ),
 
-          // 2. Editor Surface (PRISM GLASS: Tinted, not White)
-          SafeArea(
-            child: Column(
-              children: [
-                EditorAppBar(
-                  scriptName: widget.script?.name ?? "Untitled",
-                  isSaving: _isSaving,
-                  onBack: () async {
-                    final shouldPop = await _handleBackPress();
-                    if (!shouldPop) return;
-                    if (!context.mounted) return;
-                    Navigator.of(context).pop();
-                  },
-                  onPlay: _runScript,
-                  onDocsTap: () => _showDocsSheet(context),
-                  onPublish: widget.script == null ? null : () async {
-                    final success = await PublishScriptSheet.show(
-                      context, 
-                      widget.script!.copyWith(
-                        content: _controller.text, 
-                        settings: widget.script!.settings,
-                      ),
-                    );
-                    if (success == true) {
+            // 2. Editor Surface (PRISM GLASS: Tinted, not White)
+            SafeArea(
+              child: Column(
+                children: [
+                  EditorAppBar(
+                    scriptName: widget.script?.name ?? "Untitled",
+                    isSaving: _isSaving,
+                    onBack: () async {
+                      final shouldPop = await _handleBackPress();
+                      if (!shouldPop) return;
                       if (!context.mounted) return;
-                      PublishScriptSheet.showSuccessDialog(context);
-                    }
-                  },
-                  onUndo: _handleUndo,
-                  onRedo: _handleRedo,
-                  canUndo: _history.canUndo,
-                  canRedo: _history.canRedo,
-                  onSave: _saveScript,
-                ),
-                Expanded(
-                  child: FadeTransition(
-                    opacity: _fadeAnim,
-                    child: Container(
-                      margin: EdgeInsets.zero, // Full-width edge-to-edge
-                      decoration: BoxDecoration(
-                        // Adaptive Glass for Code Editor
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: isDark
-                              ? [
-                                  const Color(0xFF1E293B).withValues(alpha: 0.6),
-                                  const Color(0xFF0F172A).withValues(alpha: 0.8),
-                                ]
-                              : [
-                                  const Color(0xFFF1F5F9).withValues(alpha: 0.95),
-                                  const Color(0xFFE2E8F0).withValues(alpha: 0.8),
-                                ],
+                      Navigator.of(context).pop();
+                    },
+                    onPlay: _runScript,
+                    onDocsTap: () => _showDocsSheet(context),
+                    onPublish: widget.script == null ? null : () async {
+                      final success = await PublishScriptSheet.show(
+                        context, 
+                        widget.script!.copyWith(
+                          content: _controller.text, 
+                          settings: widget.script!.settings,
                         ),
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : const Color(0xFFE2E8F0), // Slate 200
-                          width: 1.0,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: isDark
-                                ? Colors.black.withValues(alpha: 0.4)
-                                : Colors.black.withValues(alpha: 0.06),
-                            blurRadius: 30,
-                            offset: const Offset(0, 15),
+                      );
+                      if (success == true) {
+                        if (!context.mounted) return;
+                        PublishScriptSheet.showSuccessDialog(context);
+                      }
+                    },
+                    onUndo: _handleUndo,
+                    onRedo: _handleRedo,
+                    canUndo: _history.canUndo,
+                    canRedo: _history.canRedo,
+                    onSave: _saveScript,
+                  ),
+                  Expanded(
+                    child: FadeTransition(
+                      opacity: _fadeAnim,
+                      child: Container(
+                        margin: EdgeInsets.zero, // Full-width edge-to-edge
+                        decoration: BoxDecoration(
+                          // Adaptive Glass for Code Editor
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: isDark
+                                ? [
+                                    const Color(0xFF1E293B).withValues(alpha: 0.6),
+                                    const Color(0xFF0F172A).withValues(alpha: 0.8),
+                                  ]
+                                : [
+                                    const Color(0xFFF1F5F9).withValues(alpha: 0.95),
+                                    const Color(0xFFE2E8F0).withValues(alpha: 0.8),
+                                  ],
                           ),
-                        ],
-                      ),
-                      child: _isLoadingContent
-                          ? const Center(
-                              child: CircularProgressIndicator(
-                                color: LiquidTheme.primary,
-                              ),
-                            )
-                          : LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final availableWidth = constraints.maxWidth;
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : const Color(0xFFE2E8F0), // Slate 200
+                            width: 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isDark
+                                  ? Colors.black.withValues(alpha: 0.4)
+                                  : Colors.black.withValues(alpha: 0.06),
+                              blurRadius: 30,
+                              offset: const Offset(0, 15),
+                            ),
+                          ],
+                        ),
+                        child: _isLoadingContent
+                            ? const Center(
+                                child: CircularProgressIndicator(
+                                  color: LiquidTheme.primary,
+                                ),
+                              )
+                            : LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final availableWidth = constraints.maxWidth;
 
-                                  return Scrollbar(
-                                    controller: _verticalController,
-                                    child: SingleChildScrollView(
+                                    return Scrollbar(
                                       controller: _verticalController,
-                                      child: ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                          minHeight: constraints.maxHeight,
-                                          maxWidth: availableWidth,
-                                        ),
-                                        child: Stack(
-                                          children: [
-                                            Positioned.fill(
-                                              child: AnimatedBuilder(
-                                                animation: Listenable.merge([
-                                                  _verticalController,
-                                                  _controller,
-                                                ]),
-                                                builder: (context, _) => CustomPaint(
-                                                painter: ViewportAwarePainter(
-                                                  controller: _controller,
-                                                  scrollOffset:
-                                                      _verticalController
-                                                          .hasClients
-                                                      ? _verticalController
-                                                            .offset
-                                                      : 0,
-                                                  viewportHeight:
-                                                      constraints.maxHeight,
-                                                  textStyle:
-                                                      editorTextStyle,
-                                                  strutStyle: snappedStrutStyle,
-                                                  textScaler: MediaQuery.textScalerOf(context),
-                                                  gutterWidth: 44.0,
-                                                  codePaddingLeft: 8.0,
-                                                  isDark: isDark,
-                                                  maxLineWidth:
-                                                      availableWidth - 60.0 - 3.0,
-                                                  highlighter:
-                                                      SyntaxHighlighter.adaptive(
-                                                        baseStyle: editorTextStyle,
-                                                        brightness: isDark
-                                                            ? Brightness.dark
-                                                            : Brightness.light,
+                                      child: SingleChildScrollView(
+                                        controller: _verticalController,
+                                        child: ConstrainedBox(
+                                          constraints: BoxConstraints(
+                                            minHeight: constraints.maxHeight,
+                                            maxWidth: availableWidth,
+                                          ),
+                                          child: Stack(
+                                            children: [
+                                              Positioned.fill(
+                                                child: AnimatedBuilder(
+                                                  animation: Listenable.merge([
+                                                    _verticalController,
+                                                    _controller,
+                                                  ]),
+                                                  builder: (context, _) => CustomPaint(
+                                                  painter: ViewportAwarePainter(
+                                                    controller: _controller,
+                                                    scrollOffset:
+                                                        _verticalController
+                                                            .hasClients
+                                                        ? _verticalController
+                                                              .offset
+                                                        : 0,
+                                                    viewportHeight:
+                                                        constraints.maxHeight,
+                                                    textStyle:
+                                                        editorTextStyle,
+                                                    strutStyle: snappedStrutStyle,
+                                                    textScaler: MediaQuery.textScalerOf(context),
+                                                    gutterWidth: 44.0,
+                                                    codePaddingLeft: 8.0,
+                                                    isDark: isDark,
+                                                    maxLineWidth:
+                                                        availableWidth - 60.0 - 3.0,
+                                                    highlighter:
+                                                        SyntaxHighlighter.adaptive(
+                                                          baseStyle: editorTextStyle,
+                                                          brightness: isDark
+                                                              ? Brightness.dark
+                                                              : Brightness.light,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                              ),
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  left: 52.0,
+                                                  right: 8.0,
+                                                  bottom: 300.0,
+                                                ),
+                                                child: TextField(
+                                                  controller: _inputController,
+                                                  scrollController: _textFieldScrollController,
+                                                  focusNode: _focusNode,
+                                                  maxLines: null,
+                                                  keyboardType:
+                                                      TextInputType.multiline,
+                                                  scrollPhysics: const NeverScrollableScrollPhysics(),
+                                                  showCursor: true,
+                                                  style: editorTextStyle
+                                                      .copyWith(
+                                                        color:
+                                                            Colors.transparent,
                                                       ),
+                                                  strutStyle: snappedStrutStyle,
+                                                  cursorColor: const Color(
+                                                    0xFF0284C7,
+                                                  ),
+                                                  cursorHeight: 13.5 * snappedHeightFactor,
+                                                  cursorWidth: 1.5,
+                                                  decoration: const InputDecoration(
+                                                    border: InputBorder.none,
+                                                    isCollapsed: true,
+                                                    isDense: true,
+                                                    contentPadding:
+                                                        EdgeInsets.zero,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                            ),
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                left: 52.0,
-                                                right: 8.0,
-                                                bottom: 300.0,
-                                              ),
-                                              child: TextField(
-                                                controller: _inputController,
-                                                scrollController: _textFieldScrollController,
-                                                focusNode: _focusNode,
-                                                maxLines: null,
-                                                keyboardType:
-                                                    TextInputType.multiline,
-                                                scrollPhysics: const NeverScrollableScrollPhysics(),
-                                                showCursor: true,
-                                                style: editorTextStyle
-                                                    .copyWith(
-                                                      color:
-                                                          Colors.transparent,
-                                                    ),
-                                                strutStyle: snappedStrutStyle,
-                                                cursorColor: const Color(
-                                                  0xFF0284C7,
-                                                ),
-                                                cursorHeight: 13.5 * snappedHeightFactor,
-                                                cursorWidth: 1.5,
-                                                decoration: const InputDecoration(
-                                                  border: InputBorder.none,
-                                                  isCollapsed: true,
-                                                  isDense: true,
-                                                  contentPadding:
-                                                      EdgeInsets.zero,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  );
-                                },
-                              ),
+                                    );
+                                  },
+                                ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: bottomInset > 0 ? 0 : 0),
+                ],
+              ),
+            ),
+
+            // 3. CROSS-PLATFORM CONSOLE (DraggableScrollableSheet)
+            if (_showConsole)
+              if (!_isLogExpanded)
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: bottomInset),
+                    child: _buildConsolePill(),
+                  ),
+                )
+              else
+                Positioned.fill(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: bottomInset),
+                    child: DraggableScrollableSheet(
+                      initialChildSize: 0.4,
+                      minChildSize: 0.1,
+                      maxChildSize: 0.8,
+                      builder: (context, scrollController) {
+                        return _buildDraggableConsoleSheet(scrollController);
+                      },
                     ),
                   ),
                 ),
-                SizedBox(height: bottomInset > 0 ? 0 : 0),
-              ],
-            ),
-          ),
 
-          // 3. CROSS-PLATFORM CONSOLE (DraggableScrollableSheet)
-          if (_showConsole)
-            if (!_isLogExpanded)
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: bottomInset),
-                  child: _buildConsolePill(),
-                ),
-              )
-            else
-              Positioned.fill(
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: bottomInset),
-                  child: DraggableScrollableSheet(
-                    initialChildSize: 0.4,
-                    minChildSize: 0.1,
-                    maxChildSize: 0.8,
-                    builder: (context, scrollController) {
-                      return _buildDraggableConsoleSheet(scrollController);
-                    },
+            Positioned(
+              bottom: bottomInset,
+              left: 0,
+              right: 0,
+              child: KeyboardToolbar(
+                onInsert: _insertText,
+                onTab: () => _insertText("  "),
+                onUndo: _handleUndo,
+                onRedo: _handleRedo,
+              ),
+            ),
+
+            // 4. Draggable Floating AI Button
+            if (_aiFabPosition != null)
+              Positioned(
+                left: _aiFabPosition!.dx,
+                top: _aiFabPosition!.dy,
+                child: GestureDetector(
+                  onPanUpdate: (details) {
+                    _snapController.stop();
+                    setState(() {
+                      double newX = _aiFabPosition!.dx + details.delta.dx;
+                      double newY = _aiFabPosition!.dy + details.delta.dy;
+                      
+                      newX = newX.clamp(-10.0, screenWidth - 46.0);
+                      final double topLimit = mediaQuery.padding.top + 76.0;
+                      newY = newY.clamp(topLimit, screenHeight - 72.0 - mediaQuery.padding.bottom);
+                      
+                      _aiFabPosition = Offset(newX, newY);
+                    });
+                  },
+                  onPanEnd: (details) {
+                    _snapToEdge(
+                      _aiFabPosition!,
+                      screenWidth,
+                      screenHeight,
+                      mediaQuery.padding.bottom,
+                    );
+                  },
+                  child: DraggableAiFab(
+                    onTap: () => _showAiGenerateSheet(context),
+                    onLongPress: () => showAiOnboardingDialog(context),
                   ),
                 ),
               ),
-
-          Positioned(
-            bottom: bottomInset,
-            left: 0,
-            right: 0,
-            child: KeyboardToolbar(
-              onInsert: _insertText,
-              onTab: () => _insertText("  "),
-              onUndo: _handleUndo,
-              onRedo: _handleRedo,
-            ),
-          ),
-
-          // 4. Draggable Floating AI Button
-          if (_aiFabPosition != null)
-            Positioned(
-              left: _aiFabPosition!.dx,
-              top: _aiFabPosition!.dy,
-              child: GestureDetector(
-                onPanUpdate: (details) {
-                  _snapController.stop();
-                  setState(() {
-                    double newX = _aiFabPosition!.dx + details.delta.dx;
-                    double newY = _aiFabPosition!.dy + details.delta.dy;
-                    
-                    newX = newX.clamp(-10.0, screenWidth - 46.0);
-                    final double topLimit = mediaQuery.padding.top + 76.0;
-                    newY = newY.clamp(topLimit, screenHeight - 72.0 - mediaQuery.padding.bottom);
-                    
-                    _aiFabPosition = Offset(newX, newY);
-                  });
-                },
-                onPanEnd: (details) {
-                  _snapToEdge(
-                    _aiFabPosition!,
-                    screenWidth,
-                    screenHeight,
-                    mediaQuery.padding.bottom,
-                  );
-                },
-                child: DraggableAiFab(
-                  onTap: () => _showAiGenerateSheet(context),
-                  onLongPress: () => showAiOnboardingDialog(context),
-                ),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     ),);
   }
@@ -1014,12 +1019,8 @@ class _EditorPageState extends State<EditorPage>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildStatusDot(const Color(0xFFEF4444)),
-            const SizedBox(width: 6),
-            _buildStatusDot(const Color(0xFFF59E0B)),
-            const SizedBox(width: 6),
             _buildStatusDot(const Color(0xFF10B981)),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             const Text(
               "Build: Running...",
               style: TextStyle(
@@ -1078,33 +1079,41 @@ class _EditorPageState extends State<EditorPage>
                   vertical: 8,
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => setState(() {
-                            _isLogExpanded = false;
-                          }),
-                          child: _buildStatusDot(const Color(0xFFEF4444)),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          "Console Output",
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                            decoration: TextDecoration.none,
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        _buildStatusDot(const Color(0xFFF59E0B)),
-                        const SizedBox(width: 8),
-                        _buildStatusDot(const Color(0xFF10B981)),
-                      ],
-                    ),
-                    const Text(
-                      "Console Output",
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
                       ),
                     ),
-                    const SizedBox(width: 40),
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        _isLogExpanded = false;
+                      }),
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFEF4444),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1127,14 +1136,6 @@ class _EditorPageState extends State<EditorPage>
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildStatusDot(Color color) {
-    return Container(
-      width: 12,
-      height: 12,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 
@@ -1182,4 +1183,11 @@ class _EditorPageState extends State<EditorPage>
     }
   }
 
+  Widget _buildStatusDot(Color color) {
+    return Container(
+      width: 12,
+      height: 12,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
 }
