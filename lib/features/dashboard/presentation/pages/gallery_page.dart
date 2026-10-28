@@ -148,6 +148,8 @@ class _GalleryPageState extends State<GalleryPage> {
                             const SizedBox(width: 12),
                             StreamBuilder<int>(
                               stream: GetIt.I<NotificationService>().unreadCount,
+                              initialData: GetIt.I<NotificationService>()
+                                  .currentUnreadCount,
                               builder: (context, snapshot) {
                                 return GlassHeaderActions(
                                   hasNotificationBadge: (snapshot.data ?? 0) > 0,

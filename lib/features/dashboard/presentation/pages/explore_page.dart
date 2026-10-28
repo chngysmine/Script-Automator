@@ -166,6 +166,8 @@ class _ExplorePageState extends State<ExplorePage> {
                       ),
                       StreamBuilder<int>(
                         stream: GetIt.I<NotificationService>().unreadCount,
+                        initialData:
+                            GetIt.I<NotificationService>().currentUnreadCount,
                         builder: (context, snapshot) {
                           final unread = snapshot.data ?? 0;
                           return GlassHeaderActions(

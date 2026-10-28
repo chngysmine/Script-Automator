@@ -61,11 +61,18 @@ class AppNotification {
 /// Manages in-app notifications for script execution events and system alerts.
 ///
 /// Notifications are persisted in a Hive box and broadcast via [Stream].
+/// Both streams replay the latest value to every new subscriber, so a widget
+/// that subscribes after [init] still receives the current state.
 /// Social notifications (follow, star, comment) have been intentionally
 /// removed as they are not relevant to a widget automation app.
 class NotificationService {
   static const String _boxName = 'app_notifications';
   static const int _maxNotifications = 100;
+
+  /// [auth] is injectable for tests; defaults to [FirebaseAuth.instance].
+  NotificationService({FirebaseAuth? auth}) : _authOverride = auth;
+
+  final FirebaseAuth? _authOverride;
 
   final _notificationsController =
       StreamController<List<AppNotification>>.broadcast();
@@ -74,12 +81,23 @@ class NotificationService {
   final List<AppNotification> _notifications = [];
   Box<String>? _box;
 
-  /// Stream of all current notifications.
-  Stream<List<AppNotification>> get notifications =>
-      _notificationsController.stream;
+  /// Emits the current list to each new subscriber, then every update.
+  late final Stream<List<AppNotification>> notifications =
+      _replayLatest(_notificationsController.stream, () => allNotifications);
 
-  /// Stream of the current unread notification count.
-  Stream<int> get unreadCount => _unreadCountController.stream;
+  /// Emits the current unread count to each new subscriber, then every update.
+  late final Stream<int> unreadCount =
+      _replayLatest(_unreadCountController.stream, () => currentUnreadCount);
+
+  /// Current unread notification count (synchronous snapshot).
+  int get currentUnreadCount => _notifications.where((n) => !n.isRead).length;
+
+  static Stream<T> _replayLatest<T>(Stream<T> updates, T Function() current) {
+    return Stream<T>.multi((controller) {
+      controller.add(current());
+      controller.addStream(updates).whenComplete(controller.close);
+    }, isBroadcast: true);
+  }
 
   /// Initializes the Hive box and loads persisted notifications.
   // Serializes box switching on account changes (see UserStatsService).
@@ -88,7 +106,8 @@ class NotificationService {
   Future<void> init() => _initLock.synchronized(_initLocked);
 
   Future<void> _initLocked() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    final uid =
+        (_authOverride ?? FirebaseAuth.instance).currentUser?.uid ?? 'guest';
     // Hive lowercases box names; compare in the same form.
     final currentBoxName = '${_boxName}_$uid'.toLowerCase();
 
@@ -123,18 +142,23 @@ class NotificationService {
     _notifications.sort((a, b) => b.timestamp.compareTo(a.timestamp));
   }
 
-  Future<void> _saveToDisk() async {
-    if (_box == null) return;
-    await _box!.clear();
-    for (final n in _notifications) {
-      await _box!.put(n.id, json.encode(n.toJson()));
+  // Serializes saves so overlapping writes cannot interleave clear/put.
+  final Lock _saveLock = Lock();
+
+  Future<void> _saveToDisk() => _saveLock.synchronized(() async {
+    final box = _box;
+    if (box == null) return;
+    // Snapshot: the list may change while the writes below are awaited.
+    final snapshot = List<AppNotification>.of(_notifications);
+    await box.clear();
+    for (final n in snapshot) {
+      await box.put(n.id, json.encode(n.toJson()));
     }
-  }
+  });
 
   void _broadcast() {
     _notificationsController.add(List.from(_notifications));
-    final unread = _notifications.where((n) => !n.isRead).length;
-    _unreadCountController.add(unread);
+    _unreadCountController.add(currentUnreadCount);
   }
 
   /// Adds a new notification and broadcasts the updated list.

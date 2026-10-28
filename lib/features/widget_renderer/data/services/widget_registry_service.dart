@@ -17,6 +17,17 @@ class WidgetRegistryService {
   static const String _tableName = 'scripts';
   static const String _appGroupId = 'group.com.js.scriptAutomator';
 
+  /// [databaseFactory] and [directoryProvider] are injectable for tests;
+  /// defaults are the sqflite factory and the App Group directory.
+  WidgetRegistryService({
+    DatabaseFactory? databaseFactory,
+    Future<Directory?> Function()? directoryProvider,
+  }) : _factory = databaseFactory,
+       _dirProvider = directoryProvider;
+
+  final DatabaseFactory? _factory;
+  final Future<Directory?> Function()? _dirProvider;
+
   Database? _db;
 
   /// Initializes the SQLite database in the App Group container.
@@ -24,7 +35,7 @@ class WidgetRegistryService {
     if (_db != null && _db!.isOpen) return;
 
     try {
-      final directory = await _getSharedDirectory();
+      final directory = await (_dirProvider ?? _getSharedDirectory)();
       // _getSharedDirectory now handles fallback internally
       if (directory == null) {
         // Should not happen with fallback, but safe check
@@ -33,22 +44,29 @@ class WidgetRegistryService {
 
       final dbPath = p.join(directory.path, _dbName);
 
-      _db = await openDatabase(
+      _db = await (_factory ?? databaseFactory).openDatabase(
         dbPath,
-        version: 1,
-        onCreate: (db, version) async {
-          await db.execute('''
-            CREATE TABLE $_tableName (
-              id TEXT PRIMARY KEY,
-              name TEXT NOT NULL,
-              updated_at INTEGER NOT NULL
-            )
-          ''');
-        },
-        onOpen: (db) async {
-          await db.execute('PRAGMA journal_mode=WAL;');
-          debugPrint("WidgetRegistryDB: WAL mode enabled");
-        },
+        options: OpenDatabaseOptions(
+          version: 1,
+          // WAL lets the widget extension read while the app writes.
+          // PRAGMA journal_mode returns a row; execute() fails on
+          // sqflite_darwin ("not an error") and on Android without the WAL
+          // manifest flag, so use rawQuery.
+          onConfigure: (db) async {
+            final rows = await db.rawQuery('PRAGMA journal_mode=WAL');
+            final mode = rows.isEmpty ? '?' : rows.first.values.first;
+            debugPrint("WidgetRegistryDB: journal_mode=$mode");
+          },
+          onCreate: (db, version) async {
+            await db.execute('''
+              CREATE TABLE $_tableName (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                updated_at INTEGER NOT NULL
+              )
+            ''');
+          },
+        ),
       );
       debugPrint("WidgetRegistryDB initialized at: $dbPath");
     } catch (e) {
@@ -93,6 +111,13 @@ class WidgetRegistryService {
       debugPrint("Failed to get active widget IDs: $e");
       return [];
     }
+  }
+
+  /// Closes the database so tests can release the file.
+  @visibleForTesting
+  Future<void> close() async {
+    await _db?.close();
+    _db = null;
   }
 
   Future<Directory?> _getSharedDirectory() async {

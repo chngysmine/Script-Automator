@@ -87,16 +87,11 @@ class _NotificationPageState extends State<NotificationPage>
           SafeArea(
             child: StreamBuilder<List<AppNotification>>(
               stream: _notificationService.notifications,
+              // Local Hive state is always available; no loading phase.
+              initialData: _notificationService.allNotifications,
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      color: LiquidTheme.primary,
-                    ),
-                  );
-                }
-
-                final allNotifications = snapshot.data!;
+                final allNotifications =
+                    snapshot.data ?? const <AppNotification>[];
                 final List<AppNotification> filtered;
 
                 switch (_tabController.index) {
