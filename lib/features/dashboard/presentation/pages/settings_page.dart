@@ -1,3 +1,5 @@
+import 'package:script_automator/features/ai_integration/domain/ai_service.dart';
+import 'package:script_automator/features/editor/presentation/widgets/ai_onboarding_dialog.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
@@ -720,6 +722,18 @@ class _SettingsPageState extends State<SettingsPage> {
                       iconColor: const Color(0xFF10B981),
                     ),
                     SettingsActionItem(
+                      icon: Icons.auto_awesome_rounded,
+                      title: "AI Assistant",
+                      trailingText: GetIt.I.isRegistered<AiService>()
+                          ? GetIt.I<AiService>().activeProvider.label
+                          : null,
+                      onTap: () async {
+                        await showAiOnboardingDialog(context);
+                        if (mounted) setState(() {});
+                      },
+                      iconColor: LiquidTheme.primary,
+                    ),
+                    SettingsActionItem(
                       icon: Icons.sync_rounded,
                       title: "Sync to Cloud",
                       onTap: () => syncToCloud(context),
@@ -746,6 +760,19 @@ class _SettingsPageState extends State<SettingsPage> {
                       },
                       iconColor: const Color(0xFFEF4444),
                     ),
+                    if (!isAnonymousUser())
+                      SettingsActionItem(
+                        icon: Icons.delete_forever_rounded,
+                        title: "Delete Account",
+                        onTap: () async {
+                          final nav = Navigator.of(context, rootNavigator: true);
+                          final deleted = await confirmAndDeleteAccount(context);
+                          if (deleted && mounted) {
+                            nav.popUntil((route) => route.isFirst);
+                          }
+                        },
+                        iconColor: const Color(0xFFEF4444),
+                      ),
                   ])
                   .animate(delay: 250.ms)
                   .fadeIn()

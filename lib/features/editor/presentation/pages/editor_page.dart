@@ -4,7 +4,7 @@ import 'dart:async'; // StreamSubscription
 import 'package:get_it/get_it.dart';
 import '../../../../features/script_engine/domain/script_runner_service.dart';
 import '../../domain/code_forge_controller.dart';
-import '../../../../features/ai_integration/data/services/openai_service.dart';
+import '../../../../features/ai_integration/domain/ai_service.dart';
 import '../painters/viewport_aware_painter.dart';
 import '../widgets/keyboard_toolbar.dart';
 import '../widgets/console_log_widget.dart'; // Enhanced Console
@@ -1142,8 +1142,9 @@ class _EditorPageState extends State<EditorPage>
   // ────────────────────── AI Code Generation Sheet ──────────────────────
 
   Future<void> _showAiGenerateSheet(BuildContext ctx) async {
-    final openai = GetIt.I<OpenAIService>();
-    if (!openai.isReady) {
+    // Gemini needs no setup; only prompt when even the default is unavailable.
+    final ai = GetIt.I<AiService>();
+    if (!ai.isReady) {
       await showAiOnboardingDialog(ctx);
       return;
     }

@@ -2,9 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
 import '../../../../core/data_structures/rope.dart';
-import '../../../../features/ai_integration/data/services/gemini_service.dart';
-import '../../../../features/ai_integration/data/services/ollama_service.dart';
-import '../../../../features/ai_integration/data/services/openai_service.dart';
+import '../../../../features/ai_integration/domain/ai_service.dart';
 import '../../../../features/dashboard/data/services/user_stats_service.dart';
 import 'dart:async'; // Added for Timer
 
@@ -244,42 +242,19 @@ class CodeForgeController extends ChangeNotifier
 
   // --- AI Integration ---
 
-  // Helper enum for AI Provider
-  // 'openai' by default
-  static String? activeAiProvider = 'openai';
-
-  /// Triggers AI Ghost Text generation
+  /// Triggers AI ghost text through the user's selected provider
+  /// (Gemini by default, see [AiService]).
   Future<void> triggerGhostText() async {
     final cursorOffset = selection.baseOffset;
     if (cursorOffset < 0) return;
+    if (!GetIt.I.isRegistered<AiService>()) return;
 
-    // Send context up to the cursor
     final contextStr = text.substring(0, cursorOffset);
-    String? completion;
+    final requestedText = text;
+    final completion = await GetIt.I<AiService>().completeCode(contextStr);
 
-    if (activeAiProvider == 'openai') {
-      // OpenAI Integration
-      if (!GetIt.I.isRegistered<OpenAIService>()) return;
-      final openAiService = GetIt.I<OpenAIService>();
-      completion = await openAiService.completeCode(contextStr);
-    } else if (activeAiProvider == 'gemini') {
-      // Gemini Integration
-      if (!GetIt.I.isRegistered<GeminiService>()) return;
-      final geminiService = GetIt.I<GeminiService>();
-
-      if (!(await geminiService.hasApiKey())) {
-        debugPrint("Gemini API Key missing");
-        return;
-      }
-      completion = await geminiService.completeCode(contextStr);
-    } else {
-      // Ollama Integration
-      if (!GetIt.I.isRegistered<OllamaService>()) return;
-      final ollamaService = GetIt.I<OllamaService>();
-
-      completion = await ollamaService.completeCode(contextStr);
-    }
-
+    // Drop stale suggestions if the user kept typing meanwhile.
+    if (text != requestedText) return;
     if (completion != null && completion.isNotEmpty) {
       setGhostText(completion);
     }

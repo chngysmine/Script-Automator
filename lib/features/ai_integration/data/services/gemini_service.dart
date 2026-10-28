@@ -1,94 +1,133 @@
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:script_automator/core/security/app_secure_storage.dart';
 
-class GeminiService {
-  final FlutterSecureStorage _secureStorage;
-  GenerativeModel? _model;
+import 'package:script_automator/core/services/app_config_service.dart';
+import '../../domain/ai_backend.dart';
+import '../../domain/ai_prompts.dart';
+import '../../domain/ai_text_client.dart';
+import '../clients/firebase_ai_text_client.dart';
 
-  static const String _kApiKeyKey = 'gemini_api_key';
+/// Default AI provider: Gemini through Firebase AI Logic.
+///
+/// Model names come from [AppConfigService] (`app_config/global`) so they can
+/// be changed without shipping a new build.
+class GeminiService implements AiBackend {
+  GeminiService({
+    this._config,
+    AiTextClient? client,
+    this._legacyStorage,
+    bool Function()? isFirebaseReady,
+  })  : _client = client ?? FirebaseAiTextClient(),
+        _isFirebaseReady = isFirebaseReady ?? (() => Firebase.apps.isNotEmpty);
 
-  GeminiService(this._secureStorage);
+  /// Key used by the old google_generative_ai integration (user-supplied key).
+  static const String legacyApiKeyStorageKey = 'gemini_api_key';
 
+  final AppConfigService? _config;
+  final AiTextClient _client;
+  final FlutterSecureStorage? _legacyStorage;
+  final bool Function() _isFirebaseReady;
+
+  @override
+  bool get isReady => _isFirebaseReady();
+
+  String get chatModel =>
+      _config?.aiChatModel ?? AppConfigService.defaultChatModel;
+  String get completionModel =>
+      _config?.aiCompletionModel ?? AppConfigService.defaultCompletionModel;
+
+  /// Removes the API key stored by the previous Gemini integration; keys are
+  /// no longer kept on device.
   Future<void> initialize() async {
-    final apiKey = await AppSecureStorage.readMigratingLegacy(
-      _secureStorage,
-      _kApiKeyKey,
-    );
-    if (apiKey != null && apiKey.isNotEmpty) {
-      _initModel(apiKey);
+    final storage = _legacyStorage;
+    if (storage == null) return;
+    try {
+      await storage.delete(key: legacyApiKeyStorageKey);
+    } catch (e) {
+      debugPrint('[GeminiService] Legacy key cleanup failed: $e');
     }
-    // No fallback - user must provide their own key via setApiKey()
   }
 
-  void _initModel(String apiKey) {
-    _model = GenerativeModel(model: 'gemini-2.0-flash', apiKey: apiKey);
-  }
-
-  Future<void> setApiKey(String apiKey) async {
-    await _secureStorage.write(key: _kApiKeyKey, value: apiKey);
-    _initModel(apiKey);
-  }
-
-  Future<bool> hasApiKey() async {
-    return _model != null;
-  }
-
-  Future<bool> hasCustomApiKey() async {
-    return (await AppSecureStorage.readMigratingLegacy(
-          _secureStorage,
-          _kApiKeyKey,
-        )) !=
-        null;
-  }
-
-  /// Generates a full script based on a natural language prompt
-  Future<String> generateScript(String prompt) async {
-    if (_model == null) {
-      throw Exception("AI Model not initialized. Please set API Key.");
-    }
-
-    final content = [Context.scriptGenerationPrompt(prompt)];
-    final response = await _model!.generateContent([
-      Content.text(content.first),
-    ]);
-
-    return _cleanCodeBlock(response.text ?? "");
-  }
-
-  /// Completes code based on current context (Ghost Text)
+  /// Ghost-text completion. Returns null on any failure so typing is never
+  /// interrupted.
+  @override
   Future<String?> completeCode(String codeContext) async {
-    if (_model == null) return null;
-
-    final prompt =
-        "Complete the following JavaScript/QuickJS code. Return ONLY the completion text, no markdown. Context:\n$codeContext";
-    final response = await _model!.generateContent([Content.text(prompt)]);
-
-    return response.text;
-  }
-
-  String _cleanCodeBlock(String text) {
-    // Remove markdown code blocks if present
-    final regex = RegExp(r'```(javascript|js)?\n([\s\S]*?)\n```');
-    final match = regex.firstMatch(text);
-    if (match != null) {
-      return match.group(2) ?? text;
+    if (!isReady || codeContext.trim().isEmpty) return null;
+    try {
+      final text = await _client.generate(
+        model: completionModel,
+        systemInstruction: AiPrompts.completion,
+        turns: [AiTurn(isUser: true, text: AiPrompts.completionUser(codeContext))],
+        temperature: 0.1,
+        maxOutputTokens: 256,
+        lowLatency: true,
+      );
+      if (text == null || text.trim().isEmpty) return null;
+      return AiPrompts.stripCodeFence(text);
+    } catch (e) {
+      debugPrint('[GeminiService] Completion failed: $e');
+      return null;
     }
-    return text;
   }
-}
 
-class Context {
-  static String scriptGenerationPrompt(String userRequest) {
-    return """
-You are an expert JavaScript developer for a mobile widget automation app (similar to Scriptable).
-The environment supports standard ES6 and has a global object `console` for logging.
-It does NOT have DOM, window, or document.
+  /// Generates new code, or fixes/modifies [existingCode] according to [prompt].
+  @override
+  Future<String> generateCode(String prompt, {String? existingCode}) async {
+    if (!isReady) return '// Error: AI service is not ready (offline?).';
+    try {
+      final text = await _client.generate(
+        model: chatModel,
+        systemInstruction: AiPrompts.hasMeaningfulCode(existingCode)
+            ? AiPrompts.generateEdit
+            : AiPrompts.generateNew,
+        turns: [
+          AiTurn(isUser: true, text: AiPrompts.generateUser(prompt, existingCode)),
+        ],
+        temperature: 0.3,
+        maxOutputTokens: 8192,
+      );
+      if (text == null || text.trim().isEmpty) {
+        return '// No response from AI. Try again.';
+      }
+      return AiPrompts.stripCodeFence(text);
+    } on AiException catch (e) {
+      return '// Error: ${e.message}';
+    } catch (e) {
+      debugPrint('[GeminiService] Generation failed: $e');
+      return '// Error generating code: $e';
+    }
+  }
 
-Generate a self-contained JavaScript script for the following request:
-"$userRequest"
-
-Return ONLY the code. Do not include explanations. Use comments in the code if needed.
-""";
+  /// Multi-turn chat. [messages] use `{'role': 'user'|'assistant', 'content': ...}`.
+  /// Errors are returned as text starting with `Error` so the chat UI can flag them.
+  @override
+  Future<String> chatWithAi(
+    List<Map<String, String>> messages, {
+    String? existingCode,
+  }) async {
+    if (!isReady) return 'Error: AI service is not ready (offline?).';
+    try {
+      final turns = messages
+          .where((m) => m['role'] != 'system')
+          .map((m) => AiTurn(isUser: m['role'] != 'assistant', text: m['content'] ?? ''))
+          .toList();
+      final text = await _client.generate(
+        model: chatModel,
+        systemInstruction: AiPrompts.chat(existingCode),
+        turns: turns,
+        temperature: 0.5,
+        maxOutputTokens: 8192,
+      );
+      if (text == null || text.trim().isEmpty) {
+        return 'Error: Gemini returned an empty response. Try rephrasing.';
+      }
+      return text.trim();
+    } on AiException catch (e) {
+      return 'Error: ${e.message}';
+    } catch (e) {
+      debugPrint('[GeminiService] Chat failed: $e');
+      return 'Error chatting with AI: $e';
+    }
   }
 }

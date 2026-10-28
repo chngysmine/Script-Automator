@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
-import 'package:script_automator/features/ai_integration/data/services/openai_service.dart';
+import 'package:script_automator/features/ai_integration/domain/ai_service.dart';
 
 class ChatMessage {
   final String text;
@@ -46,7 +46,7 @@ class _AiGenerateSheetContentState extends State<AiGenerateSheetContent> {
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   bool _isGenerating = false;
-  final OpenAIService _openAIService = GetIt.I<OpenAIService>();
+  final AiService _aiService = GetIt.I<AiService>();
 
   String _statusText = "Active Now";
   Color _statusColor = Colors.green;
@@ -54,8 +54,10 @@ class _AiGenerateSheetContentState extends State<AiGenerateSheetContent> {
   @override
   void initState() {
     super.initState();
-    final isReady = _openAIService.isReady;
-    _statusText = isReady ? "Active Now" : "Not Configured";
+    final isReady = _aiService.isReady;
+    _statusText = isReady
+        ? "${_aiService.activeProvider.label} • Active"
+        : "Offline";
     _statusColor = isReady ? Colors.green : Colors.amber;
 
     // Warm greeting from AI
@@ -128,21 +130,21 @@ class _AiGenerateSheetContentState extends State<AiGenerateSheetContent> {
 
     try {
       // Call chat API
-      final response = await _openAIService.chatWithAi(
+      final response = await _aiService.chatWithAi(
         apiMessages,
         existingCode: widget.editorCode,
       );
 
       if (!mounted) return;
 
-      if (response == null || response.startsWith('Error')) {
+      if (response.startsWith('Error')) {
         setState(() {
           _statusText = "Connection Error";
           _statusColor = Colors.red;
         });
       } else {
         setState(() {
-          _statusText = "Active Now";
+          _statusText = "${_aiService.activeProvider.label} • Active";
           _statusColor = Colors.green;
         });
       }
@@ -150,7 +152,7 @@ class _AiGenerateSheetContentState extends State<AiGenerateSheetContent> {
       setState(() {
         _isGenerating = false;
         _messages.add(ChatMessage(
-          text: response ?? "Sorry, I couldn't get a response. Please check your network or API key settings.",
+          text: response,
           isUser: false,
           timestamp: DateTime.now(),
         ));
@@ -162,7 +164,7 @@ class _AiGenerateSheetContentState extends State<AiGenerateSheetContent> {
         _statusColor = Colors.red;
         _isGenerating = false;
         _messages.add(ChatMessage(
-          text: "Error calling AI: $e\nPlease verify your API key settings or network connection.",
+          text: "Error calling AI: $e\nPlease check your network connection.",
           isUser: false,
           timestamp: DateTime.now(),
         ));

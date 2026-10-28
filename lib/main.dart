@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'firebase_options.dart';
+import 'core/services/firebase_bootstrap.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -33,36 +31,23 @@ import 'package:script_automator/features/dashboard/data/services/user_preferenc
 import 'package:script_automator/features/dashboard/data/services/user_stats_service.dart';
 import 'package:script_automator/core/services/telemetry_service.dart';
 import 'features/ai_integration/data/services/openai_service.dart';
+import 'features/ai_integration/domain/ai_service.dart';
 import 'core/services/app_config_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Global error handler — catches framework-level errors
+  // Fallback handler until Crashlytics is wired by FirebaseBootstrap.
   FlutterError.onError = (details) {
     debugPrint('[FLUTTER_ERROR] ${details.exception}');
     debugPrint('[FLUTTER_ERROR] ${details.stack}');
   };
 
-  // Load environment variables from .env asset
-  try {
-    await dotenv.load(fileName: '.env');
-  } catch (e) {
-    debugPrint('[BOOT] .env load failed (using defaults): $e');
-  }
-
-  // Phase 1A: Initialize Firebase (Auth, Firestore, FCM)
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e) {
-    debugPrint('[BOOT] Firebase init failed (degraded mode): $e');
-  }
-
+  // Firebase + App Check + Crashlytics (never throws).
+  await FirebaseBootstrap.initialize();
 
   try {
-    await _setupDI();
+    await setupDependencies();
   } catch (e, stack) {
     debugPrint('[BOOT] DI setup failed: $e');
     debugPrint('[BOOT] $stack');
@@ -78,7 +63,8 @@ void main() async {
   runApp(const MyApp());
 }
 
-Future<void> _setupDI() async {
+/// Registers all services in GetIt. Public so integration tests boot the same graph.
+Future<void> setupDependencies() async {
   // Phase 0: Navigator Key (for background alerts)
   if (!GetIt.I.isRegistered<GlobalKey<NavigatorState>>()) {
     GetIt.I.registerSingleton<GlobalKey<NavigatorState>>(GlobalKey<NavigatorState>());
@@ -130,7 +116,7 @@ Future<void> _setupDI() async {
 
   // Register Encryption/SecureStorage for AI Service
   if (!GetIt.I.isRegistered<FlutterSecureStorage>()) {
-    GetIt.I.registerLazySingleton(AppSecureStorage.create);
+    GetIt.I.registerLazySingleton<FlutterSecureStorage>(AppSecureStorage.create);
   }
 
   // Phase 3: Widget Registry (SQLite)
@@ -175,23 +161,44 @@ Future<void> _setupDI() async {
     GetIt.I.registerSingleton<ScriptRunnerService>(ScriptRunnerService());
   }
 
-  // Phase 4: AI & Cloud
+  // Remote config (feature flags + AI model names) must exist before AI.
+  if (!GetIt.I.isRegistered<AppConfigService>()) {
+    GetIt.I.registerSingleton<AppConfigService>(AppConfigService());
+  }
+  await GetIt.I<AppConfigService>().initialize();
+
+  // Phase 4: AI — Gemini (Firebase AI Logic) is the default provider.
+  final secureStorage = GetIt.I<FlutterSecureStorage>();
   if (!GetIt.I.isRegistered<GeminiService>()) {
-    final geminiService = GeminiService(GetIt.I<FlutterSecureStorage>());
+    final geminiService = GeminiService(
+      config: GetIt.I<AppConfigService>(),
+      legacyStorage: secureStorage,
+    );
     await geminiService.initialize();
     GetIt.I.registerSingleton<GeminiService>(geminiService);
   }
 
   if (!GetIt.I.isRegistered<OllamaService>()) {
-    final ollamaService = OllamaService(GetIt.I<FlutterSecureStorage>());
+    final ollamaService = OllamaService(secureStorage);
     await ollamaService.initialize();
     GetIt.I.registerSingleton<OllamaService>(ollamaService);
   }
 
   if (!GetIt.I.isRegistered<OpenAIService>()) {
-    final openAiService = OpenAIService(GetIt.I<FlutterSecureStorage>());
+    final openAiService = OpenAIService(secureStorage);
     await openAiService.initialize();
     GetIt.I.registerSingleton<OpenAIService>(openAiService);
+  }
+
+  if (!GetIt.I.isRegistered<AiService>()) {
+    final aiService = AiService(
+      gemini: GetIt.I<GeminiService>(),
+      openai: GetIt.I<OpenAIService>(),
+      ollama: GetIt.I<OllamaService>(),
+      storage: secureStorage,
+    );
+    await aiService.initialize();
+    GetIt.I.registerSingleton<AiService>(aiService);
   }
 
   // Use Cloud Repo with Fallback (replaces LocalGalleryRepository)
@@ -205,12 +212,6 @@ Future<void> _setupDI() async {
       HeadlessWidgetRenderingService(),
     );
   }
-
-  // Phase 5: Remote Config (feature flags from Firestore)
-  if (!GetIt.I.isRegistered<AppConfigService>()) {
-    GetIt.I.registerSingleton<AppConfigService>(AppConfigService());
-  }
-  await GetIt.I<AppConfigService>().initialize();
 }
 
 class MyApp extends StatefulWidget {
@@ -292,7 +293,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 void scriptRunnerMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await _setupDI();
+    // Moderation checks and telemetry in DI services need Firebase.
+    await FirebaseBootstrap.initialize();
+    await setupDependencies();
     final runner = GetIt.I<ScriptRunnerService>();
     await runner.pollPendingActions();
     final registry = GetIt.I<WidgetRegistryService>();
