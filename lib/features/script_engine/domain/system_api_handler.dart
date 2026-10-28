@@ -291,8 +291,7 @@ class SystemAPIHandler {
         return jsonEncode({'error': 'Text must not be empty'});
       }
 
-      // ignore: deprecated_member_use
-      await Share.share(text, subject: title);
+      await SharePlus.instance.share(ShareParams(text: text, subject: title));
       return jsonEncode({'success': true});
     } catch (e) {
       return jsonEncode({'error': e.toString()});

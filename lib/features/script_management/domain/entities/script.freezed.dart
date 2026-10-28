@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'script.dart';
@@ -9,6 +9,7 @@ part of 'script.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
@@ -25,16 +26,21 @@ $ScriptCopyWith<Script> get copyWith => _$ScriptCopyWithImpl<Script>(this as Scr
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Script&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.content, content) || other.content == content)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&const DeepCollectionEquality().equals(other.settings, settings));
+  final _this = this as Script;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Script&&(identical(other.id, _this.id) || other.id == _this.id)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.content, _this.content) || other.content == _this.content)&&(identical(other.createdAt, _this.createdAt) || other.createdAt == _this.createdAt)&&(identical(other.updatedAt, _this.updatedAt) || other.updatedAt == _this.updatedAt)&&const DeepCollectionEquality().equals(other.settings, _this.settings));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,content,createdAt,updatedAt,const DeepCollectionEquality().hash(settings));
+int get hashCode {
+  final _this = this as Script;
+  return Object.hash(runtimeType,_this.id,_this.name,_this.content,_this.createdAt,_this.updatedAt,const DeepCollectionEquality().hash(_this.settings));
+}
 
 @override
 String toString() {
-  return 'Script(id: $id, name: $name, content: $content, createdAt: $createdAt, updatedAt: $updatedAt, settings: $settings)';
+  final _this = this as Script;
+  return 'Script(id: ${_this.id}, name: ${_this.name}, content: ${_this.content}, createdAt: ${_this.createdAt}, updatedAt: ${_this.updatedAt}, settings: ${_this.settings})';
 }
 
 
@@ -63,7 +69,7 @@ class _$ScriptCopyWithImpl<$Res>
 /// Create a copy of Script
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? content = null,Object? createdAt = null,Object? updatedAt = null,Object? settings = null,}) {
-  return _then(_self.copyWith(
+  return _then(Script(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,content: null == content ? _self.content : content // ignore: cast_nullable_to_non_nullable
@@ -211,7 +217,7 @@ return $default(_that.id,_that.name,_that.content,_that.createdAt,_that.updatedA
 
 
 class _Script implements Script {
-  const _Script({required this.id, required this.name, required this.content, required this.createdAt, required this.updatedAt, final  Map<String, dynamic> settings = const {}}): _settings = settings;
+  const _Script({required this.id, required this.name, required this.content, required this.createdAt, required this.updatedAt,  Map<String, dynamic> settings = const {}}): _settings = settings;
   
 
 @override final  String id;
@@ -237,16 +243,18 @@ _$ScriptCopyWith<_Script> get copyWith => __$ScriptCopyWithImpl<_Script>(this, _
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Script&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.content, content) || other.content == content)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&const DeepCollectionEquality().equals(other._settings, _settings));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _Script&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.content, content) || other.content == content)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&const DeepCollectionEquality().equals(other.settings, _settings));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,content,createdAt,updatedAt,const DeepCollectionEquality().hash(_settings));
+int get hashCode {
+    return Object.hash(runtimeType,id,name,content,createdAt,updatedAt,const DeepCollectionEquality().hash(_settings));
+}
 
 @override
 String toString() {
-  return 'Script(id: $id, name: $name, content: $content, createdAt: $createdAt, updatedAt: $updatedAt, settings: $settings)';
+    return 'Script(id: $id, name: $name, content: $content, createdAt: $createdAt, updatedAt: $updatedAt, settings: $settings)';
 }
 
 

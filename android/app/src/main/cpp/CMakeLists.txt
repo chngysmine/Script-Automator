@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.4.1)
+cmake_minimum_required(VERSION 3.22.1)
+project(script_engine C)
 
 add_definitions(-D_GNU_SOURCE -DCONFIG_VERSION="2025-09-13")
 

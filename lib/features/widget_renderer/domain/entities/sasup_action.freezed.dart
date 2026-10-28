@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'sasup_action.dart';
@@ -9,6 +9,7 @@ part of 'sasup_action.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 
@@ -28,16 +29,21 @@ $SASUPActionCopyWith<SASUPAction> get copyWith => _$SASUPActionCopyWithImpl<SASU
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SASUPAction&&(identical(other.type, type) || other.type == type)&&const DeepCollectionEquality().equals(other.payload, payload));
+  final _this = this as SASUPAction;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SASUPAction&&(identical(other.type, _this.type) || other.type == _this.type)&&const DeepCollectionEquality().equals(other.payload, _this.payload));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,type,const DeepCollectionEquality().hash(payload));
+int get hashCode {
+  final _this = this as SASUPAction;
+  return Object.hash(runtimeType,_this.type,const DeepCollectionEquality().hash(_this.payload));
+}
 
 @override
 String toString() {
-  return 'SASUPAction(type: $type, payload: $payload)';
+  final _this = this as SASUPAction;
+  return 'SASUPAction(type: ${_this.type}, payload: ${_this.payload})';
 }
 
 
@@ -66,7 +72,7 @@ class _$SASUPActionCopyWithImpl<$Res>
 /// Create a copy of SASUPAction
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? type = null,Object? payload = freezed,}) {
-  return _then(_self.copyWith(
+  return _then(SASUPAction(
 type: null == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
 as String,payload: freezed == payload ? _self.payload : payload // ignore: cast_nullable_to_non_nullable
 as Map<String, dynamic>?,
@@ -210,7 +216,7 @@ return $default(_that.type,_that.payload);case _:
 @JsonSerializable()
 
 class _SASUPAction implements SASUPAction {
-  const _SASUPAction({required this.type, final  Map<String, dynamic>? payload}): _payload = payload;
+  const _SASUPAction({required this.type,  Map<String, dynamic>? payload}): _payload = payload;
   factory _SASUPAction.fromJson(Map<String, dynamic> json) => _$SASUPActionFromJson(json);
 
 @override final  String type;
@@ -237,16 +243,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SASUPAction&&(identical(other.type, type) || other.type == type)&&const DeepCollectionEquality().equals(other._payload, _payload));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _SASUPAction&&(identical(other.type, type) || other.type == type)&&const DeepCollectionEquality().equals(other.payload, _payload));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,type,const DeepCollectionEquality().hash(_payload));
+int get hashCode {
+    return Object.hash(runtimeType,type,const DeepCollectionEquality().hash(_payload));
+}
 
 @override
 String toString() {
-  return 'SASUPAction(type: $type, payload: $payload)';
+    return 'SASUPAction(type: $type, payload: $payload)';
 }
 
 

@@ -27,3 +27,12 @@
 
 # Prevent obfuscation of JSEngine and FFI related classes if any
 -keep class com.js.scriptAutomator.JSEngine { *; }
+
+# Flutter's deferred-components support references Play Core, which this app
+# doesn't ship (no deferred components). Keeping io.flutter.embedding.** above
+# makes R8 resolve those references, so silence them.
+-dontwarn com.google.android.play.core.**
+
+# Keep source file/line info for readable Crashlytics stack traces.
+-keepattributes SourceFile,LineNumberTable
+-keep public class * extends java.lang.Exception

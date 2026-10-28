@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:script_automator/core/ui/staggered_entrance.dart';
 import 'package:get_it/get_it.dart';
 import 'package:intl/intl.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
@@ -201,19 +201,11 @@ class _NotificationPageState extends State<NotificationPage>
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
-                              return AnimationConfiguration.staggeredList(
-                                position: index,
-                                duration: const Duration(milliseconds: 375),
-                                child: SlideAnimation(
-                                  verticalOffset: 30.0,
-                                  child: FadeInAnimation(
-                                    child: _buildGroupedItem(
-                                      index,
-                                      groups,
-                                      sectionOrder,
-                                    ),
-                                  ),
-                                ),
+                              // Items animate inside _buildGroupedItem.
+                              return _buildGroupedItem(
+                                index,
+                                groups,
+                                sectionOrder,
                               );
                             },
                             childCount: _calculateItemCount(
@@ -284,17 +276,12 @@ class _NotificationPageState extends State<NotificationPage>
       if (index < currentIndex + items.length) {
         final itemIndex = index - currentIndex;
         final notif = items[itemIndex];
-        return AnimationConfiguration.staggeredList(
+        return StaggeredEntrance(
           position: index,
           duration: const Duration(milliseconds: 400),
-          child: SlideAnimation(
-            verticalOffset: 30.0,
-            child: FadeInAnimation(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _buildNotificationItem(notif),
-              ),
-            ),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _buildNotificationItem(notif),
           ),
         );
       }

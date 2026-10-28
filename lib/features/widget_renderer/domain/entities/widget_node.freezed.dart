@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'widget_node.dart';
@@ -9,16 +9,14 @@ part of 'widget_node.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 
 /// @nodoc
 mixin _$WidgetNode {
 
- WidgetType get type; String? get id;// For Diffing
- SASUPModifiers? get modifiers; List<WidgetNode>? get children;// Recursive
- dynamic get content;// String for text/image path, or nested structure
- SASUPAction? get action;
+ WidgetType get type; String? get id; SASUPModifiers? get modifiers; List<WidgetNode>? get children; dynamic get content; SASUPAction? get action;
 /// Create a copy of WidgetNode
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -31,16 +29,21 @@ $WidgetNodeCopyWith<WidgetNode> get copyWith => _$WidgetNodeCopyWithImpl<WidgetN
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is WidgetNode&&(identical(other.type, type) || other.type == type)&&(identical(other.id, id) || other.id == id)&&(identical(other.modifiers, modifiers) || other.modifiers == modifiers)&&const DeepCollectionEquality().equals(other.children, children)&&const DeepCollectionEquality().equals(other.content, content)&&(identical(other.action, action) || other.action == action));
+  final _this = this as WidgetNode;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is WidgetNode&&(identical(other.type, _this.type) || other.type == _this.type)&&(identical(other.id, _this.id) || other.id == _this.id)&&(identical(other.modifiers, _this.modifiers) || other.modifiers == _this.modifiers)&&const DeepCollectionEquality().equals(other.children, _this.children)&&const DeepCollectionEquality().equals(other.content, _this.content)&&(identical(other.action, _this.action) || other.action == _this.action));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,type,id,modifiers,const DeepCollectionEquality().hash(children),const DeepCollectionEquality().hash(content),action);
+int get hashCode {
+  final _this = this as WidgetNode;
+  return Object.hash(runtimeType,_this.type,_this.id,_this.modifiers,const DeepCollectionEquality().hash(_this.children),const DeepCollectionEquality().hash(_this.content),_this.action);
+}
 
 @override
 String toString() {
-  return 'WidgetNode(type: $type, id: $id, modifiers: $modifiers, children: $children, content: $content, action: $action)';
+  final _this = this as WidgetNode;
+  return 'WidgetNode(type: ${_this.type}, id: ${_this.id}, modifiers: ${_this.modifiers}, children: ${_this.children}, content: ${_this.content}, action: ${_this.action})';
 }
 
 
@@ -69,7 +72,7 @@ class _$WidgetNodeCopyWithImpl<$Res>
 /// Create a copy of WidgetNode
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? type = null,Object? id = freezed,Object? modifiers = freezed,Object? children = freezed,Object? content = freezed,Object? action = freezed,}) {
-  return _then(_self.copyWith(
+  return _then(WidgetNode(
 type: null == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
 as WidgetType,id: freezed == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String?,modifiers: freezed == modifiers ? _self.modifiers : modifiers // ignore: cast_nullable_to_non_nullable
@@ -241,12 +244,11 @@ return $default(_that.type,_that.id,_that.modifiers,_that.children,_that.content
 @JsonSerializable()
 
 class _WidgetNode implements WidgetNode {
-  const _WidgetNode({required this.type, this.id, this.modifiers, final  List<WidgetNode>? children, this.content, this.action}): _children = children;
+  const _WidgetNode({required this.type, this.id, this.modifiers,  List<WidgetNode>? children, this.content, this.action}): _children = children;
   factory _WidgetNode.fromJson(Map<String, dynamic> json) => _$WidgetNodeFromJson(json);
 
 @override final  WidgetType type;
 @override final  String? id;
-// For Diffing
 @override final  SASUPModifiers? modifiers;
  final  List<WidgetNode>? _children;
 @override List<WidgetNode>? get children {
@@ -257,9 +259,7 @@ class _WidgetNode implements WidgetNode {
   return EqualUnmodifiableListView(value);
 }
 
-// Recursive
 @override final  dynamic content;
-// String for text/image path, or nested structure
 @override final  SASUPAction? action;
 
 /// Create a copy of WidgetNode
@@ -275,16 +275,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _WidgetNode&&(identical(other.type, type) || other.type == type)&&(identical(other.id, id) || other.id == id)&&(identical(other.modifiers, modifiers) || other.modifiers == modifiers)&&const DeepCollectionEquality().equals(other._children, _children)&&const DeepCollectionEquality().equals(other.content, content)&&(identical(other.action, action) || other.action == action));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _WidgetNode&&(identical(other.type, type) || other.type == type)&&(identical(other.id, id) || other.id == id)&&(identical(other.modifiers, modifiers) || other.modifiers == modifiers)&&const DeepCollectionEquality().equals(other.children, _children)&&const DeepCollectionEquality().equals(other.content, content)&&(identical(other.action, action) || other.action == action));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,type,id,modifiers,const DeepCollectionEquality().hash(_children),const DeepCollectionEquality().hash(content),action);
+int get hashCode {
+    return Object.hash(runtimeType,type,id,modifiers,const DeepCollectionEquality().hash(_children),const DeepCollectionEquality().hash(content),action);
+}
 
 @override
 String toString() {
-  return 'WidgetNode(type: $type, id: $id, modifiers: $modifiers, children: $children, content: $content, action: $action)';
+    return 'WidgetNode(type: $type, id: $id, modifiers: $modifiers, children: $children, content: $content, action: $action)';
 }
 
 

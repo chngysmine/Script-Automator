@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:get_it/get_it.dart';
-import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
 import 'package:script_automator/core/utils/debouncer.dart';
@@ -190,11 +189,9 @@ class _LiquidDashboardPageState extends State<LiquidDashboardPage> {
           sliver: SliverToBoxAdapter(
             child: _isLoading
                 ? _buildShimmerGrid()
-                : AnimationLimiter(
-                    child: StaggeredScriptGrid(
-                      scripts: _scripts,
-                      onTap: _openPreview,
-                    ),
+                : StaggeredScriptGrid(
+                    scripts: _scripts,
+                    onTap: _openPreview,
                   ),
           ),
         ),

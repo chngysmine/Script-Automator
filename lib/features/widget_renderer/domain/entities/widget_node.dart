@@ -17,18 +17,26 @@ abstract class WidgetNode with _$WidgetNode {
     SASUPAction? action,
   }) = _WidgetNode;
 
-  factory WidgetNode.fromJson(Map<String, dynamic> json) {
-    // Process button label to content
-    if (json['type'] == 'button' && json['label'] != null && json['content'] == null) {
-      json['content'] = json['label'];
+  // Freezed only generates toJson when fromJson is a direct expression, so
+  // legacy-shape normalization lives in a static helper.
+  factory WidgetNode.fromJson(Map<String, dynamic> json) =>
+      _$WidgetNodeFromJson(_normalizeLegacyJson(json));
+
+  static Map<String, dynamic> _normalizeLegacyJson(Map<String, dynamic> json) {
+    final normalized = Map<String, dynamic>.of(json);
+    // Buttons may declare `label` instead of `content`.
+    if (normalized['type'] == 'button' &&
+        normalized['label'] != null &&
+        normalized['content'] == null) {
+      normalized['content'] = normalized['label'];
     }
-    // Process actionId to action object
-    if (json['actionId'] != null && json['action'] == null) {
-      json['action'] = {
+    // Shorthand `actionId` expands to a widget_action payload.
+    if (normalized['actionId'] != null && normalized['action'] == null) {
+      normalized['action'] = {
         'type': 'widget_action',
-        'payload': {'actionId': json['actionId']}
+        'payload': {'actionId': normalized['actionId']},
       };
     }
-    return _$WidgetNodeFromJson(json);
+    return normalized;
   }
 }

@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'sasup_schema.dart';
@@ -9,6 +9,7 @@ part of 'sasup_schema.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 
@@ -28,16 +29,21 @@ $SASUPMetaCopyWith<SASUPMeta> get copyWith => _$SASUPMetaCopyWithImpl<SASUPMeta>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SASUPMeta&&(identical(other.version, version) || other.version == version)&&(identical(other.target, target) || other.target == target)&&(identical(other.timestamp, timestamp) || other.timestamp == timestamp));
+  final _this = this as SASUPMeta;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SASUPMeta&&(identical(other.version, _this.version) || other.version == _this.version)&&(identical(other.target, _this.target) || other.target == _this.target)&&(identical(other.timestamp, _this.timestamp) || other.timestamp == _this.timestamp));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,version,target,timestamp);
+int get hashCode {
+  final _this = this as SASUPMeta;
+  return Object.hash(runtimeType,_this.version,_this.target,_this.timestamp);
+}
 
 @override
 String toString() {
-  return 'SASUPMeta(version: $version, target: $target, timestamp: $timestamp)';
+  final _this = this as SASUPMeta;
+  return 'SASUPMeta(version: ${_this.version}, target: ${_this.target}, timestamp: ${_this.timestamp})';
 }
 
 
@@ -66,7 +72,7 @@ class _$SASUPMetaCopyWithImpl<$Res>
 /// Create a copy of SASUPMeta
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? version = null,Object? target = null,Object? timestamp = freezed,}) {
-  return _then(_self.copyWith(
+  return _then(SASUPMeta(
 version: null == version ? _self.version : version // ignore: cast_nullable_to_non_nullable
 as String,target: null == target ? _self.target : target // ignore: cast_nullable_to_non_nullable
 as String,timestamp: freezed == timestamp ? _self.timestamp : timestamp // ignore: cast_nullable_to_non_nullable
@@ -231,16 +237,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SASUPMeta&&(identical(other.version, version) || other.version == version)&&(identical(other.target, target) || other.target == target)&&(identical(other.timestamp, timestamp) || other.timestamp == timestamp));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _SASUPMeta&&(identical(other.version, version) || other.version == version)&&(identical(other.target, target) || other.target == target)&&(identical(other.timestamp, timestamp) || other.timestamp == timestamp));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,version,target,timestamp);
+int get hashCode {
+    return Object.hash(runtimeType,version,target,timestamp);
+}
 
 @override
 String toString() {
-  return 'SASUPMeta(version: $version, target: $target, timestamp: $timestamp)';
+    return 'SASUPMeta(version: $version, target: $target, timestamp: $timestamp)';
 }
 
 
@@ -297,16 +305,21 @@ $SASUPSchemaCopyWith<SASUPSchema> get copyWith => _$SASUPSchemaCopyWithImpl<SASU
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SASUPSchema&&(identical(other.meta, meta) || other.meta == meta)&&(identical(other.root, root) || other.root == root));
+  final _this = this as SASUPSchema;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SASUPSchema&&(identical(other.meta, _this.meta) || other.meta == _this.meta)&&(identical(other.root, _this.root) || other.root == _this.root));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,meta,root);
+int get hashCode {
+  final _this = this as SASUPSchema;
+  return Object.hash(runtimeType,_this.meta,_this.root);
+}
 
 @override
 String toString() {
-  return 'SASUPSchema(meta: $meta, root: $root)';
+  final _this = this as SASUPSchema;
+  return 'SASUPSchema(meta: ${_this.meta}, root: ${_this.root})';
 }
 
 
@@ -335,7 +348,7 @@ class _$SASUPSchemaCopyWithImpl<$Res>
 /// Create a copy of SASUPSchema
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? meta = null,Object? root = null,}) {
-  return _then(_self.copyWith(
+  return _then(SASUPSchema(
 meta: null == meta ? _self.meta : meta // ignore: cast_nullable_to_non_nullable
 as SASUPMeta,root: null == root ? _self.root : root // ignore: cast_nullable_to_non_nullable
 as WidgetNode,
@@ -516,16 +529,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SASUPSchema&&(identical(other.meta, meta) || other.meta == meta)&&(identical(other.root, root) || other.root == root));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _SASUPSchema&&(identical(other.meta, meta) || other.meta == meta)&&(identical(other.root, root) || other.root == root));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,meta,root);
+int get hashCode {
+    return Object.hash(runtimeType,meta,root);
+}
 
 @override
 String toString() {
-  return 'SASUPSchema(meta: $meta, root: $root)';
+    return 'SASUPSchema(meta: $meta, root: $root)';
 }
 
 

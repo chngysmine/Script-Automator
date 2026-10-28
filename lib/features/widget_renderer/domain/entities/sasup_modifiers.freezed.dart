@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'sasup_modifiers.dart';
@@ -9,18 +9,14 @@ part of 'sasup_modifiers.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 
 /// @nodoc
 mixin _$SASUPModifiers {
 
- double? get width; double? get height; int? get flex; String? get background;// Hex or gradient definition
- double? get cornerRadius; SASUPPadding? get padding; SASUPAction? get clickAction; String? get font;// For text widgets ('bold', 'normal')
- double? get fontSize;// Font size
- String? get color;// Text color
- String? get alignment;// 'start', 'center', 'end'
- double? get spacing;
+ double? get width; double? get height; int? get flex; String? get background; double? get cornerRadius; SASUPPadding? get padding; SASUPAction? get clickAction; String? get font; double? get fontSize; String? get color; String? get alignment; double? get spacing;
 /// Create a copy of SASUPModifiers
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -33,16 +29,21 @@ $SASUPModifiersCopyWith<SASUPModifiers> get copyWith => _$SASUPModifiersCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SASUPModifiers&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.flex, flex) || other.flex == flex)&&(identical(other.background, background) || other.background == background)&&(identical(other.cornerRadius, cornerRadius) || other.cornerRadius == cornerRadius)&&(identical(other.padding, padding) || other.padding == padding)&&(identical(other.clickAction, clickAction) || other.clickAction == clickAction)&&(identical(other.font, font) || other.font == font)&&(identical(other.fontSize, fontSize) || other.fontSize == fontSize)&&(identical(other.color, color) || other.color == color)&&(identical(other.alignment, alignment) || other.alignment == alignment)&&(identical(other.spacing, spacing) || other.spacing == spacing));
+  final _this = this as SASUPModifiers;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SASUPModifiers&&(identical(other.width, _this.width) || other.width == _this.width)&&(identical(other.height, _this.height) || other.height == _this.height)&&(identical(other.flex, _this.flex) || other.flex == _this.flex)&&(identical(other.background, _this.background) || other.background == _this.background)&&(identical(other.cornerRadius, _this.cornerRadius) || other.cornerRadius == _this.cornerRadius)&&(identical(other.padding, _this.padding) || other.padding == _this.padding)&&(identical(other.clickAction, _this.clickAction) || other.clickAction == _this.clickAction)&&(identical(other.font, _this.font) || other.font == _this.font)&&(identical(other.fontSize, _this.fontSize) || other.fontSize == _this.fontSize)&&(identical(other.color, _this.color) || other.color == _this.color)&&(identical(other.alignment, _this.alignment) || other.alignment == _this.alignment)&&(identical(other.spacing, _this.spacing) || other.spacing == _this.spacing));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,width,height,flex,background,cornerRadius,padding,clickAction,font,fontSize,color,alignment,spacing);
+int get hashCode {
+  final _this = this as SASUPModifiers;
+  return Object.hash(runtimeType,_this.width,_this.height,_this.flex,_this.background,_this.cornerRadius,_this.padding,_this.clickAction,_this.font,_this.fontSize,_this.color,_this.alignment,_this.spacing);
+}
 
 @override
 String toString() {
-  return 'SASUPModifiers(width: $width, height: $height, flex: $flex, background: $background, cornerRadius: $cornerRadius, padding: $padding, clickAction: $clickAction, font: $font, fontSize: $fontSize, color: $color, alignment: $alignment, spacing: $spacing)';
+  final _this = this as SASUPModifiers;
+  return 'SASUPModifiers(width: ${_this.width}, height: ${_this.height}, flex: ${_this.flex}, background: ${_this.background}, cornerRadius: ${_this.cornerRadius}, padding: ${_this.padding}, clickAction: ${_this.clickAction}, font: ${_this.font}, fontSize: ${_this.fontSize}, color: ${_this.color}, alignment: ${_this.alignment}, spacing: ${_this.spacing})';
 }
 
 
@@ -71,7 +72,7 @@ class _$SASUPModifiersCopyWithImpl<$Res>
 /// Create a copy of SASUPModifiers
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? width = freezed,Object? height = freezed,Object? flex = freezed,Object? background = freezed,Object? cornerRadius = freezed,Object? padding = freezed,Object? clickAction = freezed,Object? font = freezed,Object? fontSize = freezed,Object? color = freezed,Object? alignment = freezed,Object? spacing = freezed,}) {
-  return _then(_self.copyWith(
+  return _then(SASUPModifiers(
 width: freezed == width ? _self.width : width // ignore: cast_nullable_to_non_nullable
 as double?,height: freezed == height ? _self.height : height // ignore: cast_nullable_to_non_nullable
 as double?,flex: freezed == flex ? _self.flex : flex // ignore: cast_nullable_to_non_nullable
@@ -244,18 +245,13 @@ class _SASUPModifiers implements SASUPModifiers {
 @override final  double? height;
 @override final  int? flex;
 @override final  String? background;
-// Hex or gradient definition
 @override final  double? cornerRadius;
 @override final  SASUPPadding? padding;
 @override final  SASUPAction? clickAction;
 @override final  String? font;
-// For text widgets ('bold', 'normal')
 @override final  double? fontSize;
-// Font size
 @override final  String? color;
-// Text color
 @override final  String? alignment;
-// 'start', 'center', 'end'
 @override final  double? spacing;
 
 /// Create a copy of SASUPModifiers
@@ -271,16 +267,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SASUPModifiers&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.flex, flex) || other.flex == flex)&&(identical(other.background, background) || other.background == background)&&(identical(other.cornerRadius, cornerRadius) || other.cornerRadius == cornerRadius)&&(identical(other.padding, padding) || other.padding == padding)&&(identical(other.clickAction, clickAction) || other.clickAction == clickAction)&&(identical(other.font, font) || other.font == font)&&(identical(other.fontSize, fontSize) || other.fontSize == fontSize)&&(identical(other.color, color) || other.color == color)&&(identical(other.alignment, alignment) || other.alignment == alignment)&&(identical(other.spacing, spacing) || other.spacing == spacing));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _SASUPModifiers&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.flex, flex) || other.flex == flex)&&(identical(other.background, background) || other.background == background)&&(identical(other.cornerRadius, cornerRadius) || other.cornerRadius == cornerRadius)&&(identical(other.padding, padding) || other.padding == padding)&&(identical(other.clickAction, clickAction) || other.clickAction == clickAction)&&(identical(other.font, font) || other.font == font)&&(identical(other.fontSize, fontSize) || other.fontSize == fontSize)&&(identical(other.color, color) || other.color == color)&&(identical(other.alignment, alignment) || other.alignment == alignment)&&(identical(other.spacing, spacing) || other.spacing == spacing));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,width,height,flex,background,cornerRadius,padding,clickAction,font,fontSize,color,alignment,spacing);
+int get hashCode {
+    return Object.hash(runtimeType,width,height,flex,background,cornerRadius,padding,clickAction,font,fontSize,color,alignment,spacing);
+}
 
 @override
 String toString() {
-  return 'SASUPModifiers(width: $width, height: $height, flex: $flex, background: $background, cornerRadius: $cornerRadius, padding: $padding, clickAction: $clickAction, font: $font, fontSize: $fontSize, color: $color, alignment: $alignment, spacing: $spacing)';
+    return 'SASUPModifiers(width: $width, height: $height, flex: $flex, background: $background, cornerRadius: $cornerRadius, padding: $padding, clickAction: $clickAction, font: $font, fontSize: $fontSize, color: $color, alignment: $alignment, spacing: $spacing)';
 }
 
 

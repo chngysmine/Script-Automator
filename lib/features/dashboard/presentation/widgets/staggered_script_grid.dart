@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:script_automator/core/ui/staggered_entrance.dart';
 import 'package:script_automator/features/script_management/domain/entities/script.dart';
 import 'package:script_automator/features/dashboard/presentation/widgets/premium_bento_card.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
@@ -38,19 +38,15 @@ class StaggeredScriptGrid extends StatelessWidget {
       ),
       itemCount: scripts.length,
       itemBuilder: (context, index) {
-        return AnimationConfiguration.staggeredGrid(
+        return StaggeredEntrance(
           position: index,
           columnCount: 2,
           duration: const Duration(milliseconds: 400),
-          child: SlideAnimation(
-            verticalOffset: 50.0,
-            child: FadeInAnimation(
-              child: PremiumBentoCard(
-                script: scripts[index],
-                size: BentoSize.small,
-                onTap: () => onTap(scripts[index]),
-              ),
-            ),
+          verticalOffset: 50,
+          child: PremiumBentoCard(
+            script: scripts[index],
+            size: BentoSize.small,
+            onTap: () => onTap(scripts[index]),
           ),
         );
       },

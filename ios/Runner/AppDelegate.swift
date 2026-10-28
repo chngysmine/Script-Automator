@@ -4,33 +4,33 @@ import BackgroundTasks
 import WidgetKit
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    
-    // Register Background Task
-    if #available(iOS 13.0, *) {
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.js.scriptAutomator.refresh", using: nil) { task in
-            self.handleAppRefresh(task: task as! BGAppRefreshTask)
+    // BGTask handlers must be registered before launch finishes.
+    BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.js.scriptAutomator.refresh", using: nil) { task in
+        guard let refreshTask = task as? BGAppRefreshTask else {
+            task.setTaskCompleted(success: false)
+            return
         }
+        self.handleAppRefresh(task: refreshTask)
     }
-
-    // Widget Refresh Channel
-    let controller : FlutterViewController = window?.rootViewController as! FlutterViewController
-    registerWidgetChannel(on: controller.binaryMessenger)
-
-
-    GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // UIScene lifecycle: the scene creates the engine, so plugins and app-level
+  // channels are registered here instead of via window.rootViewController.
+  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    registerWidgetChannel(on: engineBridge.applicationRegistrar.messenger())
   }
 
   // Headless Engine for Background Tasks
   var headlessEngine: FlutterEngine?
   
   // MARK: - Background Task Handling
-  @available(iOS 13.0, *)
   func handleAppRefresh(task: BGAppRefreshTask) {
       // 1. Schedule Next (Moved to script implementation to support Smart Policy)
       // We do NOT schedule here immediately. We wait for script execution to determine needed time.
@@ -95,7 +95,6 @@ import WidgetKit
       }
   }
   
-  @available(iOS 13.0, *)
   func scheduleNextRefresh(delay: Double = 15 * 60) {
       let request = BGAppRefreshTaskRequest(identifier: "com.js.scriptAutomator.refresh")
       request.earliestBeginDate = Date(timeIntervalSinceNow: delay)
@@ -114,10 +113,7 @@ import WidgetKit
       widgetChannel.setMethodCallHandler({
         (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
         if call.method == "reloadTimelines" {
-           if #available(iOS 14.0, *) {
-               WidgetCenter.shared.reloadAllTimelines()
-               print("Native: Widget Timelines Reloaded")
-           }
+           WidgetCenter.shared.reloadAllTimelines()
            result(nil)
         } else if call.method == "getAppGroupPath" {
            guard let groupId = call.arguments as? String else {
