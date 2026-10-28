@@ -57,6 +57,10 @@ describe('users', () => {
   test('new profile cannot carry a role', async () => {
     await assertFails(setDoc(doc(as(OTHER), 'users/bob'), { role: 'admin' }));
   });
+  test('admin can ban a user who has no profile doc yet', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'users/newbie'), { is_banned: true }, { merge: true }));
+    await assertFails(setDoc(doc(as(OTHER), 'users/newbie2'), { is_banned: true }, { merge: true }));
+  });
   test('users cannot read others; admins can', async () => {
     await assertFails(getDoc(doc(as(OTHER), 'users/alice')));
     await assertSucceeds(getDoc(doc(as(ADMIN), 'users/alice')));

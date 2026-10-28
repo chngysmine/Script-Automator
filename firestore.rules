@@ -44,8 +44,9 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
       // Owners can never grant themselves a role or lift their own ban.
-      allow create: if isOwner(uid) && isNotBanned()
-        && !request.resource.data.keys().hasAny(['role', 'is_banned', 'banned_at']);
+      // Admins may create the doc too: banning a user who never synced.
+      allow create: if isAdmin() || (isOwner(uid) && isNotBanned()
+        && !request.resource.data.keys().hasAny(['role', 'is_banned', 'banned_at']));
       allow update: if isAdmin() || (isOwner(uid) && isNotBanned()
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'is_banned', 'banned_at']));
       allow delete: if isAdmin();
