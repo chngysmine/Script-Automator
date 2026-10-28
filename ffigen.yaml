@@ -1,13 +1,18 @@
+# Reference bindings for the QuickJS wrapper.
+# The runtime uses hand-maintained bindings in
+# lib/features/script_engine/native_bridge/ffi_quickjs_bindings.dart (they model
+# JSValue as a 16-byte struct that ffigen cannot express portably), so this
+# config writes to tool/ffigen/ and is only used to diff against the manual
+# bindings after QuickJS or wrapper updates:
+#   flutter pub run ffigen --config ffigen.yaml
 name: QuickJSBindings
-description: Bindings for QuickJS library.
-output: 'lib/features/script_engine/native_bridge/ffi_quickjs_bindings.dart'
+description: Reference bindings for the QuickJS wrapper (not used at runtime).
+output: 'tool/ffigen/quickjs_bindings.g.dart'
 headers:
   entry-points:
-    - 'android/app/src/main/cpp/quickjs/quickjs.h'
-    - 'android/app/src/main/cpp/quickjs_wrapper.c'
+    - 'native/quickjs_wrapper.c'
   include-directives:
-    - 'android/app/src/main/cpp/quickjs/quickjs.h'
-    - 'android/app/src/main/cpp/quickjs_wrapper.c'
+    - 'native/quickjs_wrapper.c'
 
 comments:
   style: any
@@ -19,4 +24,4 @@ preamble: |
   // ignore_for_file: non_constant_identifier_names
 
 compiler-opts:
-  - '-Iandroid/app/src/main/cpp/quickjs'
+  - '-Inative/quickjs'

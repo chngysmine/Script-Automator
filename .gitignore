@@ -59,8 +59,19 @@ app.*.map.json
 android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 lib/firebase_options.dart
-firebase.json
+# firebase.json is versioned: it holds rules/index/functions deploy config (app IDs are public).
+# Local emulator snapshot (npm run demo)
+emulator-data/
 
+# Local run logs and stray Hive lock files
+app_syslog.txt
+syslog_output.txt
+temp_run_log*.txt
+scripts_content_v2_*.lock
+# Firebase emulator / debug output
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
 # Private signing secrets
 **/android/key.properties
 **/android/upload-keystore.jks
