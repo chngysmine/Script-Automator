@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:script_automator/core/auth/auth_service.dart';
@@ -260,6 +261,27 @@ void showLinkAccountSheet(BuildContext context, {VoidCallback? onLinked}) {
                 ),
               ),
             ],
+            const SizedBox(height: 12),
+            _LinkButton(
+              icon: Icons.email_rounded,
+              label: "Continue with Email",
+              color: LiquidTheme.primary,
+              onTap: () async {
+                final navigator = Navigator.of(context);
+                final creds = await _askEmailPassword(context);
+                if (creds == null || !navigator.mounted) return;
+                navigator.pop();
+                final host = navigator.context;
+                if (!host.mounted) return;
+                await _linkProvider(
+                  host,
+                  linkFn: () => auth.linkWithEmail(creds.email, creds.password),
+                  providerName: "Email",
+                  onLinked: onLinked,
+                  popSheet: false,
+                );
+              },
+            ),
           ],
         ),
       );
@@ -272,10 +294,13 @@ Future<void> _linkProvider(
   required Future<void> Function() linkFn,
   required String providerName,
   VoidCallback? onLinked,
+  bool popSheet = true,
 }) async {
-
   final navigator = Navigator.of(context);
-  navigator.pop();
+  final messenger = ScaffoldMessenger.of(context);
+  if (popSheet) navigator.pop();
+  // The sheet's context is gone after pop; dialogs use the navigator's.
+  final host = navigator.context;
   try {
     await linkFn();
     final uid = GetIt.I<AuthService>().currentUser?.uid;
@@ -283,15 +308,169 @@ Future<void> _linkProvider(
       try {
         await GetIt.I<FirestoreSyncService>().pushLocalToCloud(uid);
       } on SyncConflictException catch (e) {
-        if (context.mounted) {
-          await _showSyncConflictDialog(context, uid, e, onLinked);
+        if (host.mounted) {
+          await _showSyncConflictDialog(host, uid, e, onLinked);
         }
         return;
       }
     }
+    messenger.showSnackBar(
+      SnackBar(content: Text('$providerName linked. Your data is now backed up.')),
+    );
     onLinked?.call();
+  } on AccountAlreadyExistsException catch (e) {
+    if (!host.mounted) return;
+    final switchAccount = await showDialog<bool>(
+      context: host,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Account already exists'),
+        content: Text(
+          '${e.email ?? 'This $providerName account'} is already registered. '
+          'Sign in with it instead? Guest scripts on this device stay local and '
+          'can be re-synced after signing in.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Sign in'),
+          ),
+        ],
+      ),
+    );
+    if (switchAccount != true) return;
+    try {
+      await GetIt.I<AuthService>().signInWithExistingCredential(e.credential);
+      onLinked?.call();
+    } catch (signInError) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(_authErrorMessage(signInError)), backgroundColor: Colors.red),
+      );
+    }
   } catch (e) {
-    debugPrint("Failed: $e");
+    debugPrint('[Auth] Link $providerName failed: $e');
+    final message = _authErrorMessage(e);
+    if (message.isNotEmpty) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    }
+  }
+}
+
+/// Maps auth errors to short user-facing messages ('' for user cancellation).
+String _authErrorMessage(Object error) {
+  final text = error.toString();
+  if (text.contains('canceled') || text.contains('cancelled')) return '';
+  if (error is FirebaseAuthException) {
+    switch (error.code) {
+      case 'network-request-failed':
+        return 'No internet connection. Please try again.';
+      case 'weak-password':
+        return 'Password must be at least 6 characters.';
+      case 'invalid-email':
+        return 'That email address is not valid.';
+      case 'requires-recent-login':
+        return 'Please sign out and sign in again, then retry.';
+      case 'provider-already-linked':
+        return 'This provider is already linked to your account.';
+      default:
+        return error.message ?? 'Authentication failed (${error.code}).';
+    }
+  }
+  return 'Something went wrong: $text';
+}
+
+Future<({String email, String password})?> _askEmailPassword(BuildContext context) async {
+  final emailCtrl = TextEditingController();
+  final passCtrl = TextEditingController();
+  final result = await showDialog<({String email, String password})>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Link Email'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            autocorrect: false,
+            autofillHints: const [AutofillHints.email],
+            decoration: const InputDecoration(labelText: 'Email'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: passCtrl,
+            obscureText: true,
+            autofillHints: const [AutofillHints.newPassword],
+            decoration: const InputDecoration(labelText: 'Password (min. 6 characters)'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final email = emailCtrl.text.trim();
+            if (email.isEmpty || passCtrl.text.length < 6) return;
+            Navigator.pop(dialogContext, (email: email, password: passCtrl.text));
+          },
+          child: const Text('Link'),
+        ),
+      ],
+    ),
+  );
+  emailCtrl.dispose();
+  passCtrl.dispose();
+  return result;
+}
+
+/// Confirms and permanently deletes the signed-in account and local data.
+///
+/// Returns `true` when the account was deleted.
+Future<bool> confirmAndDeleteAccount(BuildContext context) async {
+  if (!GetIt.I.isRegistered<AuthService>()) return false;
+  final messenger = ScaffoldMessenger.of(context);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Delete account?'),
+      content: const Text(
+        'This permanently deletes your account and signs you out. Scripts on '
+        'this device are removed. This cannot be undone.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          style: TextButton.styleFrom(foregroundColor: Colors.red),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return false;
+  try {
+    await GetIt.I<AuthService>().deleteAccount();
+    if (GetIt.I.isRegistered<ScriptLocalDataSource>()) {
+      await GetIt.I<ScriptLocalDataSource>().reset();
+    }
+    return true;
+  } catch (e) {
+    final message = _authErrorMessage(e);
+    if (message.isNotEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.red));
+    }
+    return false;
   }
 }
 

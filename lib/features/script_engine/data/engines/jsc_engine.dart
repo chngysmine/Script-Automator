@@ -52,15 +52,16 @@ class JSCEngine implements JSEngine, Finalizable {
       (function() {
         try {
           new Function($escaped);
-          return null;
+          // Empty string, not null: engines stringify null results to "null".
+          return '';
         } catch (e) {
           return e.toString();
         }
       })()
     ''';
     try {
-      final result = evaluate(wrapper);
-      return result as String?;
+      final result = evaluate(wrapper)?.toString() ?? '';
+      return result.isEmpty ? null : result;
     } catch (e) {
       return "Engine Error: $e";
     }

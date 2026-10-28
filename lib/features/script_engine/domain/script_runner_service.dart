@@ -135,6 +135,20 @@ class ScriptRunnerService {
   /// The maximum execution time for a single script evaluation.
   static const _evalTimeout = Duration(seconds: 30);
 
+  /// Maps a local gallery script id to its `gallery_published` doc id.
+  Future<String> _moderationIdFor(String scriptId) async {
+    try {
+      if (GetIt.I.isRegistered<ScriptLocalDataSource>()) {
+        final detail = await GetIt.I<ScriptLocalDataSource>().getScriptDetail(scriptId);
+        final galleryId = detail?.settings['gallery_id'];
+        if (galleryId is String && galleryId.isNotEmpty) return galleryId;
+      }
+    } catch (e) {
+      debugPrint('[SECURITY] gallery_id lookup failed for $scriptId: $e');
+    }
+    return scriptId;
+  }
+
   /// Sends a script to the background isolate for evaluation.
   ///
   /// If the script does not complete within [_evalTimeout], native QuickJS
@@ -147,27 +161,30 @@ class ScriptRunnerService {
     // and skip checks for 'manual_run' or local private user scripts.
     final isGalleryScript = scriptId.startsWith('gallery_');
     if (scriptId != 'manual_run' && isGalleryScript) {
+      // Admin blocks and user reports are keyed by the gallery_published doc
+      // id (stored as settings.gallery_id), not by the local script id.
+      final moderationId = await _moderationIdFor(scriptId);
       try {
         final moderationDoc = await FirebaseFirestore.instance
             .collection('script_moderation')
-            .doc(scriptId)
+            .doc(moderationId)
             .get()
             .timeout(const Duration(seconds: 3));
         final isBlocked = moderationDoc.exists && moderationDoc.data()?['is_blocked'] == true;
-        _moderationCache[scriptId] = isBlocked;
+        _moderationCache[moderationId] = isBlocked;
         if (isBlocked) {
-          debugPrint("[SECURITY] Execution blocked: $scriptId is suppressed by Admin.");
+          debugPrint("[SECURITY] Execution blocked: $moderationId is suppressed by Admin.");
           return;
         }
       } catch (e) {
         // Fail-closed: check cache, block if unknown
-        final cachedStatus = _moderationCache[scriptId];
+        final cachedStatus = _moderationCache[moderationId];
         if (cachedStatus == null) {
-          debugPrint("[SECURITY] Moderation check failed & no cache — blocking $scriptId");
+          debugPrint("[SECURITY] Moderation check failed & no cache — blocking $moderationId");
           return;
         }
         if (cachedStatus) {
-          debugPrint("[SECURITY] Execution blocked (cached): $scriptId");
+          debugPrint("[SECURITY] Execution blocked (cached): $moderationId");
           return;
         }
         debugPrint("[SECURITY] Moderation check failed — using cached ALLOW for $scriptId");

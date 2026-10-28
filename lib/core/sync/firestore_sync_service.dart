@@ -354,16 +354,11 @@ class FirestoreSyncService {
 
       for (final doc in snapshot.docs) {
         try {
-          final data = doc.data();
-          final typeVal = data['type'] as int? ?? 2; // default system
-          final type = NotificationType.values[typeVal.clamp(0, NotificationType.values.length - 1)];
-          final title = data['title'] as String? ?? 'Notification';
-          final body = data['body'] as String? ?? '';
-
+          final parsed = parseRemoteNotification(doc.data());
           notifService.addNotification(
-            type: type,
-            title: title,
-            body: body,
+            type: parsed.type,
+            title: parsed.title,
+            body: parsed.body,
           );
 
           batch.delete(doc.reference);
@@ -376,6 +371,26 @@ class FirestoreSyncService {
     }, onError: (e) {
       debugPrint('[Sync] Notification listener error: $e');
     });
+  }
+
+  /// Maps a `users/{uid}/notifications` doc written by the admin panel.
+  /// Rejections carry `reject_reason`, which is appended to the body when the
+  /// admin text doesn't already include it.
+  static ({NotificationType type, String title, String body}) parseRemoteNotification(
+    Map<String, dynamic> data,
+  ) {
+    final rawType = data['type'];
+    final typeVal = rawType is int ? rawType : 2; // default: system
+    final type = NotificationType.values[typeVal.clamp(0, NotificationType.values.length - 1)];
+    final title = (data['title'] as String?)?.trim().isNotEmpty == true
+        ? data['title'] as String
+        : 'Notification';
+    var body = data['body'] as String? ?? '';
+    final reason = (data['reject_reason'] as String?)?.trim() ?? '';
+    if (reason.isNotEmpty && !body.contains(reason)) {
+      body = body.isEmpty ? 'Reason: $reason' : '$body\nReason: $reason';
+    }
+    return (type: type, title: title, body: body);
   }
 
   /// Cancels the notification subscription when user logs out.

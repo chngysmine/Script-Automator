@@ -107,7 +107,8 @@ class QuickJSEngine implements JSEngine {
       (function() {
         try {
           new Function($escaped);
-          return null;
+          // Empty string, not null: engines stringify null results to "null".
+          return '';
         } catch (e) {
           return e.toString();
         }
@@ -115,8 +116,8 @@ class QuickJSEngine implements JSEngine {
     ''';
 
     try {
-      final result = evaluate(wrapper);
-      return result as String?;
+      final result = evaluate(wrapper)?.toString() ?? '';
+      return result.isEmpty ? null : result;
     } catch (e) {
       // If the engine itself fails, assume strict syntax error
       return "Engine Error: $e";

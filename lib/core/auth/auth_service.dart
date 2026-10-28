@@ -34,15 +34,50 @@ class AuthService {
   // ────────────────────── Google Init (v7) ──────────────────────
 
   /// Initializes the GoogleSignIn singleton. Safe to call multiple times.
+  /// Client IDs come from GoogleService-Info.plist / google-services.json.
   Future<void> _ensureGoogleInitialized() async {
     if (_googleInitialized) return;
+    await GoogleSignIn.instance.initialize();
+    _googleInitialized = true;
+  }
+
+  /// Runs the Google account picker and returns a Firebase credential.
+  Future<OAuthCredential> _googleCredential() async {
+    await _ensureGoogleInitialized();
+    final googleUser = await GoogleSignIn.instance.authenticate();
+    final idToken = googleUser.authentication.idToken;
+    if (idToken == null || idToken.isEmpty) {
+      throw FirebaseAuthException(
+        code: 'missing-id-token',
+        message: 'Google did not return an ID token. Please try again.',
+      );
+    }
+    return GoogleAuthProvider.credential(idToken: idToken);
+  }
+
+  /// Links [credential] to the signed-in (anonymous) user. When the provider
+  /// account already belongs to another user, throws
+  /// [AccountAlreadyExistsException] so the UI can offer to sign in instead.
+  Future<UserCredential> _linkCurrentUser(AuthCredential credential) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw FirebaseAuthException(code: 'no-current-user', message: 'Not signed in.');
+    }
     try {
-      await GoogleSignIn.instance.initialize();
-      _googleInitialized = true;
-    } catch (e) {
-      debugPrint('[Auth] Google Sign-In init failed: $e');
+      return await user.linkWithCredential(credential);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'credential-already-in-use' ||
+          e.code == 'email-already-in-use' ||
+          e.code == 'account-exists-with-different-credential') {
+        throw AccountAlreadyExistsException(e.credential ?? credential, e.email);
+      }
+      rethrow;
     }
   }
+
+  /// Signs in with a credential returned by [AccountAlreadyExistsException].
+  Future<UserCredential> signInWithExistingCredential(AuthCredential credential) =>
+      _auth.signInWithCredential(credential);
 
   // ────────────────────── Sign-In Methods ──────────────────────
 
@@ -63,12 +98,7 @@ class AuthService {
   /// Uses `GoogleSignIn.instance.authenticate()` which returns a
   /// [GoogleSignInAccount] with `authentication.idToken` for Firebase.
   Future<UserCredential> signInWithGoogle() async {
-    await _ensureGoogleInitialized();
-
-    final googleUser = await GoogleSignIn.instance.authenticate();
-    final idToken = googleUser.authentication.idToken;
-
-    final credential = GoogleAuthProvider.credential(idToken: idToken);
+    final credential = await _googleCredential();
     final result = await _auth.signInWithCredential(credential);
     debugPrint('[Auth] Google sign-in: ${result.user?.email}');
     return result;
@@ -130,13 +160,8 @@ class AuthService {
 
   /// Links the current anonymous account with Google credentials.
   Future<UserCredential> linkWithGoogle() async {
-    await _ensureGoogleInitialized();
-
-    final googleUser = await GoogleSignIn.instance.authenticate();
-    final idToken = googleUser.authentication.idToken;
-
-    final credential = GoogleAuthProvider.credential(idToken: idToken);
-    final result = await _auth.currentUser!.linkWithCredential(credential);
+    final credential = await _googleCredential();
+    final result = await _linkCurrentUser(credential);
     debugPrint('[Auth] Linked anonymous → Google: ${result.user?.email}');
     return result;
   }
@@ -155,7 +180,7 @@ class AuthService {
       accessToken: appleCredential.authorizationCode,
     );
 
-    final result = await _auth.currentUser!.linkWithCredential(oauthCredential);
+    final result = await _linkCurrentUser(oauthCredential);
     debugPrint('[Auth] Linked anonymous → Apple: ${result.user?.email}');
     return result;
   }
@@ -166,7 +191,7 @@ class AuthService {
       email: email,
       password: password,
     );
-    final result = await _auth.currentUser!.linkWithCredential(credential);
+    final result = await _linkCurrentUser(credential);
     debugPrint('[Auth] Linked anonymous → Email: ${result.user?.email}');
     return result;
   }
@@ -183,9 +208,14 @@ class AuthService {
   }
 
   /// Deletes the current user account permanently.
+  /// Throws [FirebaseAuthException] `requires-recent-login` when the session
+  /// is too old; the UI asks the user to sign in again first.
   Future<void> deleteAccount() async {
     try {
       await _auth.currentUser?.delete();
+      try {
+        await GoogleSignIn.instance.disconnect();
+      } catch (_) {}
       debugPrint('[Auth] Account deleted.');
     } catch (e) {
       debugPrint('[Auth] Account deletion failed: $e');
@@ -216,4 +246,16 @@ class AuthService {
     if (user.providerData.isEmpty) return 'unknown';
     return user.providerData.first.providerId;
   }
+}
+
+/// The provider account is already linked to a different Firebase user.
+class AccountAlreadyExistsException implements Exception {
+  const AccountAlreadyExistsException(this.credential, this.email);
+
+  final AuthCredential credential;
+  final String? email;
+
+  @override
+  String toString() =>
+      'This ${email ?? 'account'} is already registered. Sign in with it instead.';
 }

@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get_it/get_it.dart';
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
@@ -158,6 +159,15 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
       return;
     }
 
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.isAnonymous) {
+      setState(() {
+        _errorMessage = 'Publishing needs an account. Link Google, Apple or email '
+            'in Settings → Account (your scripts are kept).';
+      });
+      return;
+    }
+
     final bool isImported = widget.script.settings['gallery_id'] != null;
     final bool isModified = widget.script.settings['is_modified_from_gallery'] == true;
     
@@ -194,6 +204,8 @@ class _PublishScriptSheetState extends State<PublishScriptSheet> {
       if (mounted) {
         Navigator.pop(context, true);
       }
+    } on GuestAccountRequiredException catch (e) {
+      if (mounted) setState(() => _errorMessage = e.toString());
     } catch (e) {
       if (mounted) {
         setState(() {

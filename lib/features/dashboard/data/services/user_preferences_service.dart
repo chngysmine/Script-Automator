@@ -22,7 +22,8 @@ class UserPreferencesService {
     _initializing = true;
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
-      final currentBoxName = '${_boxName}_$uid';
+      // Hive lowercases box names; compare in the same form.
+      final currentBoxName = '${_boxName}_$uid'.toLowerCase();
 
       // Already initialized for the current user and box is still open
       if (_box != null && _box!.name == currentBoxName && _box!.isOpen) {

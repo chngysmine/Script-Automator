@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:script_automator/features/dashboard/presentation/widgets/import_progress_dialog.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:script_automator/core/theme/liquid_theme.dart';
 import 'package:script_automator/core/theme/liquid_colors.dart';
@@ -514,30 +513,21 @@ class _GalleryPageState extends State<GalleryPage> {
 
     if (confirmReport == true) {
       try {
-        final docRef = FirebaseFirestore.instance.collection('script_moderation').doc(scriptId);
-        await FirebaseFirestore.instance.runTransaction((transaction) async {
-          final snapshot = await transaction.get(docRef);
-          if (snapshot.exists) {
-            final currentReports = snapshot.data()?['reports_count'] ?? 0;
-            transaction.update(docRef, {
-              'reports_count': currentReports + 1,
-              'updated_at': FieldValue.serverTimestamp(),
-            });
-          } else {
-            transaction.set(docRef, {
-              'reports_count': 1,
-              'is_blocked': false,
-              'updated_at': FieldValue.serverTimestamp(),
-            });
-          }
-        });
-
+        final result = await GetIt.I<GalleryRepository>().reportScript(scriptId.toString());
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Thank you! Script has been reported for moderation review.'),
+            SnackBar(
+              content: Text(result == ReportResult.alreadyReported
+                  ? 'You have already reported this script. Thanks!'
+                  : 'Thank you! Script has been reported for moderation review.'),
               backgroundColor: Colors.green,
             ),
+          );
+        }
+      } on GuestAccountRequiredException catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString()), backgroundColor: Colors.orange),
           );
         }
       } catch (e) {

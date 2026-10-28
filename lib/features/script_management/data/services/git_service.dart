@@ -1,39 +1,28 @@
 import 'package:http/http.dart' as http;
 
-/// Service responsible for Git operations (Clone, Pull, Push).
-/// This serves as the foundation for the "Script Gallery" feature.
+/// Imports scripts from a raw URL ("Import from URL" in the Gallery).
+///
+/// Full Git clone/pull is planned for Phase 5 and intentionally not exposed.
 class GitService {
-  /// Downloads a script content from a [url] (Raw View).
-  /// This is used for the "Import from URL" feature in the Gallery.
+  // Private field with a public named parameter, so no initializing formal.
+  // ignore: prefer_initializing_formals
+  GitService({http.Client? client}) : _client = client;
+
+  final http.Client? _client;
+
+  static const Duration _timeout = Duration(seconds: 20);
+
   Future<String> downloadScript(String url) async {
-    try {
-      final uri = Uri.parse(url);
-      final response = await http.get(uri);
-
-      if (response.statusCode == 200) {
-        return response.body;
-      } else {
-        throw Exception("Failed to download script: ${response.statusCode}");
-      }
-    } catch (e) {
-      throw Exception("Network error downloading script: $e");
+    final uri = Uri.tryParse(url);
+    if (uri == null || !(uri.isScheme('https') || uri.isScheme('http'))) {
+      throw const FormatException('Please enter a valid http(s) URL.');
     }
-  }
-
-  /// Clones a repository from [url] to [targetPath].
-  Future<void> cloneRepository(String url, String targetPath) async {
-    throw UnimplementedError(
-      "Full Git Clone is planned for Phase 5. Use 'Import URL' for now.",
-    );
-  }
-
-  /// Pulls the latest changes for the repository at [repoPath].
-  Future<void> pullRepository(String repoPath) async {
-    throw UnimplementedError("Git Pull not yet implemented");
-  }
-
-  /// Gets the status of the repository at [repoPath].
-  Future<String> getStatus(String repoPath) async {
-    return "clean";
+    try {
+      final response = await (_client?.get(uri) ?? http.get(uri)).timeout(_timeout);
+      if (response.statusCode == 200) return response.body;
+      throw Exception('Failed to download script: HTTP ${response.statusCode}');
+    } catch (e) {
+      throw Exception('Network error downloading script: $e');
+    }
   }
 }

@@ -5,7 +5,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:script_automator/features/dashboard/domain/repositories/gallery_repository.dart';
+import 'package:get_it/get_it.dart';
 import 'package:script_automator/core/security/script_integrity_checker.dart';
+import 'package:script_automator/core/services/app_config_service.dart';
 
 /// Fetches community gallery scripts from the Firestore `gallery_published` collection.
 ///
@@ -15,6 +17,22 @@ import 'package:script_automator/core/security/script_integrity_checker.dart';
 /// Submissions are uploaded to Firebase Storage with metadata stored in
 /// Firestore `gallery_submissions`.
 class CloudGalleryRepository implements GalleryRepository {
+  CloudGalleryRepository({
+    FirebaseFirestore? firestore,
+    FirebaseAuth? auth,
+    FirebaseStorage? storage,
+  })  : _firestoreOverride = firestore,
+        _authOverride = auth,
+        _storageOverride = storage;
+
+  final FirebaseFirestore? _firestoreOverride;
+  final FirebaseAuth? _authOverride;
+  final FirebaseStorage? _storageOverride;
+
+  FirebaseFirestore get _firestore => _firestoreOverride ?? FirebaseFirestore.instance;
+  FirebaseAuth get _auth => _authOverride ?? FirebaseAuth.instance;
+  FirebaseStorage get _storage => _storageOverride ?? FirebaseStorage.instance;
+
   static const _cacheBoxName = 'gallery_cache';
   static const _cacheKey = 'templates';
   static const _cacheTtl = Duration(hours: 24);
@@ -64,7 +82,7 @@ class CloudGalleryRepository implements GalleryRepository {
   Future<List<Map<String, dynamic>>> getTemplates() async {
     final freshCache = await _readCache();
     try {
-      final snapshot = await FirebaseFirestore.instance
+      final snapshot = await _firestore
           .collection('gallery_published')
           .orderBy('published_at', descending: true)
           .limit(100)
@@ -106,9 +124,74 @@ class CloudGalleryRepository implements GalleryRepository {
   }
 
   @override
+  Future<ReportResult> reportScript(String scriptId, {String? reason}) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User is not logged in.');
+    if (user.isAnonymous) throw const GuestAccountRequiredException();
+
+    // Doc id is fixed per (script, user); rules reject a second create, so a
+    // permission error on an existing doc means "already reported".
+    final ref = _firestore.collection('script_reports').doc('${scriptId}_${user.uid}');
+    try {
+      final existing = await ref.get();
+      if (existing.exists) return ReportResult.alreadyReported;
+    } on FirebaseException catch (e) {
+      if (e.code != 'permission-denied') rethrow;
+    }
+
+    final trimmedReason = reason?.trim();
+    final moderationRef = _firestore.collection('script_moderation').doc(scriptId);
+    final threshold = await _reportThreshold();
+
+    // Report + counter are written atomically; firestore.rules only accept
+    // this exact shape (one report per user, +1, block at the threshold).
+    await _firestore.runTransaction((tx) async {
+      final moderation = await tx.get(moderationRef);
+      final data = moderation.data() ?? const <String, dynamic>{};
+      final count = ((data['reports_count'] as num?)?.toInt() ?? 0) + 1;
+      final wasBlocked = data['is_blocked'] == true;
+      final override = data['admin_override'] == true;
+      final blocked = wasBlocked || (!override && count >= threshold);
+
+      tx.set(ref, {
+        'script_id': scriptId,
+        'reporter_uid': user.uid,
+        if (trimmedReason != null && trimmedReason.isNotEmpty)
+          'reason': trimmedReason.length > 500 ? trimmedReason.substring(0, 500) : trimmedReason,
+        'created_at': FieldValue.serverTimestamp(),
+      });
+      tx.set(
+        moderationRef,
+        {
+          'reports_count': count,
+          'is_blocked': blocked,
+          if (blocked && !wasBlocked) 'blocked_reason': 'auto_reports_threshold',
+          'updated_at': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    });
+    return ReportResult.reported;
+  }
+
+  /// Auto-block threshold from app_config/global (rules apply the same default).
+  Future<int> _reportThreshold() async {
+    if (GetIt.I.isRegistered<AppConfigService>()) {
+      return GetIt.I<AppConfigService>().reportAutoBlockThreshold;
+    }
+    try {
+      final snap = await _firestore.collection('app_config').doc('global').get();
+      final raw = snap.data()?['report_auto_block_threshold'];
+      if (raw is int && raw >= 1) return raw;
+    } catch (_) {}
+    return AppConfigService.defaultReportAutoBlockThreshold;
+  }
+
+  @override
   Future<void> submitScript(Map<String, dynamic> submission) async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = _auth.currentUser;
     if (user == null) throw Exception("User is not logged in.");
+    if (user.isAnonymous) throw const GuestAccountRequiredException();
 
     final content = submission['content'] as String? ?? '';
     final scriptId = submission['script_id'] as String? ?? 'untitled';
@@ -118,7 +201,7 @@ class CloudGalleryRepository implements GalleryRepository {
     String sha256Hash = '';
 
     if (content.isNotEmpty) {
-      final storageRef = FirebaseStorage.instance.ref('submissions/${user.uid}/$scriptId.js');
+      final storageRef = _storage.ref('submissions/${user.uid}/$scriptId.js');
       await storageRef.putString(
         content,
         format: PutStringFormat.raw,
@@ -148,13 +231,13 @@ class CloudGalleryRepository implements GalleryRepository {
       metadata['original_gallery_id'] = submission['original_gallery_id'];
     }
 
-    await FirebaseFirestore.instance.collection('gallery_submissions').add(metadata);
+    await _firestore.collection('gallery_submissions').add(metadata);
   }
 
   /// Queries the Firestore `script_moderation` collection and strips out blocked items.
   Future<List<Map<String, dynamic>>> _filterBlockedScripts(List<Map<String, dynamic>> rawScripts) async {
     try {
-      final snapshot = await FirebaseFirestore.instance
+      final snapshot = await _firestore
           .collection('script_moderation')
           .where('is_blocked', isEqualTo: true)
           .get();

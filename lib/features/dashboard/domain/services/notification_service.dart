@@ -1,3 +1,4 @@
+import 'package:synchronized/synchronized.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -81,9 +82,15 @@ class NotificationService {
   Stream<int> get unreadCount => _unreadCountController.stream;
 
   /// Initializes the Hive box and loads persisted notifications.
-  Future<void> init() async {
+  // Serializes box switching on account changes (see UserStatsService).
+  final Lock _initLock = Lock();
+
+  Future<void> init() => _initLock.synchronized(_initLocked);
+
+  Future<void> _initLocked() async {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
-    final currentBoxName = '${_boxName}_$uid';
+    // Hive lowercases box names; compare in the same form.
+    final currentBoxName = '${_boxName}_$uid'.toLowerCase();
 
     if (_box != null && _box!.name == currentBoxName && _box!.isOpen) {
       return;

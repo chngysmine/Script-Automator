@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:synchronized/synchronized.dart';
 import 'package:get_it/get_it.dart';
 import 'package:script_automator/core/sync/firestore_sync_service.dart';
 
@@ -8,13 +9,22 @@ import 'package:script_automator/core/sync/firestore_sync_service.dart';
 class UserStatsService {
   static const String _boxName = 'user_stats';
   static const String _activityBoxName = 'daily_activity';
+
   Box<int>? _box;
   Box<int>? _activityBox;
 
-  Future<void> init() async {
+  // Serializes box switching so concurrent callers (profile page, runner,
+  // sync) never read a box another call just closed.
+  final Lock _lock = Lock();
+
+  Future<void> init() => _lock.synchronized(_initLocked);
+
+  Future<void> _initLocked() async {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
-    final currentBoxName = '${_boxName}_$uid';
-    final currentActivityBoxName = '${_activityBoxName}_$uid';
+    // Hive lowercases box names; compare in the same form, otherwise every
+    // call closes and reopens the box (the uid contains capitals).
+    final currentBoxName = '${_boxName}_$uid'.toLowerCase();
+    final currentActivityBoxName = '${_activityBoxName}_$uid'.toLowerCase();
 
     // If already initialized for the current user, do nothing.
     if (_box != null &&
@@ -38,21 +48,21 @@ class UserStatsService {
     _activityBox = await Hive.openBox<int>(currentActivityBoxName);
   }
 
-  Future<int> get(String key) async {
-    await init();
-    return _box?.get(key) ?? 0;
-  }
+  Future<int> get(String key) => _lock.synchronized(() async {
+        await _initLocked();
+        return _box?.get(key) ?? 0;
+      });
 
-  Future<void> increment(String key, {int by = 1}) async {
-    await init();
-    final current = _box?.get(key) ?? 0;
-    await _box?.put(key, current + by);
-  }
+  Future<void> increment(String key, {int by = 1}) => _lock.synchronized(() async {
+        await _initLocked();
+        final current = _box?.get(key) ?? 0;
+        await _box?.put(key, current + by);
+      });
 
-  Future<void> set(String key, int value) async {
-    await init();
-    await _box?.put(key, value);
-  }
+  Future<void> set(String key, int value) => _lock.synchronized(() async {
+        await _initLocked();
+        await _box?.put(key, value);
+      });
 
   /// Call after each script run
   Future<void> recordRun({required bool success}) async {
