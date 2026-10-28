@@ -1,4 +1,6 @@
 rules_version = '2';
+// Single source of truth for Firestore rules (deployed from Script-Automator/).
+// The admin web reuses these rules; it has no rules file of its own.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -11,75 +13,154 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
+    function isAnonymous() {
+      return request.auth.token.get('firebase', {}).get('sign_in_provider', '') == 'anonymous';
+    }
+
+    // BOOTSTRAP: the email fallback is temporary and is removed once the
+    // super admin's `admin` custom claim is confirmed (deploy step 7).
     function isAdmin() {
-      return isSignedIn() && (request.auth.token.admin == true || (request.auth.token.email == 'chaunganpenny@gmail.com' && request.auth.token.email_verified == true));
+      return isSignedIn() && (request.auth.token.get('admin', false) == true || (request.auth.token.get('email', '') == 'chaunganpenny@gmail.com' && request.auth.token.get('email_verified', false) == true));
     }
 
     function isNotBanned() {
-      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) || 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.is_banned != true;
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('is_banned', false) != true;
     }
 
     function validString(field) {
       return field is string && field.size() > 0;
     }
 
+    function shortString(field, max) {
+      return field is string && field.size() <= max;
+    }
+
+    function optionalShortString(data, key, max) {
+      return !(key in data) || data[key] == null || shortString(data[key], max);
+    }
+
     // ── User Documents ────────────────────────────────────────────────
-    // Users can only read/write their own profile and sub-collections.
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid) && isNotBanned();
-      allow update: if (isOwner(uid) && isNotBanned()) || isAdmin();
+      // Owners can never grant themselves a role or lift their own ban.
+      allow create: if isOwner(uid) && isNotBanned()
+        && !request.resource.data.keys().hasAny(['role', 'is_banned', 'banned_at']);
+      allow update: if isAdmin() || (isOwner(uid) && isNotBanned()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'is_banned', 'banned_at']));
       allow delete: if isAdmin();
 
-      // Scripts sub-collection — owner full access, admin read-only
       match /scripts/{scriptId} {
         allow read, write: if isOwner(uid) && isNotBanned();
         allow read: if isAdmin();
       }
 
-      // Notifications subcollection — owner read/write, admin read/write
       match /notifications/{notifId} {
         allow read, write: if isOwner(uid) && isNotBanned();
         allow read, write: if isAdmin();
       }
 
-      // Profile sub-documents
-      match /{subcollection=**} {
+      // `{x=**}` also matches zero segments in rules v2, which would re-open
+      // users/{uid} itself; require at least one sub-collection segment.
+      match /{subcollection}/{path=**} {
         allow read, write: if isOwner(uid) && isNotBanned();
         allow read: if isAdmin();
       }
     }
 
     // ── Telemetry Logs ────────────────────────────────────────────────
-    // Authenticated users can insert logs. Only admins can read/query.
     match /telemetry_logs/{logId} {
       allow create: if isSignedIn() && isNotBanned()
         && request.resource.data.user_id == request.auth.uid
         && validString(request.resource.data.script_id)
-        && validString(request.resource.data.event)
-        && validString(request.resource.data.status);
+        && shortString(request.resource.data.script_id, 200)
+        && request.resource.data.event in ['run', 'crash', 'error']
+        && shortString(request.resource.data.status, 50)
+        && optionalShortString(request.resource.data, 'error_trace', 20000)
+        && request.resource.data.keys().size() <= 12;
       allow read: if isAdmin();
-      allow update: if false; // Logs are immutable
-      allow delete: if isAdmin(); // Allow admin purge
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     // ── Script Moderation ─────────────────────────────────────────────
-    // All authenticated users can read moderation state (for pre-run check).
-    // Only admins can block/unblock scripts.
+    // Admins write freely. Users may only apply their own report: the same
+    // batch must create script_reports/{scriptId}_{uid} (which can exist
+    // once), the counter moves by exactly +1, and the script may be blocked
+    // only once the threshold in app_config/global is reached — never
+    // unblocked, and never re-blocked after an admin override.
+    function reportThreshold() {
+      let cfgPath = /databases/$(database)/documents/app_config/global;
+      let raw = exists(cfgPath) ? get(cfgPath).data.get('report_auto_block_threshold', 5) : 5;
+      return raw is int && raw >= 1 ? raw : 5;
+    }
+
+    function reportCreatedInBatch(scriptId) {
+      let reportPath = /databases/$(database)/documents/script_reports/$(scriptId + '_' + request.auth.uid);
+      return !exists(reportPath) && existsAfter(reportPath);
+    }
+
+    function validReportBlockState(before, after) {
+      let wasBlocked = before.get('is_blocked', false) == true;
+      let override = before.get('admin_override', false) == true;
+      let reachesThreshold = after.reports_count >= reportThreshold();
+      return after.get('admin_override', false) == override
+        && (wasBlocked ? after.is_blocked == true
+            : (override ? after.is_blocked == false
+               : after.is_blocked == reachesThreshold));
+    }
+
     match /script_moderation/{scriptId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+
+      allow create: if isSignedIn() && !isAnonymous() && isNotBanned()
+        && reportCreatedInBatch(scriptId)
+        && request.resource.data.keys().hasOnly(['reports_count', 'is_blocked', 'blocked_reason', 'updated_at'])
+        && request.resource.data.reports_count == 1
+        && request.resource.data.updated_at == request.time
+        && validReportBlockState({}, request.resource.data);
+
+      allow update: if isSignedIn() && !isAnonymous() && isNotBanned()
+        && reportCreatedInBatch(scriptId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['reports_count', 'is_blocked', 'blocked_reason', 'updated_at'])
+        && request.resource.data.reports_count == resource.data.get('reports_count', 0) + 1
+        && request.resource.data.updated_at == request.time
+        && validReportBlockState(resource.data, request.resource.data);
+    }
+
+    // ── Script Reports ────────────────────────────────────────────────
+    // One report per user per script: the doc id is `{scriptId}_{uid}`, and
+    // the moderation counter must be bumped in the same batch.
+    match /script_reports/{reportId} {
+      allow create: if isSignedIn() && !isAnonymous() && isNotBanned()
+        && reportId == request.resource.data.script_id + '_' + request.auth.uid
+        && request.resource.data.reporter_uid == request.auth.uid
+        && validString(request.resource.data.script_id)
+        && shortString(request.resource.data.script_id, 200)
+        && optionalShortString(request.resource.data, 'reason', 500)
+        && request.resource.data.created_at == request.time
+        && request.resource.data.keys().hasOnly(['script_id', 'reporter_uid', 'reason', 'created_at'])
+        && getAfter(/databases/$(database)/documents/script_moderation/$(request.resource.data.script_id))
+             .data.get('updated_at', null) == request.time;
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.reporter_uid == request.auth.uid);
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     // ── Gallery Submissions ───────────────────────────────────────────
-    // Authenticated users can submit scripts for review.
-    // Admins can approve/reject. Authors can read their own submissions.
     match /gallery_submissions/{subId} {
-      allow create: if isSignedIn() && isNotBanned()
+      allow create: if isSignedIn() && !isAnonymous() && isNotBanned()
         && validString(request.resource.data.name)
+        && shortString(request.resource.data.name, 100)
+        && optionalShortString(request.resource.data, 'description', 2000)
         && validString(request.resource.data.user_id)
-        && request.resource.data.user_id == request.auth.uid;
+        && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.status == 'pending'
+        // Review fields are written by admins only.
+        && !request.resource.data.keys().hasAny(['reject_reason', 'reviewed_at', 'reviewed_by']);
       allow read: if isAdmin()
         || (isSignedIn() && resource.data.user_id == request.auth.uid);
       allow update: if isAdmin();
@@ -87,21 +168,18 @@ service cloud.firestore {
     }
 
     // ── Admin Registry ────────────────────────────────────────────────
-    // Only readable by the system (for rule-level admin checks via Custom Claims).
     match /admins/{uid} {
       allow read: if isOwner(uid) || isAdmin();
       allow write: if false; // Managed via Cloud Functions only
     }
 
     // ── Gallery Published ─────────────────────────────────────────────
-    // Public read for community gallery. Admin-only write.
     match /gallery_published/{scriptId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
     // ── App Config ───────────────────────────────────────────────────
-    // Feature flags and system configuration. Auth users can read.
     match /app_config/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
@@ -110,7 +188,10 @@ service cloud.firestore {
     // ── User Profiles (Telemetry Registration) ─────────────────────
     match /user_profiles/{uid} {
       allow read: if isAdmin();
-      allow create, update: if request.auth != null && request.auth.uid == uid && isNotBanned();
+      allow create, update: if isOwner(uid) && isNotBanned()
+        && request.resource.data.keys().hasOnly(['os', 'app_version', 'last_active'])
+        && shortString(request.resource.data.os, 30)
+        && shortString(request.resource.data.app_version, 50);
     }
 
     // ── Widget Stats (Telemetry) ─────────────────────────────────────
@@ -118,12 +199,10 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if isSignedIn() && isNotBanned()
         && validString(request.resource.data.script_id)
-        && request.resource.data.timestamp == request.time;
-    }
-
-    // ── GitHub Activity (Admin Dashboard read-only) ──────────────────
-    match /github_activity/{doc} {
-      allow read: if isAdmin();
+        && shortString(request.resource.data.script_id, 200)
+        && optionalShortString(request.resource.data, 'family', 30)
+        && request.resource.data.timestamp == request.time
+        && request.resource.data.keys().hasOnly(['script_id', 'family', 'timestamp']);
     }
 
     // ── Admin Audit Log ─────────────────────────────────────────────
@@ -134,17 +213,23 @@ service cloud.firestore {
 
     // ── User Feedback ───────────────────────────────────────────────
     match /user_feedback/{feedbackId} {
-      allow create: if isSignedIn() && isNotBanned();
+      allow create: if isSignedIn() && isNotBanned()
+        && request.resource.data.user_id == request.auth.uid
+        && validString(request.resource.data.title)
+        && shortString(request.resource.data.title, 200)
+        && shortString(request.resource.data.description, 5000)
+        && optionalShortString(request.resource.data, 'email', 320)
+        && optionalShortString(request.resource.data, 'category', 50)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().size() <= 12;
       allow read, update, delete: if isAdmin();
     }
 
     // ── Rate Limits ──────────────────────────────────────────────────
-    // Server-only via Admin SDK. No client access.
     match /rate_limits/{uid} {
       allow read, write: if false;
     }
 
-    // ── Default Deny ──────────────────────────────────────────────────
-    // Any collection not explicitly listed above is denied.
+    // Any collection not listed above is denied.
   }
 }
